@@ -1,0 +1,32 @@
+project_id = "web_test_001"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+
+# Seed 파일 경로 (여러 파일 지원)
+[db.seed]
+enabled = true
+sql_paths = ["./seeds/*.sql"]
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://localhost:54321"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+jwt_expiry = 3600
+
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
