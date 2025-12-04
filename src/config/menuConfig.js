@@ -15,7 +15,8 @@ import {
   LayoutTemplate,
   Mail,
   HelpCircle,
-  MessagesSquare
+  MessagesSquare,
+  Video
 } from 'lucide-react'
 
 /**
@@ -79,6 +80,11 @@ const adminOnlyMenuItems = [
     labelKey: 'menu.partnerList'
   },
   {
+    to: '/adm/sessions',
+    icon: Video,
+    labelKey: 'menu.sessionManagement'
+  },
+  {
     id: 'templates',
     icon: LayoutTemplate,
     labelKey: 'menu.templateManagement',
@@ -127,12 +133,13 @@ export const adminMenuItems = (() => {
     adminOnlyMenuItems[0], // 회원 관리
     adminOnlyMenuItems[1], // 파트너 신청
     adminOnlyMenuItems[2], // 파트너 목록
+    adminOnlyMenuItems[3], // 세션 관리
     common[1], // 내 정보
     common[2], // 콘텐츠 관리
-    adminOnlyMenuItems[3], // 템플릿 관리
-    adminOnlyMenuItems[4], // 문의/지원 관리 (관리자용)
-    adminOnlyMenuItems[5], // 시스템
-    adminOnlyMenuItems[6], // 프로필 테스트
+    adminOnlyMenuItems[4], // 템플릿 관리
+    adminOnlyMenuItems[5], // 문의/지원 관리 (관리자용)
+    adminOnlyMenuItems[6], // 시스템
+    adminOnlyMenuItems[7], // 프로필 테스트
     common[4], // 설정
   ]
 })()

@@ -30,6 +30,7 @@ const UsersPage = lazy(() => import('./pages/Users'))
 const ProfileTest = lazy(() => import('./pages/ProfileTest'))
 const PartnerRequests = lazy(() => import('./pages/admin/PartnerRequests'))
 const Partners = lazy(() => import('./pages/admin/Partners'))
+const AdminSessions = lazy(() => import('./pages/admin/Sessions'))
 
 // Content Management Pages
 const Posts = lazy(() => import('./pages/content/Posts'))
@@ -194,6 +195,7 @@ function App() {
               <Route path="users" element={<SuspenseWrapper><UsersPage /></SuspenseWrapper>} />
               <Route path="partner-requests" element={<SuspenseWrapper><PartnerRequests /></SuspenseWrapper>} />
               <Route path="partners" element={<SuspenseWrapper><Partners /></SuspenseWrapper>} />
+              <Route path="sessions" element={<SuspenseWrapper><AdminSessions /></SuspenseWrapper>} />
               <Route path="profile" element={<SuspenseWrapper><Profile /></SuspenseWrapper>} />
               <Route path="profile-test" element={<SuspenseWrapper><ProfileTest /></SuspenseWrapper>} />
               

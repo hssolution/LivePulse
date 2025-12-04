@@ -1,0 +1,85 @@
+# Supabase 작업 워크플로우 규칙
+
+## 개요
+
+이 프로젝트는 Supabase Cloud(운영)와 연동하여 작업합니다.
+로컬 Supabase는 사용하지 않으며, MCP를 통해 직접 운영 DB에 접속합니다.
+
+## MCP 연결 정보
+
+- **mcpSpabaseCloud**: 운영 Supabase 연결
+  - URL: `https://mcp.supabase.com/mcp?project_ref=pfrdyviyzilhjarnmcec`
+
+## 파일 구조 및 동기화 규칙
+
+### 1. 마이그레이션 (`supabase/migrations/`)
+
+- 모든 DDL(테이블 생성, 변경, 삭제)은 마이그레이션 파일로 관리
+- 파일명 형식: `001_init.sql`, `002_language.sql`, ...
+- **새 마이그레이션 추가 시**:
+  1. 로컬 파일 생성
+  2. MCP `apply_migration` 또는 Dashboard SQL Editor에서 실행
+  3. Git 커밋
+
+### 2. 시드 데이터 (`supabase/seeds/`)
+
+- 언어팩, 기본 설정 등 초기 데이터
+- 파일명 형식: `01_app_config.sql`, `02_templates.sql`, ...
+- **시드 추가/수정 시**:
+  1. 로컬 파일 수정
+  2. MCP `execute_sql` 또는 Dashboard SQL Editor에서 실행
+  3. Git 커밋
+
+### 3. 수동 설정 (`supabase/manual/`)
+
+MCP로 처리할 수 없고 **Dashboard에서 직접 설정**해야 하는 항목들.
+각 파일에 설정 방법이 문서화되어 있음.
+
+## MCP로 처리 가능한 작업
+
+| 작업 | MCP 함수 |
+|------|----------|
+| SQL 실행 | `execute_sql` |
+| 마이그레이션 적용 | `apply_migration` |
+| 테이블 목록 | `list_tables` |
+| TypeScript 타입 생성 | `generate_typescript_types` |
+| Edge Function 배포 | `deploy_edge_function` |
+
+## MCP로 처리 불가능한 작업 (Dashboard 필요)
+
+| 작업 | 위치 | 문서 |
+|------|------|------|
+| 이메일 템플릿 | Authentication → Email Templates | `manual/email-templates.md` |
+| Auth Hook 활성화 | Authentication → Hooks | `manual/auth-hooks.md` |
+| Site URL 설정 | Authentication → URL Configuration | `manual/auth-urls.md` |
+| SMTP 설정 | Project Settings → Auth | `manual/smtp-settings.md` |
+| Storage 버킷 정책 | Storage → Policies | 마이그레이션으로 가능 |
+
+## 작업 시 체크리스트
+
+### 새 테이블/컬럼 추가 시
+1. [ ] 마이그레이션 파일 작성 (`supabase/migrations/`)
+2. [ ] MCP 또는 Dashboard에서 실행
+3. [ ] 시드 데이터 필요 시 추가 (`supabase/seeds/`)
+4. [ ] Git 커밋
+
+### 새 프로젝트 배포 시
+1. [ ] Supabase 프로젝트 생성
+2. [ ] 마이그레이션 순서대로 실행
+3. [ ] 시드 데이터 실행
+4. [ ] `supabase/manual/` 문서 따라 수동 설정
+5. [ ] Auth Hook 활성화 (Dashboard)
+6. [ ] 이메일 템플릿 설정 (Dashboard)
+7. [ ] Site URL / Redirect URL 설정 (Dashboard)
+
+## 환경 변수
+
+### 로컬 개발 (운영 DB 연결)
+`.env.local`:
+```
+VITE_SUPABASE_URL=https://pfrdyviyzilhjarnmcec.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIs...
+```
+
+### 프로덕션
+Vercel/서버에 동일한 환경 변수 설정

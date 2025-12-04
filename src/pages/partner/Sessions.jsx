@@ -32,7 +32,9 @@ import {
   Edit,
   Trash2,
   Copy,
-  QrCode
+  QrCode,
+  ExternalLink,
+  Link as LinkIcon
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -41,6 +43,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 
@@ -125,6 +133,15 @@ export default function Sessions() {
   const copyCode = (code) => {
     navigator.clipboard.writeText(code)
     toast.success(t('session.codeCopied'))
+  }
+
+  /**
+   * 미리보기 링크 복사
+   */
+  const copyPreviewLink = (code) => {
+    const url = `${window.location.origin}/join/${code}?preview=true`
+    navigator.clipboard.writeText(url)
+    toast.success(t('session.previewLinkCopied'))
   }
 
   /**
@@ -294,9 +311,18 @@ export default function Sessions() {
                   <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg">
                     <span className="text-xs text-muted-foreground">{t('session.code')}:</span>
                     <span className="font-mono font-bold">{session.code}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyCode(session.code)}>
-                      <Copy className="h-3 w-3" />
-                    </Button>
+                    <TooltipProvider delayDuration={100}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyCode(session.code)}>
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="bg-slate-900 text-white border-slate-800 shadow-xl">
+                          <p className="font-medium">{t('session.copyCode')}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
 
                   {/* 주요 액션 버튼 */}
@@ -309,15 +335,30 @@ export default function Sessions() {
                       <Edit className="h-4 w-4 mr-1" />
                       {t('common.edit')}
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => handleDelete(session.id)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      {t('common.delete')}
-                    </Button>
+                    
+                    <TooltipProvider delayDuration={100}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary hover:border-primary transition-all"
+                            asChild
+                          >
+                            <a 
+                              href={`/join/${session.code}?preview=true`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="bg-slate-900 text-white border-slate-800 shadow-xl">
+                          <p className="font-medium">{t('session.openPreview')}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     
                     {/* 추가 액션 메뉴 */}
                     <DropdownMenu>
@@ -326,20 +367,27 @@ export default function Sessions() {
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end" className="w-56">
                         <DropdownMenuItem onClick={() => copyCode(session.code)}>
                           <Copy className="h-4 w-4 mr-2" />
                           {t('session.copyCode')}
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link to={`/join/${session.code}`} target="_blank">
-                            <Eye className="h-4 w-4 mr-2" />
-                            {t('session.preview')}
-                          </Link>
+                        <DropdownMenuItem onClick={() => copyPreviewLink(session.code)}>
+                          <LinkIcon className="h-4 w-4 mr-2" />
+                          {t('session.copyPreviewLink')}
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem>
                           <QrCode className="h-4 w-4 mr-2" />
                           {t('session.showQR')}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          className="text-red-600"
+                          onClick={() => handleDelete(session.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {t('common.delete')}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

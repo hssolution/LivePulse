@@ -34,8 +34,10 @@ import {
   Power,
   PowerOff,
   CheckCircle,
-  XCircle
+  XCircle,
+  Settings
 } from 'lucide-react'
+import PartnerInfoDialog from '@/components/common/PartnerInfoDialog'
 
 /**
  * 파트너 목록 관리 페이지 (관리자 전용)
@@ -52,9 +54,22 @@ export default function Partners() {
   const [selectedPartner, setSelectedPartner] = useState(null)
   const [detailOpen, setDetailOpen] = useState(false)
   
+  // 파트너 정보 팝업 (PartnerInfoDialog)
+  const [selectedPartnerId, setSelectedPartnerId] = useState(null)
+  const [infoDialogOpen, setInfoDialogOpen] = useState(false)
+  
   // 비활성화 확인 모달
   const [toggleOpen, setToggleOpen] = useState(false)
   const [processing, setProcessing] = useState(false)
+
+  /**
+   * 파트너 정보 팝업 열기 (리스트 항목 클릭)
+   */
+  const handlePartnerInfoClick = (partnerId, e) => {
+    e?.stopPropagation()
+    setSelectedPartnerId(partnerId)
+    setInfoDialogOpen(true)
+  }
 
   useEffect(() => {
     fetchPartners()
@@ -90,6 +105,31 @@ export default function Partners() {
       const { data, error } = await query
 
       if (error) throw error
+      
+      // 마지막 로그인 시간 조회
+      if (data && data.length > 0) {
+        const userIds = data.map(p => p.profile_id).filter(Boolean)
+        const { data: loginLogsData } = await supabase
+          .from('login_logs')
+          .select('user_id, created_at')
+          .in('user_id', userIds)
+          .eq('event_type', 'login_success')
+          .order('created_at', { ascending: false })
+        
+        // 사용자별 마지막 로그인 시간 매핑
+        const lastLoginMap = {}
+        loginLogsData?.forEach(log => {
+          if (!lastLoginMap[log.user_id]) {
+            lastLoginMap[log.user_id] = log.created_at
+          }
+        })
+        
+        // 파트너에 마지막 로그인 시간 매핑
+        data.forEach(p => {
+          p.lastLoginAt = lastLoginMap[p.profile_id] || null
+        })
+      }
+      
       setPartners(data || [])
     } catch (error) {
       console.error('Error fetching partners:', error)
@@ -145,6 +185,24 @@ export default function Partners() {
     } finally {
       setProcessing(false)
     }
+  }
+
+  /**
+   * 마지막 로그인 시간 포맷팅
+   */
+  const formatLastLogin = (dateString) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now - date
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    
+    if (diffMins < 1) return t('team.justNow')
+    if (diffMins < 60) return t('team.minutesAgo', { count: diffMins })
+    if (diffHours < 24) return t('team.hoursAgo', { count: diffHours })
+    if (diffDays < 7) return t('team.daysAgo', { count: diffDays })
+    return format(date, 'yyyy-MM-dd')
   }
 
   /**
@@ -372,7 +430,12 @@ export default function Partners() {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-1">
-                          <p className="font-medium truncate">{partner.representative_name}</p>
+                          <span 
+                            className="font-medium truncate text-primary hover:underline cursor-pointer"
+                            onClick={(e) => handlePartnerInfoClick(partner.id, e)}
+                          >
+                            {partner.representative_name}
+                          </span>
                           <Badge variant="outline" className={getPartnerTypeStyle(partner.partner_type)}>
                             <TypeIcon className="h-3 w-3 mr-1" />
                             {getPartnerTypeLabel(partner.partner_type)}
@@ -384,23 +447,46 @@ export default function Partners() {
                           )}
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                          <span>{partner.profiles?.email}</span>
-                          {details?.company_name && <span>· {details.company_name}</span>}
+                          <span 
+                            className="text-primary hover:underline cursor-pointer"
+                            onClick={(e) => handlePartnerInfoClick(partner.id, e)}
+                          >
+                            {partner.profiles?.email}
+                          </span>
+                          {details?.company_name && (
+                            <span 
+                              className="cursor-pointer hover:text-primary"
+                              onClick={(e) => handlePartnerInfoClick(partner.id, e)}
+                            >
+                              · {details.company_name}
+                            </span>
+                          )}
                           {details?.display_name && <span>· {details.display_name}</span>}
                           <span>· {format(new Date(partner.created_at), 'yyyy-MM-dd')}</span>
+                          <span>· {t('team.lastLogin')}: {partner.lastLoginAt ? formatLastLogin(partner.lastLoginAt) : '-'}</span>
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedPartner(partner)
-                          setDetailOpen(true)
-                        }}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        {t('admin.viewAll')}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handlePartnerInfoClick(partner.id, e)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          {t('common.view')}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedPartner(partner)
+                            setDetailOpen(true)
+                          }}
+                        >
+                          <Settings className="h-4 w-4 mr-1" />
+                          {t('common.manage')}
+                        </Button>
+                      </div>
                     </div>
                   )
                 })}
@@ -592,6 +678,13 @@ export default function Partners() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 파트너 정보 팝업 (PartnerInfoDialog) */}
+      <PartnerInfoDialog
+        partnerId={selectedPartnerId}
+        open={infoDialogOpen}
+        onOpenChange={setInfoDialogOpen}
+      />
     </div>
   )
 }

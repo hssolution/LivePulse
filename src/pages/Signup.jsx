@@ -4,8 +4,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
-import { Zap, ArrowLeft, CheckCircle } from 'lucide-react'
+import { Zap, ArrowLeft, CheckCircle, Mail, AlertCircle, RefreshCw } from 'lucide-react'
 import { useLanguage } from '@/context/LanguageContext'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 /**
  * 회원가입 페이지
@@ -14,6 +22,11 @@ import { useLanguage } from '@/context/LanguageContext'
  * - 이후 사용자는 일반 회원으로 가입 (파트너 신청은 마이페이지에서)
  * - URL 파라미터: email (자동 입력), redirect (가입 후 이동)
  * - 언어팩 적용됨
+ * 
+ * 시나리오:
+ * 1. 새 사용자 → 가입 성공, 이메일 인증 안내
+ * 2. 이미 가입 + 인증 완료 → 로그인 페이지로 안내
+ * 3. 이미 가입 + 인증 대기 → 이메일 재발송 여부 확인
  */
 export default function Signup() {
   const [searchParams] = useSearchParams()
@@ -23,10 +36,15 @@ export default function Signup() {
   const [email, setEmail] = useState(prefillEmail)
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resending, setResending] = useState(false)
   const [error, setError] = useState(null)
   const [isFirstUser, setIsFirstUser] = useState(null)
+  
+  // 다이얼로그 상태
+  const [dialogType, setDialogType] = useState(null) // 'emailSent' | 'alreadyExists' | 'pendingVerification'
+  
   const navigate = useNavigate()
-  const { t } = useLanguage()
+  const { t, currentLanguage } = useLanguage()
 
   useEffect(() => {
     checkSystemStatus()
@@ -66,9 +84,17 @@ export default function Signup() {
 
   /**
    * 회원가입 처리
+   * 
+   * Supabase signUp 응답 분석:
+   * - identities 배열이 있음 → 새 가입
+   * - identities가 빈 배열 → 이미 존재하는 이메일
+   *   - email_confirmed_at 있음 → 인증 완료된 사용자
+   *   - email_confirmed_at 없음 → 인증 대기중
    */
   const handleSignup = async (e) => {
     e.preventDefault()
+    debugger // 🔴 회원가입 - F12 열고 테스트
+    console.log('🔴 [SIGNUP] 회원가입 시도:', { email, isFirstUser, currentLanguage })
     setLoading(true)
     setError(null)
 
@@ -76,27 +102,102 @@ export default function Signup() {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            preferred_language: currentLanguage
+          }
+        }
       })
 
       if (authError) throw authError
 
       if (authData.user) {
-        if (isFirstUser) {
-          // 관리자는 대시보드로 이동
-          navigate('/adm')
-        } else if (redirectUrl) {
-          // redirect URL이 있으면 해당 페이지로 이동 (초대 수락 등)
-          navigate(redirectUrl)
+        const hasIdentities = authData.user.identities && authData.user.identities.length > 0
+        const isEmailConfirmed = authData.user.email_confirmed_at
+        
+        console.log('🔴 [SIGNUP] 응답:', {
+          hasSession: !!authData.session,
+          hasIdentities,
+          identitiesCount: authData.user.identities?.length,
+          isEmailConfirmed,
+          userId: authData.user.id
+        })
+        
+        if (hasIdentities) {
+          // 새 사용자 가입 성공
+          if (authData.session) {
+            // 이메일 인증이 필요 없는 환경 (로컬 등)
+            if (isFirstUser) {
+              navigate('/adm')
+            } else if (redirectUrl) {
+              navigate(redirectUrl)
+            } else {
+              navigate('/')
+            }
+          } else {
+            // 이메일 인증 필요
+            setDialogType('emailSent')
+          }
         } else {
-          // 일반 회원은 홈으로 이동 (바로 active 상태)
-          navigate('/')
+          // 이미 존재하는 이메일
+          if (isEmailConfirmed) {
+            // 인증 완료된 사용자 → 로그인 안내
+            setDialogType('alreadyExists')
+          } else {
+            // 인증 대기중 → 재발송 안내
+            setDialogType('pendingVerification')
+          }
         }
       }
     } catch (error) {
-      setError(error.message)
+      // Supabase 에러 메시지 한글화
+      if (error.message.includes('already registered')) {
+        setDialogType('alreadyExists')
+      } else {
+        setError(error.message)
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  /**
+   * 인증 이메일 재발송
+   */
+  const handleResendEmail = async () => {
+    setResending(true)
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+      })
+      
+      if (error) throw error
+      
+      // 재발송 성공 → 이메일 발송 완료 다이얼로그로 전환
+      setDialogType('emailSent')
+    } catch (error) {
+      setError(error.message)
+      setDialogType(null)
+    } finally {
+      setResending(false)
+    }
+  }
+
+  /**
+   * 다이얼로그 닫기 및 처리
+   */
+  const handleDialogClose = () => {
+    setDialogType(null)
+  }
+
+  const handleGoToLogin = () => {
+    navigate('/login')
+  }
+
+  const handleGoToHome = () => {
+    setDialogType(null)
+    navigate('/')
   }
 
   if (isFirstUser === null) {
@@ -108,6 +209,107 @@ export default function Signup() {
   }
 
   return (
+    <>
+      {/* 1. 이메일 발송 완료 다이얼로그 */}
+      <Dialog open={dialogType === 'emailSent'} onOpenChange={handleDialogClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
+              <Mail className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </div>
+            <DialogTitle className="text-center text-xl">
+              {t('auth.emailSentTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              {t('auth.emailSentDesc').replace('{email}', email)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
+            <ul className="space-y-2">
+              <li>• {t('auth.emailSentTip1')}</li>
+              <li>• {t('auth.emailSentTip2')}</li>
+              <li>• {t('auth.emailSentTip3')}</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button 
+              onClick={handleGoToHome} 
+              className="w-full bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600"
+            >
+              {t('common.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 2. 이미 가입된 사용자 다이얼로그 */}
+      <Dialog open={dialogType === 'alreadyExists'} onOpenChange={handleDialogClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4">
+              <AlertCircle className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            </div>
+            <DialogTitle className="text-center text-xl">
+              {t('auth.alreadyRegisteredTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              {t('auth.alreadyRegisteredDesc').replace('{email}', email)}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <Button 
+              onClick={handleGoToLogin} 
+              className="w-full bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600"
+            >
+              {t('auth.goToLogin')}
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={handleDialogClose} 
+              className="w-full"
+            >
+              {t('common.cancel')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 3. 인증 대기중 다이얼로그 */}
+      <Dialog open={dialogType === 'pendingVerification'} onOpenChange={handleDialogClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto w-16 h-16 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center mb-4">
+              <RefreshCw className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
+            </div>
+            <DialogTitle className="text-center text-xl">
+              {t('auth.pendingVerificationTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              {t('auth.pendingVerificationDesc').replace('{email}', email)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground text-center">
+            {t('auth.resendQuestion')}
+          </div>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <Button 
+              onClick={handleResendEmail} 
+              disabled={resending}
+              className="w-full bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600"
+            >
+              {resending ? t('common.processing') : t('auth.resendEmail')}
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={handleGoToLogin} 
+              className="w-full"
+            >
+              {t('auth.goToLogin')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     <div className="min-h-screen flex">
       {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-orange-500 to-pink-500 p-12 flex-col justify-between relative overflow-hidden">
@@ -249,5 +451,6 @@ export default function Signup() {
         </div>
       </div>
     </div>
+    </>
   )
 }

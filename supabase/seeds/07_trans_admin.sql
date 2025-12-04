@@ -63,3 +63,17 @@ SELECT _seed_trans('template.qnaScreenDesc', '00000000-0000-0000-0001-0000000000
 SELECT _seed_trans('template.pollScreen', '00000000-0000-0000-0001-000000000003'::uuid, '설문 화면 템플릿', 'Poll Screen Templates');
 SELECT _seed_trans('template.pollScreenDesc', '00000000-0000-0000-0001-000000000003'::uuid, '설문 진행 시 표시되는 화면 템플릿을 관리합니다.', 'Manage screen templates displayed during polls.');
 
+-- 세션 관리 (관리자)
+SELECT _seed_trans('menu.sessionManagement', '00000000-0000-0000-0001-000000000003'::uuid, '세션 관리', 'Session Management');
+SELECT _seed_trans('admin.sessionManagement', '00000000-0000-0000-0001-000000000003'::uuid, '세션 관리', 'Session Management');
+SELECT _seed_trans('admin.sessionManagementDesc', '00000000-0000-0000-0001-000000000003'::uuid, '모든 파트너의 세션을 조회하고 관리합니다.', 'View and manage sessions from all partners.');
+SELECT _seed_trans('admin.sessionSearchPlaceholder', '00000000-0000-0000-0001-000000000003'::uuid, '세션 제목, 코드, 장소 검색...', 'Search by title, code, venue...');
+SELECT _seed_trans('admin.filterByPartner', '00000000-0000-0000-0001-000000000003'::uuid, '파트너 필터', 'Filter by Partner');
+SELECT _seed_trans('admin.allPartners', '00000000-0000-0000-0001-000000000003'::uuid, '전체 파트너', 'All Partners');
+SELECT _seed_trans('admin.sessionList', '00000000-0000-0000-0001-000000000003'::uuid, '세션 목록', 'Session List');
+SELECT _seed_trans('admin.sessionListDesc', '00000000-0000-0000-0001-000000000003'::uuid, '총 {count}개의 세션이 있습니다.', '{count} sessions found.');
+SELECT _seed_trans('admin.noSessions', '00000000-0000-0000-0001-000000000003'::uuid, '세션이 없습니다.', 'No sessions found.');
+SELECT _seed_trans('admin.totalParticipants', '00000000-0000-0000-0001-000000000003'::uuid, '총 참여자', 'Total Participants');
+SELECT _seed_trans('admin.viewPartner', '00000000-0000-0000-0001-000000000003'::uuid, '파트너 정보', 'View Partner');
+SELECT _seed_trans('admin.createdAt', '00000000-0000-0000-0001-000000000003'::uuid, '생성일', 'Created');
+

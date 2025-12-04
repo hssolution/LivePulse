@@ -9,7 +9,7 @@ export default function AdminLayout() {
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false)
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-[#020617]">
       {/* Desktop Sidebar - hidden on mobile */}
       <div className="hidden md:flex">
         <Sidebar 
@@ -31,7 +31,7 @@ export default function AdminLayout() {
           onToggleSidebar={() => setDesktopSidebarCollapsed(!desktopSidebarCollapsed)}
           sidebarCollapsed={desktopSidebarCollapsed}
         />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>
         <Footer />

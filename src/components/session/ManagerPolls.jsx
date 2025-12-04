@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
+import { HtmlContent } from '@/components/ui/html-content'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -452,7 +454,14 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
                     </div>
                     
                     {/* 질문 */}
-                    <p className="font-medium">{poll.question}</p>
+                    <div className="font-medium">
+                      <HtmlContent 
+                        html={poll.question}
+                        expandable={true}
+                        maxImageHeight={100}
+                        showImagePreview={true}
+                      />
+                    </div>
                     
                     {/* 보기 전체 표시 */}
                     {poll.poll_type !== 'open' && poll.poll_options?.length > 0 && (
@@ -527,7 +536,7 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
 
       {/* 편집 다이얼로그 */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingPoll ? t('poll.edit') : t('poll.create')}
@@ -541,11 +550,14 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
             {/* 질문 */}
             <div className="space-y-2">
               <Label>{t('poll.question')}</Label>
-              <Textarea
+              <RichTextEditor
                 value={pollForm.question}
-                onChange={(e) => setPollForm({ ...pollForm, question: e.target.value })}
+                onChange={(html) => setPollForm({ ...pollForm, question: html })}
                 placeholder={t('poll.questionPlaceholder')}
-                rows={2}
+                minHeight={100}
+                maxHeight={200}
+                enableImage={true}
+                simple={true}
               />
             </div>
             

@@ -27,6 +27,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import { 
   ArrowLeft, 
@@ -46,9 +52,11 @@ import {
   Upload,
   Image as ImageIcon,
   ExternalLink,
+  Link as LinkIcon,
   Settings,
   FileText,
   Users2,
+  UserCheck,
   Mic,
   MessageCircle,
   BarChart3,
@@ -61,6 +69,7 @@ import {
 import CollaborationPanel from '@/components/session/CollaborationPanel'
 import ManagerQnA from '@/components/session/ManagerQnA'
 import ManagerPolls from '@/components/session/ManagerPolls'
+import ParticipantManager from '@/components/session/ParticipantManager'
 import DynamicTemplateRenderer, { getDefaultSampleValue } from '@/components/template/DynamicTemplateRenderer'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -534,6 +543,15 @@ export default function SessionDetail() {
   }
 
   /**
+   * 미리보기 링크 복사
+   */
+  const copyPreviewLink = () => {
+    const previewUrl = `${window.location.origin}/join/${session.code}?preview=true`
+    navigator.clipboard.writeText(previewUrl)
+    toast.success(t('session.previewLinkCopied'))
+  }
+
+  /**
    * 상태 배지
    */
   const getStatusBadge = (status) => {
@@ -584,19 +602,73 @@ export default function SessionDetail() {
           <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg">
             <span className="text-sm text-muted-foreground">{t('session.code')}:</span>
             <span className="font-mono font-bold">{session.code}</span>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyCode}>
-              <Copy className="h-3 w-3" />
-            </Button>
+            <TooltipProvider delayDuration={100}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyCode}>
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="bg-slate-900 text-white border-slate-800 shadow-xl">
+                  <p className="font-medium">{t('session.copyCode')}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           
-          <Button variant="outline" size="icon" onClick={() => setShowQR(true)}>
-            <QrCode className="h-4 w-4" />
-          </Button>
+          <TooltipProvider delayDuration={100}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setShowQR(true)}>
+                  <QrCode className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-slate-900 text-white border-slate-800 shadow-xl">
+                <p className="font-medium">{t('session.showQR')}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
-          <Button variant="outline" onClick={copyLink}>
-            <ExternalLink className="h-4 w-4 mr-2" />
-            {t('session.copyLink')}
-          </Button>
+          <TooltipProvider delayDuration={100}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={copyPreviewLink}
+                >
+                  <LinkIcon className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-slate-900 text-white border-slate-800 shadow-xl">
+                <p className="font-medium">{t('session.copyPreviewLink')}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <TooltipProvider delayDuration={100}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  className="hover:bg-primary/10 hover:text-primary hover:border-primary transition-all"
+                  asChild
+                >
+                  <a 
+                    href={`/join/${session.code}?preview=true`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-slate-900 text-white border-slate-800 shadow-xl">
+                <p className="font-medium">{t('session.openPreview')}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
@@ -614,6 +686,10 @@ export default function SessionDetail() {
           <TabsTrigger value="collaboration">
             <Users2 className="h-4 w-4 mr-2" />
             {t('session.collaboration')}
+          </TabsTrigger>
+          <TabsTrigger value="participants">
+            <UserCheck className="h-4 w-4 mr-2" />
+            {t('participant.title')}
           </TabsTrigger>
           <TabsTrigger value="qna">
             <MessageCircle className="h-4 w-4 mr-2" />
@@ -1029,6 +1105,11 @@ export default function SessionDetail() {
               onUpdate={loadSession}
             />
           )}
+        </TabsContent>
+
+        {/* 참가자 탭 */}
+        <TabsContent value="participants">
+          <ParticipantManager sessionId={id} sessionCode={session?.code} />
         </TabsContent>
 
         {/* Q&A 탭 */}

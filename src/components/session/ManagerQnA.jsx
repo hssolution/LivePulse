@@ -184,10 +184,8 @@ function SortableQuestionCard({
               )}
             </div>
             
-            {/* 질문 텍스트 */}
-            <p className="text-foreground whitespace-pre-wrap break-words">
-              {question.content}
-            </p>
+            {/* 질문 내용 */}
+            <p className="text-foreground">{question.content}</p>
             
             {/* 답변 */}
             {question.answer && (
@@ -195,9 +193,7 @@ function SortableQuestionCard({
                 <p className="text-sm font-medium text-primary mb-1">
                   {t('qna.answer')}
                 </p>
-                <p className="text-sm text-foreground whitespace-pre-wrap">
-                  {question.answer}
-                </p>
+                <p className="text-sm text-foreground">{question.answer}</p>
               </div>
             )}
             
@@ -774,6 +770,9 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
         .eq('id', questionId)
       
       if (error) throw error
+      
+      // 로컬 상태에서 즉시 제거
+      setQuestions(prev => prev.filter(q => q.id !== questionId))
       toast.success(t('common.deleted'))
     } catch (error) {
       console.error('Error deleting question:', error)
@@ -1133,7 +1132,7 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
 
       {/* 질문 추가 다이얼로그 */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('qna.addQuestion')}</DialogTitle>
             <DialogDescription>{t('qna.addQuestionDesc')}</DialogDescription>
@@ -1188,9 +1187,8 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
             
             {/* 질문 내용 */}
             <div className="space-y-2">
-              <Label htmlFor="content">{t('qna.questionContent')} *</Label>
+              <Label>{t('qna.questionContent')} *</Label>
               <Textarea
-                id="content"
                 value={newQuestion.content}
                 onChange={(e) => setNewQuestion(prev => ({ ...prev, content: e.target.value }))}
                 placeholder={t('qna.questionPlaceholder')}

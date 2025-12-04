@@ -87,6 +87,8 @@ export default function Login() {
    */
   const handleLogin = async (e) => {
     e.preventDefault()
+    debugger // 🔴 로그인 - F12 열고 테스트
+    console.log('🔴 [LOGIN] 로그인 시도:', { email, redirectUrl })
     setLoading(true)
     setError(null)
 
@@ -114,19 +116,41 @@ export default function Login() {
         // 실패 횟수 증가 및 잠금 처리
         const failureResult = await recordLoginFailure(email)
         
+        // 에러 코드별 메시지 처리
+        const getErrorMessage = (code) => {
+          switch (code) {
+            case 'email_not_confirmed':
+              return t('auth.emailNotConfirmed')
+            case 'invalid_credentials':
+              return t('auth.invalidCredentials')
+            case 'user_not_found':
+              return t('auth.userNotFound')
+            default:
+              return authError.message
+          }
+        }
+        
         if (failureResult.isLocked) {
           setLockInfo(failureResult)
           setRemainingTime(Math.ceil((failureResult.lockedUntil - new Date()) / 1000))
           setError(t('auth.tooManyAttempts'))
         } else {
           const attemptsLeft = 5 - failureResult.attemptCount
-          setError(`${authError.message} (${t('auth.attemptsRemaining', { count: attemptsLeft })})`)
+          const errorMsg = getErrorMessage(authError.code)
+          setError(`${errorMsg} (${t('auth.attemptsRemaining', { count: attemptsLeft })})`)
         }
         
         throw authError
       }
 
-      // 로그인 성공 - 부가 작업들은 백그라운드에서 실행 (실패해도 로그인은 성공)
+      // 로그인 성공
+      console.log('🔴 [LOGIN] 성공:', {
+        userId: data.user?.id,
+        email: data.user?.email,
+        session: !!data.session
+      })
+      
+      // 부가 작업들은 백그라운드에서 실행 (실패해도 로그인은 성공)
       Promise.all([
         clearLoginAttempts(email).catch(e => console.warn('clearLoginAttempts error:', e)),
         logLoginEvent(email, 'login_success', null, null).catch(e => console.warn('logLoginEvent error:', e))
@@ -134,6 +158,21 @@ export default function Login() {
 
       // AuthContext 프로필 갱신 후 리다이렉트 (AdminRoute 등에서 올바른 role 체크를 위해)
       await refreshProfile()
+      
+      // 대기 중인 초대가 있는지 확인
+      const { data: pendingInvites } = await supabase
+        .from('partner_members')
+        .select('id')
+        .eq('email', email)
+        .eq('status', 'pending')
+        .limit(1)
+      
+      if (pendingInvites && pendingInvites.length > 0) {
+        // 초대가 있으면 마이페이지로 이동 (초대 수락 안내)
+        console.log('🔗 [LOGIN] 대기 중인 초대 발견, 마이페이지로 이동')
+        navigate('/mypage?tab=invites')
+        return
+      }
       
       // redirect URL이 있으면 해당 페이지로, 없으면 홈으로
       navigate(redirectUrl || '/')

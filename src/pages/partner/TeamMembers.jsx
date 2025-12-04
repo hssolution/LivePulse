@@ -65,8 +65,8 @@ import {
  * - 팀원 삭제
  */
 export default function TeamMembers() {
-  const { user } = useAuth()
-  const { t } = useLanguage()
+  const { user, profile } = useAuth()
+  const { t, currentLanguage } = useLanguage()
   
   const [loading, setLoading] = useState(true)
   const [members, setMembers] = useState([])
@@ -102,10 +102,10 @@ export default function TeamMembers() {
     
     setLoading(true)
     try {
-      // 내 파트너 정보 조회
+      // 내 파트너 정보 조회 (이메일 발송을 위해 회사명 등 포함)
       const { data: partnerData, error: partnerError } = await supabase
         .from('partners')
-        .select('*')
+        .select('*, partner_organizers(*), partner_agencies(*)')
         .eq('profile_id', user.id)
         .single()
       
@@ -131,7 +131,7 @@ export default function TeamMembers() {
       
       if (membersError) throw membersError
       
-      // user_id로 profiles 정보 매핑 (user_id가 있는 멤버만)
+      // user_id로 profiles 정보 및 마지막 로그인 시간 매핑 (user_id가 있는 멤버만)
       const userIds = membersData?.filter(m => m.user_id).map(m => m.user_id) || []
       if (userIds.length > 0) {
         const { data: profilesData } = await supabase
@@ -139,16 +139,37 @@ export default function TeamMembers() {
           .select('id, email, display_name')
           .in('id', userIds)
         
+        // 마지막 로그인 시간 조회
+        const { data: loginLogsData, error: loginLogsError } = await supabase
+          .from('login_logs')
+          .select('user_id, created_at')
+          .in('user_id', userIds)
+          .eq('event_type', 'login_success')
+          .order('created_at', { ascending: false })
+        
+        console.log('🔍 [TeamMembers] Login logs query:', { userIds, loginLogsData, loginLogsError })
+        
+        // 사용자별 마지막 로그인 시간 매핑 (첫 번째 레코드가 최신)
+        const lastLoginMap = {}
+        loginLogsData?.forEach(log => {
+          if (!lastLoginMap[log.user_id]) {
+            lastLoginMap[log.user_id] = log.created_at
+          }
+        })
+        
         const profileMap = {}
         profilesData?.forEach(p => {
           profileMap[p.id] = { email: p.email, display_name: p.display_name }
         })
         
-        // 멤버에 프로필 정보 매핑 (user_id가 없으면 초대 이메일 사용)
+        // 멤버에 프로필 정보 및 마지막 로그인 시간 매핑
         membersData?.forEach(m => {
           if (m.user_id && profileMap[m.user_id]) {
             m.profileEmail = profileMap[m.user_id].email
             m.displayName = profileMap[m.user_id].display_name
+          }
+          if (m.user_id && lastLoginMap[m.user_id]) {
+            m.lastLoginAt = lastLoginMap[m.user_id]
           }
         })
       }
@@ -165,6 +186,18 @@ export default function TeamMembers() {
     } finally {
       setLoading(false)
     }
+  }
+
+  /**
+   * 파트너 이름 가져오기
+   */
+  const getPartnerName = () => {
+    if (partner?.partner_type === 'organizer') {
+      return partner.partner_organizers?.[0]?.company_name || partner.representative_name
+    } else if (partner?.partner_type === 'agency') {
+      return partner.partner_agencies?.[0]?.company_name || partner.representative_name
+    }
+    return partner?.representative_name || 'Team'
   }
 
   /**
@@ -210,7 +243,31 @@ export default function TeamMembers() {
       
       if (insertError) throw insertError
       
-      toast.success(t('team.inviteSent'))
+      // 초대 이메일 발송 (Edge Function 호출)
+      try {
+        const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-invite-email', {
+          body: {
+            to: inviteEmail,
+            inviteToken: tokenData,
+            partnerName: getPartnerName(),
+            inviterName: profile?.displayName || profile?.email || user?.email,
+            role: inviteRole,
+            language: currentLanguage
+          }
+        })
+        
+        if (emailError) {
+          console.warn('Email sending failed:', emailError)
+          // 이메일 발송 실패해도 초대는 성공으로 처리 (링크 복사로 대체 가능)
+          toast.success(t('team.inviteSentNoEmail'))
+        } else {
+          toast.success(t('team.inviteSentWithEmail'))
+        }
+      } catch (emailErr) {
+        console.warn('Email sending error:', emailErr)
+        toast.success(t('team.inviteSentNoEmail'))
+      }
+      
       setInviteOpen(false)
       setInviteEmail('')
       setInviteRole('member')
@@ -339,6 +396,24 @@ export default function TeamMembers() {
       default:
         return <Badge className="bg-orange-500/10 text-orange-600 dark:text-orange-400">{t('team.pending')}</Badge>
     }
+  }
+
+  /**
+   * 마지막 로그인 시간 포맷팅
+   */
+  const formatLastLogin = (dateString) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now - date
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    
+    if (diffMins < 1) return t('team.justNow')
+    if (diffMins < 60) return t('team.minutesAgo', { count: diffMins })
+    if (diffHours < 24) return t('team.hoursAgo', { count: diffHours })
+    if (diffDays < 7) return t('team.daysAgo', { count: diffDays })
+    return date.toLocaleDateString()
   }
 
   // 관리 권한 확인 (owner 또는 admin)
@@ -496,6 +571,7 @@ export default function TeamMembers() {
                     <TableHead>{t('common.displayName')}</TableHead>
                     <TableHead>{t('team.role')}</TableHead>
                     <TableHead>{t('team.status')}</TableHead>
+                    <TableHead>{t('team.lastLogin')}</TableHead>
                     <TableHead>{t('team.invitedAt')}</TableHead>
                     {canManage && <TableHead className="text-right">{t('common.actions')}</TableHead>}
                   </TableRow>
@@ -514,6 +590,13 @@ export default function TeamMembers() {
                       </TableCell>
                       <TableCell>{getRoleBadge(member.role)}</TableCell>
                       <TableCell>{getStatusBadge(member.status)}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {member.lastLoginAt ? (
+                          formatLastLogin(member.lastLoginAt)
+                        ) : (
+                          <span className="text-muted-foreground/50">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(member.invited_at).toLocaleDateString()}
                       </TableCell>

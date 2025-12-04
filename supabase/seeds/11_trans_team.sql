@@ -85,3 +85,10 @@ SELECT _seed_trans('invite.error.acceptFailedDesc', '00000000-0000-0000-0001-000
 -- 에러 메시지
 SELECT _seed_trans('error.inviteFailed', '00000000-0000-0000-0001-000000000006', '초대 발송에 실패했습니다.', 'Failed to send invitation.');
 
+-- 마지막 로그인 관련
+SELECT _seed_trans('team.lastLogin', '00000000-0000-0000-0001-000000000006', '마지막 로그인', 'Last Login');
+SELECT _seed_trans('team.justNow', '00000000-0000-0000-0001-000000000006', '방금 전', 'Just now');
+SELECT _seed_trans('team.minutesAgo', '00000000-0000-0000-0001-000000000006', '{count}분 전', '{count} min ago');
+SELECT _seed_trans('team.hoursAgo', '00000000-0000-0000-0001-000000000006', '{count}시간 전', '{count} hr ago');
+SELECT _seed_trans('team.daysAgo', '00000000-0000-0000-0001-000000000006', '{count}일 전', '{count} days ago');
+

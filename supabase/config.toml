@@ -27,6 +27,20 @@ site_url = "http://localhost:3000"
 additional_redirect_urls = ["http://localhost:3000"]
 jwt_expiry = 3600
 
+# 세션 수명 제한 설정 (Refresh Token 유효기간 제어)
+# session_timebox: 세션의 최대 수명 (초). 이 시간이 지나면 재로그인 필요
+# 3시간 = 10800초
+session_timebox = 10800
+
+# inactivity_timeout: 비활성 상태 시 세션 만료 (초)
+# 30분 동안 활동이 없으면 세션 만료
+inactivity_timeout = 1800
+
+# Refresh Token 재사용 감지 (보안)
+# 도난된 Refresh Token 사용 시도 감지
+refresh_token_rotation_enabled = true
+refresh_token_reuse_interval = 10
+
 [auth.hook.custom_access_token]
 enabled = true
 uri = "pg-functions://postgres/public/custom_access_token_hook"

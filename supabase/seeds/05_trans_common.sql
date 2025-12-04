@@ -99,6 +99,7 @@ SELECT _seed_trans('mypage.approvedDesc', '00000000-0000-0000-0001-000000000001'
 SELECT _seed_trans('mypage.rejectedDesc', '00000000-0000-0000-0001-000000000001'::uuid, '파트너 신청이 거부되었습니다.', 'Your partner application has been rejected.');
 SELECT _seed_trans('mypage.requestDate', '00000000-0000-0000-0001-000000000001'::uuid, '신청일', 'Request Date');
 SELECT _seed_trans('mypage.displayNameRequired', '00000000-0000-0000-0001-000000000001'::uuid, '활동명을 입력해주세요.', 'Please enter your display name.');
+SELECT _seed_trans('mypage.displayNamePlaceholder', '00000000-0000-0000-0001-000000000001'::uuid, '사용하실 이름을 입력하세요', 'Enter your display name');
 
 -- 공용 필드
 SELECT _seed_trans('common.displayName', '00000000-0000-0000-0001-000000000001'::uuid, '사용자명', 'Display Name');

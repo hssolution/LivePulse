@@ -22,10 +22,10 @@ export function ThemeCustomizer() {
   const [originalTheme, setOriginalTheme] = useState(theme)
 
   const presetThemes = [
-    { id: 'A', name: 'Professional Blue', description: t('theme.preset') + ' A', color: 'bg-blue-600' },
-    { id: 'B', name: 'Modern Purple', description: t('theme.preset') + ' B', color: 'bg-purple-600' },
-    { id: 'C', name: 'Friendly Green', description: t('theme.preset') + ' C', color: 'bg-teal-500' },
-    { id: 'D', name: 'Clean White', description: t('theme.preset') + ' D', color: 'bg-gray-600' },
+    { id: 'A', name: t('theme.preset.A'), description: t('theme.preset') + ' A', color: 'bg-blue-600' },
+    { id: 'B', name: t('theme.preset.B'), description: t('theme.preset') + ' B', color: 'bg-purple-600' },
+    { id: 'C', name: t('theme.preset.C'), description: t('theme.preset') + ' C', color: 'bg-teal-500' },
+    { id: 'D', name: t('theme.preset.D'), description: t('theme.preset') + ' D', color: 'bg-gray-600' },
   ]
 
   const fontSizes = [

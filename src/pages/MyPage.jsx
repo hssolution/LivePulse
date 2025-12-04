@@ -60,6 +60,11 @@ export default function MyPage() {
   const [submitting, setSubmitting] = useState(false)
   const [isPartnerInDB, setIsPartnerInDB] = useState(false) // DB에서 직접 확인한 파트너 여부
   
+  // 팀원 초대 내역
+  const [pendingInvites, setPendingInvites] = useState([])
+  const [loadingInvites, setLoadingInvites] = useState(true)
+  const [processingInvite, setProcessingInvite] = useState(null) // 처리 중인 초대 ID
+  
   // 파트너 신청 팝업
   const [requestDialogOpen, setRequestDialogOpen] = useState(false)
   
@@ -189,8 +194,113 @@ export default function MyPage() {
     
     if (user) {
       fetchPartnerRequest()
+      fetchPendingInvites()
     }
   }, [user, authLoading, navigate])
+
+  /**
+   * 대기 중인 팀원 초대 내역 조회
+   */
+  const fetchPendingInvites = async () => {
+    if (!user?.email) return
+    
+    setLoadingInvites(true)
+    try {
+      // RPC 함수로 초대 정보 조회 (파트너 정보 포함)
+      const { data, error } = await supabase
+        .from('partner_members')
+        .select(`
+          id,
+          email,
+          role,
+          invite_token,
+          invited_at,
+          partner_id,
+          partners (
+            id,
+            partner_type,
+            representative_name,
+            partner_organizers (company_name),
+            partner_agencies (company_name)
+          )
+        `)
+        .eq('email', user.email)
+        .eq('status', 'pending')
+        .order('invited_at', { ascending: false })
+      
+      if (error) throw error
+      setPendingInvites(data || [])
+    } catch (error) {
+      console.error('Error fetching pending invites:', error)
+    } finally {
+      setLoadingInvites(false)
+    }
+  }
+
+  /**
+   * 초대 수락
+   */
+  const handleAcceptInvite = async (inviteToken) => {
+    setProcessingInvite(inviteToken)
+    try {
+      const { data, error } = await supabase
+        .rpc('accept_partner_invite', { p_token: inviteToken })
+      
+      if (error) throw error
+      
+      if (data.success) {
+        toast.success(t('invite.acceptedSuccess'))
+        fetchPendingInvites()
+        await refreshProfile()
+      } else {
+        toast.error(t(`invite.error.${data.error}`) || t('error.generic'))
+      }
+    } catch (error) {
+      console.error('Error accepting invite:', error)
+      toast.error(t('error.generic'))
+    } finally {
+      setProcessingInvite(null)
+    }
+  }
+
+  /**
+   * 초대 거절
+   */
+  const handleDeclineInvite = async (inviteId) => {
+    setProcessingInvite(inviteId)
+    try {
+      const { error } = await supabase
+        .from('partner_members')
+        .update({ status: 'rejected' })
+        .eq('id', inviteId)
+      
+      if (error) throw error
+      
+      toast.success(t('invite.declinedSuccess'))
+      fetchPendingInvites()
+    } catch (error) {
+      console.error('Error declining invite:', error)
+      toast.error(t('error.generic'))
+    } finally {
+      setProcessingInvite(null)
+    }
+  }
+
+  /**
+   * 파트너 이름 가져오기
+   */
+  const getPartnerDisplayName = (invite) => {
+    const partner = invite.partners
+    if (!partner) return t('common.unknown')
+    
+    if (partner.partner_type === 'organizer' && partner.partner_organizers?.[0]?.company_name) {
+      return partner.partner_organizers[0].company_name
+    }
+    if (partner.partner_type === 'agency' && partner.partner_agencies?.[0]?.company_name) {
+      return partner.partner_agencies[0].company_name
+    }
+    return partner.representative_name || t('common.unknown')
+  }
 
   /**
    * 파트너 신청 내역 조회
@@ -518,6 +628,68 @@ export default function MyPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* 팀원 초대 내역 */}
+          {pendingInvites.length > 0 && (
+            <Card className="border-orange-500/30 bg-orange-500/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-orange-500" />
+                  {t('mypage.pendingInvites')}
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-orange-500 text-white text-xs">
+                    {pendingInvites.length}
+                  </span>
+                </CardTitle>
+                <CardDescription>{t('mypage.pendingInvitesDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {loadingInvites ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
+                  </div>
+                ) : (
+                  pendingInvites.map((invite) => (
+                    <div 
+                      key={invite.id} 
+                      className="flex items-center justify-between p-4 rounded-lg bg-background border"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{getPartnerDisplayName(invite)}</span>
+                          <span className="text-xs px-2 py-0.5 rounded bg-muted">
+                            {t(`team.${invite.role}`)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {t('mypage.invitedAt')}: {new Date(invite.invited_at).toLocaleDateString('ko-KR')}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeclineInvite(invite.id)}
+                          disabled={processingInvite === invite.id || processingInvite === invite.invite_token}
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          {t('invite.decline')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleAcceptInvite(invite.invite_token)}
+                          disabled={processingInvite === invite.id || processingInvite === invite.invite_token}
+                          className="bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          {t('invite.accept')}
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
 

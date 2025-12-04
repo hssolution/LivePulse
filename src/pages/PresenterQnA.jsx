@@ -332,7 +332,7 @@ export default function PresenterQnA() {
                     )}
                     
                     {/* 질문 내용 */}
-                    <div className={`text-lg truncate ${
+                    <div className={`text-lg flex-1 min-w-0 ${
                       isBroadcasting ? 'text-blue-600 font-medium' : 'text-gray-800'
                     }`}>
                       {question.content}

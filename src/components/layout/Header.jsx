@@ -24,6 +24,8 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }) {
    * 로그아웃 처리 함수
    */
   const handleLogout = async () => {
+    debugger // 🔴 로그아웃 - F12 열고 테스트
+    console.log('🔴 [LOGOUT] 로그아웃 시도:', { user: user?.email, profile })
     try {
       await supabase.auth.signOut({ scope: 'local' })
     } catch (error) {
@@ -72,7 +74,7 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }) {
   }
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6">
+    <header className="flex h-16 items-center gap-4 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md px-6 md:px-8 z-10 sticky top-0 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-colors duration-300">
       {/* Mobile Menu Button */}
       <Button
         variant="ghost"
@@ -100,7 +102,7 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }) {
       </Button>
 
       <div className="flex-1">
-        <h1 className="text-base md:text-lg font-semibold">{headerTitle}</h1>
+        <h1 className="text-lg md:text-xl font-bold text-slate-800 dark:text-slate-100 tracking-tight transition-colors duration-300">{headerTitle}</h1>
       </div>
 
       <div className="flex items-center gap-2 md:gap-3">
@@ -111,25 +113,25 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }) {
 
         {/* 프로필 정보 배지들 - responsive */}
         {profile && (
-          <div className="flex items-center gap-1 md:gap-2">
+          <div className="flex items-center gap-2">
             {/* 역할 배지 */}
-            <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border shadow-sm transition-all hover:shadow-md ${
               profile.role === 'admin' 
-                ? 'bg-orange-100 text-orange-700 border-orange-200' 
-                : 'bg-blue-100 text-blue-700 border-blue-200'
+                ? 'bg-gradient-to-r from-orange-50 to-amber-50 text-orange-700 border-orange-200' 
+                : 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-200'
             }`}>
               {getRoleIcon()}
               <span className="hidden sm:inline">{profile.role}</span>
             </div>
 
             {/* 사용자 유형 배지 - hidden on mobile */}
-            <div className={`hidden md:flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${getUserTypeBadgeColor()}`}>
+            <div className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border shadow-sm ${getUserTypeBadgeColor()}`}>
               <Users className="h-3 w-3" />
               <span>{profile.userType}</span>
             </div>
 
             {/* 상태 배지 - hidden on mobile */}
-            <div className={`hidden md:block px-2 py-1 rounded-md text-xs font-medium border ${getStatusBadgeColor()}`}>
+            <div className={`hidden md:block px-3 py-1.5 rounded-full text-xs font-semibold border shadow-sm ${getStatusBadgeColor()}`}>
               {profile.status}
             </div>
           </div>

@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { HtmlContent } from '@/components/ui/html-content'
 import { toast } from 'sonner'
 import { 
   Loader2, 
@@ -334,8 +335,9 @@ export default function AudiencePolls({ sessionId, sessionTitle }) {
           return (
             <Card key={poll.id}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">
-                  {index + 1}. {poll.question}
+                <CardTitle className="text-base flex items-start gap-1">
+                  <span>{index + 1}.</span>
+                  <HtmlContent html={poll.question} maxImageHeight={80} />
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -391,11 +393,13 @@ export default function AudiencePolls({ sessionId, sessionTitle }) {
             <div key={poll.id} className="space-y-3">
               {/* 질문 헤더 */}
               <div className="flex items-start gap-2">
-                <span className="font-bold text-primary">
+                <span className="font-bold text-primary shrink-0">
                   {poll.is_required && <span className="text-red-500">*</span>}
                   {index + 1}.
                 </span>
-                <span className="font-medium">{poll.question}</span>
+                <div className="font-medium">
+                  <HtmlContent html={poll.question} maxImageHeight={120} />
+                </div>
               </div>
               
               {/* 복수 선택 안내 */}
