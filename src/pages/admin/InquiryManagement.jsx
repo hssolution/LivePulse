@@ -25,15 +25,15 @@ import {
 import { toast } from 'sonner'
 import { 
   Loader2, 
-  Search,
-  MessagesSquare,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Send,
-  Building2,
-  Briefcase,
-  Mic,
+  Search, 
+  MessagesSquare, 
+  Clock, 
+  CheckCircle, 
+  AlertCircle, 
+  Send, 
+  Building2, 
+  Briefcase, 
+  Mic, 
   User
 } from 'lucide-react'
 import { format } from 'date-fns'
@@ -253,118 +253,132 @@ export default function InquiryManagement() {
     resolved: inquiries.filter(i => i.status === 'resolved').length,
   }
 
+  // 탭 아이템 컴포넌트
+  const TabItem = ({ id, label, count, icon: Icon, colorClass }) => (
+    <button
+      onClick={() => setStatusFilter(id)}
+      className={`
+        flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
+        ${statusFilter === id 
+          ? `border-primary text-primary bg-primary/5` 
+          : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'}
+      `}
+    >
+      <Icon className={`h-4 w-4 ${statusFilter === id ? colorClass : 'text-muted-foreground'}`} />
+      {label}
+      {statusFilter === id && (
+        <span className="ml-1 text-xs rounded-full px-2 py-0.5 bg-primary/10">
+          {count}
+        </span>
+      )}
+    </button>
+  )
+
   return (
     <div className="h-full flex flex-col p-4 md:p-6">
       {/* 헤더 */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col gap-4 mb-6">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('inquiry.management')}</h2>
           <p className="text-muted-foreground mt-1">{t('inquiry.managementDesc')}</p>
         </div>
+
+        {/* Compact Tabs */}
+        <div className="flex items-center border-b overflow-x-auto">
+          <TabItem 
+            id="all" 
+            label={t('common.all')} 
+            count={stats.total} 
+            icon={MessagesSquare}
+            colorClass="text-primary"
+          />
+          <TabItem 
+            id="pending" 
+            label={t('inquiry.statusPending')} 
+            count={stats.pending} 
+            icon={Clock}
+            colorClass="text-yellow-500"
+          />
+          <TabItem 
+            id="in_progress" 
+            label={t('inquiry.statusInProgress')} 
+            count={stats.in_progress} 
+            icon={AlertCircle}
+            colorClass="text-blue-500"
+          />
+          <TabItem 
+            id="resolved" 
+            label={t('inquiry.statusResolved')} 
+            count={stats.resolved} 
+            icon={CheckCircle}
+            colorClass="text-green-500"
+          />
+        </div>
       </div>
 
-      {/* 통계 카드 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <Card 
-          className={`cursor-pointer transition-all ${statusFilter === 'all' ? 'ring-2 ring-primary' : ''}`}
-          onClick={() => setStatusFilter('all')}
-        >
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">{t('common.all')}</p>
-            <p className="text-2xl font-bold">{stats.total}</p>
-          </CardContent>
-        </Card>
-        <Card 
-          className={`cursor-pointer transition-all ${statusFilter === 'pending' ? 'ring-2 ring-yellow-500' : ''}`}
-          onClick={() => setStatusFilter('pending')}
-        >
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">{t('inquiry.statusPending')}</p>
-            <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-          </CardContent>
-        </Card>
-        <Card 
-          className={`cursor-pointer transition-all ${statusFilter === 'in_progress' ? 'ring-2 ring-blue-500' : ''}`}
-          onClick={() => setStatusFilter('in_progress')}
-        >
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">{t('inquiry.statusInProgress')}</p>
-            <p className="text-2xl font-bold text-blue-600">{stats.in_progress}</p>
-          </CardContent>
-        </Card>
-        <Card 
-          className={`cursor-pointer transition-all ${statusFilter === 'resolved' ? 'ring-2 ring-green-500' : ''}`}
-          onClick={() => setStatusFilter('resolved')}
-        >
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">{t('inquiry.statusResolved')}</p>
-            <p className="text-2xl font-bold text-green-600">{stats.resolved}</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* 검색 및 리스트 */}
+      <div className="flex-1 overflow-auto space-y-6">
+        <div className="relative mb-4 w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder={t('common.search')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
 
-      {/* 검색 */}
-      <div className="relative mb-4 w-full sm:w-64">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder={t('common.search')}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-        />
-      </div>
-
-      {/* 문의 목록 */}
-      <div className="flex-1 overflow-auto">
-        {loading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          </div>
-        ) : filteredInquiries.length === 0 ? (
-          <Card>
-            <CardContent className="text-center py-12">
-              <MessagesSquare className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-              <p className="text-muted-foreground">{t('inquiry.noInquiries')}</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {filteredInquiries.map((inquiry) => (
-              <Card 
-                key={inquiry.id} 
-                className="cursor-pointer hover:border-primary/50 transition-all"
-                onClick={() => openDetail(inquiry)}
-              >
-                <CardContent className="pt-4">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        {getStatusBadge(inquiry.status)}
-                        <Badge variant="outline" className="gap-1">
-                          {getPartnerTypeIcon(inquiry.partner?.partner_type)}
-                          {t(`partner.type${inquiry.partner?.partner_type?.charAt(0).toUpperCase()}${inquiry.partner?.partner_type?.slice(1)}`)}
-                        </Badge>
-                      </div>
-                      
-                      <p className="font-medium">{inquiry.title}</p>
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                        {inquiry.content}
-                      </p>
-                      
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span>{inquiry.partner?.representative_name}</span>
-                        <span>·</span>
-                        <span>{inquiry.partner?.profile?.email}</span>
-                        <span>·</span>
-                        <span>{format(new Date(inquiry.created_at), 'yyyy.MM.dd HH:mm', { locale: language === 'ko' ? ko : undefined })}</span>
+        <div className="flex-1 overflow-auto">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : filteredInquiries.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-12">
+                <MessagesSquare className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                <p className="text-muted-foreground">{t('inquiry.noInquiries')}</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {filteredInquiries.map((inquiry) => (
+                <Card 
+                  key={inquiry.id} 
+                  className="cursor-pointer hover:border-primary/50 transition-all"
+                  onClick={() => openDetail(inquiry)}
+                >
+                  <CardContent className="pt-4">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          {getStatusBadge(inquiry.status)}
+                          <Badge variant="outline" className="gap-1">
+                            {getPartnerTypeIcon(inquiry.partner?.partner_type)}
+                            {t(`partner.type${inquiry.partner?.partner_type?.charAt(0).toUpperCase()}${inquiry.partner?.partner_type?.slice(1)}`)}
+                          </Badge>
+                        </div>
+                        
+                        <p className="font-medium">{inquiry.title}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                          {inquiry.content}
+                        </p>
+                        
+                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                          <span>{inquiry.partner?.representative_name}</span>
+                          <span>·</span>
+                          <span>{inquiry.partner?.profile?.email}</span>
+                          <span>·</span>
+                          <span>{format(new Date(inquiry.created_at), 'yyyy.MM.dd HH:mm', { locale: language === 'ko' ? ko : undefined })}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 상세 보기 다이얼로그 */}
@@ -470,4 +484,3 @@ export default function InquiryManagement() {
     </div>
   )
 }
-

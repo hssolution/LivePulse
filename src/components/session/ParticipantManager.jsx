@@ -24,7 +24,6 @@ import { toast } from 'sonner'
 import {
   Users,
   Search,
-  Download,
   Mail,
   Phone,
   Calendar,
@@ -210,51 +209,6 @@ export default function ParticipantManager({ sessionId, sessionCode }) {
   }, [searchTerm, filterType, dateFilter, participants])
 
   /**
-   * CSV 다운로드
-   */
-  const handleExportCSV = () => {
-    try {
-      // CSV 헤더
-      const headers = ['번호', '이름', '이메일', '전화번호', '타입', '참가일시']
-      
-      // CSV 데이터
-      const rows = filteredParticipants.map((p, index) => [
-        index + 1,
-        p.name,
-        p.email,
-        p.phone,
-        p.type === 'authenticated' ? '회원' : '비회원',
-        format(new Date(p.createdAt), 'yyyy-MM-dd HH:mm:ss', { locale: ko })
-      ])
-
-      // CSV 생성
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-      ].join('\n')
-
-      // BOM 추가 (한글 깨짐 방지)
-      const BOM = '\uFEFF'
-      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
-      
-      // 다운로드
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      link.setAttribute('download', `참가자_${sessionCode}_${format(new Date(), 'yyyyMMdd')}.csv`)
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-
-      toast.success(t('participant.exportSuccess'))
-    } catch (err) {
-      console.error('Error exporting CSV:', err)
-      toast.error(t('participant.exportFailed'))
-    }
-  }
-
-  /**
    * 사용자 상세 보기
    */
   const handleUserClick = (participant) => {
@@ -304,14 +258,6 @@ export default function ParticipantManager({ sessionId, sessionCode }) {
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             {t('common.refresh')}
-          </Button>
-          <Button 
-            size="sm"
-            onClick={handleExportCSV} 
-            disabled={filteredParticipants.length === 0}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            {t('participant.exportCSV')}
           </Button>
         </div>
       </div>

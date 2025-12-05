@@ -34,8 +34,6 @@ const getBrowserLanguage = () => {
 
 /**
  * 초기 언어 결정
- * 1. localStorage (비로그인 시 저장된 값)
- * 2. 브라우저 언어
  */
 const getInitialLanguage = () => {
   if (typeof window !== 'undefined') {
@@ -51,14 +49,15 @@ const getInitialLanguage = () => {
  * LanguageProvider
  * 앱 최상위에서 언어 상태 관리
  */
-export function LanguageProvider({ children }) {
-  const [language, setLanguageState] = useState(getInitialLanguage)
-  const [translations, setTranslations] = useState({})
-  const [languages, setLanguages] = useState([])
-  const [translationsLoading, setTranslationsLoading] = useState(true)
+export function LanguageProvider({ children, initialData }) {
+  // 초기 데이터가 있으면 그것을 사용, 없으면 기존 로직대로 초기화
+  const [language, setLanguageState] = useState(initialData?.initialLanguage || getInitialLanguage)
+  const [translations, setTranslations] = useState(initialData?.translations || {})
+  const [languages, setLanguages] = useState(initialData?.languages || [])
+  const [translationsLoading, setTranslationsLoading] = useState(!initialData) // 초기 데이터가 있으면 로딩 완료 상태
   const [error, setError] = useState(null)
-  const [user, setUser] = useState(null)
-  const initialLoadDone = useRef(false)
+  const [user, setUser] = useState(initialData?.session?.user || null)
+  const initialLoadDone = useRef(!!initialData)
 
   /**
    * 지원 언어 목록 로드
@@ -106,7 +105,6 @@ export function LanguageProvider({ children }) {
    */
   const loadUserLanguage = useCallback(async (userId) => {
     try {
-      // RPC 대신 직접 쿼리 (캐시 문제 방지)
       const { data, error } = await supabase
         .from('profiles')
         .select('preferred_language')
@@ -133,7 +131,6 @@ export function LanguageProvider({ children }) {
     if (!user) return false
     
     try {
-      // RPC 대신 직접 업데이트 (더 확실함)
       const { error } = await supabase
         .from('profiles')
         .update({ preferred_language: langCode })
@@ -159,7 +156,6 @@ export function LanguageProvider({ children }) {
     setLanguageState(langCode)
     localStorage.setItem(STORAGE_KEY, langCode)
     
-    // 로그인 상태면 DB에도 저장
     if (user) {
       console.log('[Language] Saving to DB...')
       await saveUserLanguage(langCode)
@@ -172,18 +168,14 @@ export function LanguageProvider({ children }) {
 
   /**
    * 번역 함수
-   * - 번역이 없으면 키를 그대로 반환 (앱 즉시 렌더링)
-   * - 번역이 로드되면 자동으로 업데이트됨
    */
   const t = useCallback((key, params = {}) => {
     let value = translations[key]
     
     if (!value) {
-      // 번역이 없으면 키를 그대로 반환 (경고 없음)
       return key
     }
     
-    // 파라미터 치환
     if (params) {
       Object.keys(params).forEach((paramKey) => {
         const regex = new RegExp(`\\{${paramKey}\\}`, 'g')
@@ -205,26 +197,22 @@ export function LanguageProvider({ children }) {
    * 초기 로드 및 인증 상태 변경 감지
    */
   useEffect(() => {
+    // 초기 데이터가 있으면 초기 로드 스킵 (단, 이벤트 리스너는 등록해야 함)
+    const init = async () => {
     if (initialLoadDone.current) return
     initialLoadDone.current = true
 
-    const init = async () => {
       console.log('[Language] Initial load started, current language:', language)
       
-      // 언어 목록 로드
       loadLanguages()
       
-      // 현재 세션 확인
       const { data: { session } } = await supabase.auth.getSession()
       const currentUser = session?.user || null
       setUser(currentUser)
-      console.log('[Language] User:', currentUser?.email || 'Not logged in')
       
-      // 로그인된 사용자면 DB에서 언어 설정 로드
       let langToLoad = language
       if (currentUser) {
         const userLang = await loadUserLanguage(currentUser.id)
-        console.log('[Language] User language from DB:', userLang)
         if (userLang && userLang !== language) {
           langToLoad = userLang
           setLanguageState(userLang)
@@ -232,7 +220,6 @@ export function LanguageProvider({ children }) {
         }
       }
       
-      // 번역 로드
       console.log('[Language] Loading translations for:', langToLoad)
       await loadTranslations(langToLoad)
       console.log('[Language] Initial load completed')
@@ -240,13 +227,11 @@ export function LanguageProvider({ children }) {
     
     init()
 
-    // 인증 상태 변경 리스너 (로그인/로그아웃 시)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         const currentUser = session?.user || null
         setUser(currentUser)
 
-        // 새로 로그인한 경우에만 언어 설정 다시 로드
         if (currentUser && event === 'SIGNED_IN') {
           const userLang = await loadUserLanguage(currentUser.id)
           if (userLang && userLang !== language) {
@@ -275,7 +260,6 @@ export function LanguageProvider({ children }) {
     isLoggedIn: !!user
   }
 
-  // 블로킹 없이 바로 렌더링 (번역이 로드되면 자동으로 업데이트됨)
   return (
     <LanguageContext.Provider value={value}>
       {children}
@@ -283,9 +267,6 @@ export function LanguageProvider({ children }) {
   )
 }
 
-/**
- * 언어 컨텍스트 사용 훅
- */
 export function useLanguage() {
   const context = useContext(LanguageContext)
   if (!context) {
@@ -294,9 +275,6 @@ export function useLanguage() {
   return context
 }
 
-/**
- * 번역 훅 (간편 사용)
- */
 export function useTranslation() {
   const { t, language, loading } = useLanguage()
   return { t, language, loading }

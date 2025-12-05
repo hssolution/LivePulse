@@ -34,6 +34,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
+import { exportToExcel } from '@/utils/excel'
+import * as XLSX from 'xlsx'
 import { 
   ArrowLeft, 
   Calendar, 
@@ -42,29 +44,30 @@ import {
   Mail, 
   Users, 
   Save, 
-  Loader2,
-  Copy,
-  QrCode,
-  Eye,
-  Play,
-  Square,
-  Trash2,
-  Upload,
-  Image as ImageIcon,
-  ExternalLink,
-  Link as LinkIcon,
-  Settings,
-  FileText,
-  Users2,
-  UserCheck,
-  Mic,
-  MessageCircle,
-  BarChart3,
-  GripHorizontal,
-  Monitor,
-  Tablet,
-  Smartphone,
-  RefreshCw
+  Loader2, 
+  Copy, 
+  QrCode, 
+  Eye, 
+  Play, 
+  Square, 
+  Trash2, 
+  Upload, 
+  Image as ImageIcon, 
+  ExternalLink, 
+  Link as LinkIcon, 
+  Settings, 
+  FileText, 
+  Users2, 
+  UserCheck, 
+  Mic, 
+  MessageCircle, 
+  BarChart3, 
+  GripHorizontal, 
+  Monitor, 
+  Tablet, 
+  Smartphone, 
+  RefreshCw,
+  Download
 } from 'lucide-react'
 import CollaborationPanel from '@/components/session/CollaborationPanel'
 import ManagerQnA from '@/components/session/ManagerQnA'
@@ -109,6 +112,7 @@ export default function SessionDetail() {
   const isResizing = useRef(false)
   const [previewData, setPreviewData] = useState({}) // 미리보기용 데이터
   const [adminDefaultData, setAdminDefaultData] = useState({}) // 관리자 기본값
+  const [activeTab, setActiveTab] = useState('basic')
   
   // 폼 데이터
   const [formData, setFormData] = useState({
@@ -566,6 +570,191 @@ export default function SessionDetail() {
     return <Badge className={c.className}>{c.label}</Badge>
   }
 
+  /**
+   * 데이터 엑셀 다운로드
+   */
+  const handleExportData = async () => {
+    try {
+      const timestamp = format(new Date(), 'yyyyMMdd_HHmm')
+      let fileName = `${session.title}`
+      const sheets = {}
+
+      // 탭별 데이터 로드 및 시트 구성
+      if (activeTab === 'participants') {
+        fileName += '_참여자목록'
+        const { data: participants } = await supabase
+          .from('session_participants')
+          .select('*')
+          .eq('session_id', id)
+          .order('created_at', { ascending: false })
+        
+        sheets['참여자'] = participants?.map(p => ({
+          '참여일시': format(new Date(p.created_at), 'yyyy-MM-dd HH:mm:ss'),
+          '닉네임': p.display_name || '익명',
+          '디바이스ID': p.device_id
+        })) || []
+
+      } else if (activeTab === 'qna') {
+        fileName += '_Q&A'
+        const { data: questions } = await supabase
+          .from('questions')
+          .select('*')
+          .eq('session_id', id)
+          .order('created_at', { ascending: true })
+
+        sheets['Q&A'] = questions?.map(q => ({
+          '작성일시': format(new Date(q.created_at), 'yyyy-MM-dd HH:mm:ss'),
+          '질문내용': q.content,
+          '작성자': q.is_anonymous ? '익명' : (q.author_name || '익명'),
+          '상태': q.status === 'approved' ? '승인됨' : (q.status === 'answered' ? '답변완료' : q.status),
+          '좋아요': q.likes_count,
+          '답변': q.answer || '',
+          '답변일시': q.answered_at ? format(new Date(q.answered_at), 'yyyy-MM-dd HH:mm:ss') : ''
+        })) || []
+
+      } else if (activeTab === 'poll') {
+        fileName += '_설문결과'
+        
+        // 1. 설문 문항 및 옵션 로드
+        const { data: polls } = await supabase
+          .from('polls')
+          .select('*, poll_options(*)')
+          .eq('session_id', id)
+          .order('display_order')
+
+        if (!polls || polls.length === 0) {
+          toast.info(t('session.noPolls', '등록된 설문이 없습니다.'))
+          return
+        }
+        
+        // 2. 설문 응답 전체 로드
+        const { data: responses, error: responsesError } = await supabase
+          .from('poll_responses')
+          .select(`
+            *,
+            poll_options(id, option_text, poll_id)
+          `)
+          .in('poll_id', polls.map(p => p.id))
+          .order('created_at')
+
+        if (responsesError) throw responsesError
+
+        const safeResponses = responses || []
+
+        // 3. 응답자 식별 및 정렬 (1, 2, 3... 컬럼 생성을 위해)
+        const respondentIds = [...new Set(safeResponses.map(r => r.user_id || r.anonymous_id).filter(id => id))]
+        const respondentMap = {}
+        respondentIds.forEach((id, index) => {
+          respondentMap[id] = index + 1
+        })
+
+        // --- 통합 시트 생성 (Array of Arrays 방식) ---
+        
+        // 1. 헤더 구성
+        const headerRow = ['넘버링', '종류', '필수선택', '보기 및 응답 결과']
+        // 응답자 컬럼 추가 (1, 2, 3...)
+        respondentIds.forEach((_, idx) => {
+          headerRow.push(`${idx + 1}`)
+        })
+
+        // 2. 데이터 행 구성
+        const dataRows = polls.map((p, index) => {
+          const pollResponses = safeResponses.filter(r => r.poll_id === p.id)
+          
+          // [보기 및 응답 결과] 구성
+          let resultSummary = ''
+          
+          // poll_type 확인: DB에는 'open'으로 저장됨 (ManagerPolls.jsx 참조)
+          if (p.poll_type === 'open' || p.poll_type === 'text') {
+            // 주관식
+            const textCounts = {}
+            pollResponses.forEach(r => {
+              const text = r.response_text || '(내용 없음)'
+              textCounts[text] = (textCounts[text] || 0) + 1
+            })
+            
+            const summaryList = Object.entries(textCounts)
+              .map(([text, count]) => `- ${text} (${count}명)`)
+            
+            resultSummary = summaryList.length > 0 ? summaryList.join('\r\n') : '(응답 없음)'
+            
+          } else {
+            // 객관식
+            const summaryList = p.poll_options.map((opt, optIdx) => {
+              const count = pollResponses.filter(r => r.option_id === opt.id).length
+              return `${optIdx + 1}. ${opt.option_text} (${count}명)`
+            })
+            resultSummary = summaryList.join('\r\n')
+          }
+
+          // 기본 행 데이터
+          const row = [
+            index + 1, // 넘버링
+            p.poll_type === 'single' ? '단일 선택' : (p.poll_type === 'multiple' ? '복수 선택' : '주관식'), // 종류
+            p.is_required ? '필수' : '선택', // 필수선택
+            resultSummary // 보기 및 응답 결과
+          ]
+
+          // 응답자별 답변 추가
+          respondentIds.forEach(respondentId => {
+            // 해당 응답자의 해당 문항에 대한 답변 찾기
+            const userResponses = pollResponses.filter(r => (r.user_id || r.anonymous_id) === respondentId)
+            
+            if (userResponses.length > 0) {
+              const answers = userResponses.map(r => r.response_text || r.poll_options?.option_text || '').filter(t => t)
+              row.push(answers.join(', '))
+            } else {
+              row.push('') // 응답 없음
+            }
+          })
+
+          return row
+        })
+
+        // 헤더와 데이터를 합쳐서 시트 생성
+        const wsData = [headerRow, ...dataRows]
+        const ws = XLSX.utils.aoa_to_sheet(wsData)
+        
+        // 컬럼 너비 설정 (대략적인 값)
+        const colWidths = [
+          { wch: 8 },  // 넘버링
+          { wch: 12 }, // 종류
+          { wch: 10 }, // 필수선택
+          { wch: 50 }, // 보기 및 응답 결과 (넓게)
+        ]
+        // 응답자 컬럼 너비
+        respondentIds.forEach(() => colWidths.push({ wch: 15 }))
+        ws['!cols'] = colWidths
+
+        // utils/excel.js의 exportToExcel은 객체 배열을 받도록 되어 있으므로,
+        // 여기서는 직접 워크북을 만들어서 내보내거나 exportToExcel을 수정해야 함.
+        // 기존 exportToExcel 함수는 json_to_sheet를 사용하므로,
+        // 여기서는 sheets 객체에 ws를 직접 넣는 꼼수보다는
+        // exportToExcel 함수가 Worksheet 객체도 처리할 수 있게 하거나,
+        // 이 로직 안에서 바로 다운로드 처리.
+        
+        // 하지만 기존 구조를 유지하기 위해 sheets 객체에 '설문결과': wsData (배열의 배열)를 넣고
+        // exportToExcel 함수를 조금 수정하여 배열 데이터도 처리하게 하는 것이 좋음.
+        sheets['설문결과'] = wsData // 이제 객체 배열이 아니라 2차원 배열임
+
+      } else {
+        // 지원하지 않는 탭에서는 동작 안함
+        return
+      }
+
+      // 엑셀 생성 및 다운로드
+      exportToExcel(sheets, fileName)
+
+      toast.success(t('common.downloadSuccess', '다운로드가 완료되었습니다.'))
+    } catch (error) {
+      console.error('Export error:', error)
+      toast.error(t('error.exportFailed', '데이터 내보내기에 실패했습니다.'))
+    }
+  }
+
+  // 다운로드 가능 여부
+  const canExport = ['participants', 'qna', 'poll'].includes(activeTab)
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -645,6 +834,32 @@ export default function SessionDetail() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          <TooltipProvider delayDuration={100}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className={!canExport ? "cursor-not-allowed opacity-50" : ""}>
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    className={canExport ? "hover:bg-green-50 hover:text-green-600 hover:border-green-200 transition-all" : ""}
+                    onClick={handleExportData}
+                    disabled={!canExport}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-slate-900 text-white border-slate-800 shadow-xl">
+                <p className="font-medium">
+                  {canExport 
+                    ? t('session.exportData', '데이터 엑셀 다운로드')
+                    : t('session.exportDisabled', '다운로드할 데이터가 없습니다')
+                  }
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
           <TooltipProvider delayDuration={100}>
             <Tooltip>
@@ -673,7 +888,7 @@ export default function SessionDetail() {
       </div>
 
       {/* 탭 */}
-      <Tabs defaultValue="basic" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="basic">
             <FileText className="h-4 w-4 mr-2" />
@@ -1010,11 +1225,27 @@ export default function SessionDetail() {
                 )}
 
                 {/* 새 창에서 미리보기 버튼 */}
-                <div className="pt-4 border-t">
+                <div className="pt-4 border-t space-y-2">
                   <Button asChild variant="outline" className="w-full">
                     <Link to={`/join/${session.code}?preview=true`} target="_blank">
                       <ExternalLink className="h-4 w-4 mr-2" />
                       {t('session.openPreview')}
+                    </Link>
+                  </Button>
+                  
+                  {/* 좌장 화면 */}
+                  <Button asChild variant="outline" className="w-full">
+                    <Link to={`/presenter/${session.code}`} target="_blank">
+                      <Mic className="h-4 w-4 mr-2" />
+                      {t('session.presenterScreen')}
+                    </Link>
+                  </Button>
+                  
+                  {/* 송출 화면 */}
+                  <Button asChild variant="outline" className="w-full">
+                    <Link to={`/broadcast/${session.code}`} target="_blank">
+                      <Monitor className="h-4 w-4 mr-2" />
+                      {t('session.broadcastScreen')}
                     </Link>
                   </Button>
                 </div>

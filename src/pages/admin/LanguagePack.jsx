@@ -43,7 +43,8 @@ import {
   RefreshCw,
   Globe,
   FolderOpen,
-  Key
+  Key,
+  LayoutGrid
 } from 'lucide-react'
 
 /**
@@ -481,6 +482,22 @@ export default function LanguagePack() {
     loadKeys()
   }
 
+  // 탭 아이템 컴포넌트
+  const TabItem = ({ id, label, icon: Icon, colorClass }) => (
+    <button
+      onClick={() => setSelectedCategory(id)}
+      className={`
+        flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
+        ${selectedCategory === id 
+          ? `border-primary text-primary bg-primary/5` 
+          : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'}
+      `}
+    >
+      {Icon && <Icon className={`h-4 w-4 ${selectedCategory === id ? colorClass : 'text-muted-foreground'}`} />}
+      {label}
+    </button>
+  )
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -492,53 +509,52 @@ export default function LanguagePack() {
   return (
     <div className="h-full flex flex-col p-4 md:p-6">
       {/* 헤더 */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 md:mb-6">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Languages className="h-7 w-7" />
-            {t('admin.languagePackTitle')}
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t('admin.languagePackDesc')}
-          </p>
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+              <Languages className="h-7 w-7" />
+              {t('admin.languagePackTitle')}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('admin.languagePackDesc')}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={tableLoading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${tableLoading ? 'animate-spin' : ''}`} />
+              {t('common.refresh')}
+            </Button>
+            <Button size="sm" onClick={() => openKeyDialog()}>
+              <Plus className="h-4 w-4 mr-2" />
+              {t('admin.addKey')}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={tableLoading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${tableLoading ? 'animate-spin' : ''}`} />
-            {t('common.refresh')}
-          </Button>
-          <Button size="sm" onClick={() => openKeyDialog()}>
-            <Plus className="h-4 w-4 mr-2" />
-            {t('admin.addKey')}
-          </Button>
-        </div>
-      </div>
 
-      {/* 통계 */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <StatCard
-          title={t('admin.supportedLanguages')}
-          value={languages.filter(l => l.is_active).length}
-          description={languages.map(l => l.native_name).join(', ')}
-          icon={Globe}
-        />
-        <StatCard
-          title={t('admin.categories')}
-          value={categories.length}
-          description={categories.slice(0, 3).map(c => c.name).join(', ')}
-          icon={FolderOpen}
-        />
-        <StatCard
-          title={t('admin.translationKeys')}
-          value={totalKeysCount}
-          description={t('admin.totalTranslations', { count: totalKeysCount * languages.length })}
-          icon={Key}
-        />
+        {/* 카테고리 탭 */}
+        <div className="flex items-center border-b overflow-x-auto">
+          <TabItem 
+            id="all" 
+            label={t('admin.allCategories')} 
+            icon={LayoutGrid}
+            colorClass="text-primary"
+          />
+          {categories.map(cat => (
+            <TabItem 
+              key={cat.id}
+              id={cat.id} 
+              label={cat.name}
+              icon={FolderOpen}
+              colorClass="text-blue-500"
+            />
+          ))}
+        </div>
       </div>
 
       {/* 데이터 테이블 */}
-      <Card className="flex-1 flex flex-col min-h-0">
-        <CardHeader className="pb-3">
+      <Card className="flex-1 flex flex-col min-h-0 border-0 shadow-none sm:border sm:shadow-sm">
+        <CardHeader className="pb-3 px-0 sm:px-6 pt-0 sm:pt-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -549,17 +565,6 @@ export default function LanguagePack() {
                 className="pl-9"
               />
             </div>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder={t('admin.categories')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('admin.allCategories')}</SelectItem>
-                {categories.map(cat => (
-                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
               <SelectTrigger className="w-full sm:w-[140px]">
                 <SelectValue placeholder={t('common.language')} />
@@ -575,7 +580,7 @@ export default function LanguagePack() {
           </div>
         </CardHeader>
         
-        <CardContent className="flex-1 flex flex-col min-h-0">
+        <CardContent className="flex-1 flex flex-col min-h-0 px-0 sm:px-6 pb-0 sm:pb-6">
           <DataTable
             columns={columns}
             data={keys}

@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import InitialLoading from '@/components/ui/InitialLoading'
 
 /**
  * 관리자 전용 라우트 가드
@@ -9,11 +10,17 @@ export function AdminRoute({ children }) {
   const { user, profile, loading } = useAuth()
 
   // 로딩 중일 때는 로딩 화면 표시
-  if (loading) {
+  if (loading || (user && !profile)) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
+      <InitialLoading 
+        title="Administrator"
+        messages={[
+          '관리자 권한을 확인하고 있습니다...',
+          '보안 설정을 불러오는 중입니다...',
+          '대시보드로 이동합니다...'
+        ]}
+        speed={2} // 일반 로딩보다 조금 빠르게
+      />
     )
   }
 
@@ -22,19 +29,10 @@ export function AdminRoute({ children }) {
     return <Navigate to="/login" replace />
   }
 
-  // 프로필 로딩 중
-  if (!profile) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
-
   // 관리자가 아닌 경우
-  if (profile.role !== 'admin') {
+  if (profile?.role !== 'admin') {
     // 파트너인 경우 파트너 페이지로
-    if (profile.userType === 'partner') {
+    if (profile?.userType === 'partner') {
       return <Navigate to="/partner" replace />
     }
     // 그 외의 경우 (일반 회원) 홈으로

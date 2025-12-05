@@ -130,7 +130,7 @@ export const AuthProvider = ({ children }) => {
       
       if (error) {
         console.warn('Session refresh error:', error.message)
-        return false
+        return null
       }
       
       if (session?.access_token) {
@@ -147,12 +147,12 @@ export const AuthProvider = ({ children }) => {
         }
         setProfile(profileData)
         console.log('Profile refreshed:', profileData)
-        return true
+        return profileData
       }
-      return false
+      return null
     } catch (error) {
       console.error('Profile refresh error:', error)
-      return false
+      return null
     }
   }
 

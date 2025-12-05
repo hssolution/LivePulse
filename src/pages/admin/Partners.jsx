@@ -27,14 +27,14 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { 
   Users, 
-  Search,
-  Eye,
-  Building2,
-  Mic,
-  Power,
-  PowerOff,
-  CheckCircle,
-  XCircle,
+  Search, 
+  Eye, 
+  Building2, 
+  Mic, 
+  Power, 
+  PowerOff, 
+  CheckCircle, 
+  XCircle, 
   Settings
 } from 'lucide-react'
 import PartnerInfoDialog from '@/components/common/PartnerInfoDialog'
@@ -281,83 +281,73 @@ export default function Partners() {
     return null
   }
 
+  // 탭 아이템 컴포넌트
+  const TabItem = ({ id, label, count, icon: Icon, colorClass }) => (
+    <button
+      onClick={() => setFilter(id)}
+      className={`
+        flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
+        ${filter === id 
+          ? `border-primary text-primary bg-primary/5` 
+          : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'}
+      `}
+    >
+      <Icon className={`h-4 w-4 ${filter === id ? colorClass : 'text-muted-foreground'}`} />
+      {label}
+      {filter === id && (
+        <span className="ml-1 text-xs rounded-full px-2 py-0.5 bg-primary/10">
+          {count}
+        </span>
+      )}
+    </button>
+  )
+
   return (
     <div className="h-full flex flex-col p-4 md:p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col gap-4 mb-6">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('admin.partnerList')}</h2>
           <p className="text-muted-foreground mt-1">{t('admin.partnerListDesc')}</p>
         </div>
+
+        {/* Compact Tabs */}
+        <div className="flex items-center border-b overflow-x-auto">
+          <TabItem 
+            id="all" 
+            label={t('common.all')} 
+            count={stats.total} 
+            icon={Users}
+            colorClass="text-primary"
+          />
+          <TabItem 
+            id="organizer" 
+            label={t('partner.typeOrganizer')} 
+            count={stats.organizer} 
+            icon={Building2}
+            colorClass="text-blue-500"
+          />
+          <TabItem 
+            id="agency" 
+            label={t('partner.typeAgency')} 
+            count={stats.agency} 
+            icon={Users}
+            colorClass="text-purple-500"
+          />
+          <TabItem 
+            id="instructor" 
+            label={t('partner.typeInstructor')} 
+            count={stats.instructor} 
+            icon={Mic}
+            colorClass="text-orange-500"
+          />
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto space-y-6">
-        {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card 
-            className={`cursor-pointer transition-all ${filter === 'all' ? 'ring-2 ring-primary' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('common.all')}</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className={`cursor-pointer transition-all ${filter === 'organizer' ? 'ring-2 ring-blue-500' : ''}`}
-            onClick={() => setFilter('organizer')}
-          >
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <Building2 className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('partner.typeOrganizer')}</p>
-                <p className="text-2xl font-bold">{stats.organizer}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className={`cursor-pointer transition-all ${filter === 'agency' ? 'ring-2 ring-purple-500' : ''}`}
-            onClick={() => setFilter('agency')}
-          >
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                <Users className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('partner.typeAgency')}</p>
-                <p className="text-2xl font-bold">{stats.agency}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className={`cursor-pointer transition-all ${filter === 'instructor' ? 'ring-2 ring-orange-500' : ''}`}
-            onClick={() => setFilter('instructor')}
-          >
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                <Mic className="h-5 w-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('partner.typeInstructor')}</p>
-                <p className="text-2xl font-bold">{stats.instructor}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Search & List */}
-        <Card className="flex-1">
-          <CardHeader className="pb-4">
+        <Card className="flex-1 border-0 shadow-none sm:border sm:shadow-sm">
+          <CardHeader className="pb-4 px-0 sm:px-6 pt-0 sm:pt-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div>
@@ -404,7 +394,7 @@ export default function Partners() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 px-0 sm:px-6">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -422,7 +412,7 @@ export default function Partners() {
                   return (
                     <div
                       key={partner.id}
-                      className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border transition-colors gap-4 ${
                         partner.is_active 
                           ? 'hover:bg-muted/50' 
                           : 'bg-muted/30 opacity-70'
@@ -466,11 +456,12 @@ export default function Partners() {
                           <span>· {t('team.lastLogin')}: {partner.lastLoginAt ? formatLastLogin(partner.lastLoginAt) : '-'}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={(e) => handlePartnerInfoClick(partner.id, e)}
+                          className="flex-1 sm:flex-none"
                         >
                           <Eye className="h-4 w-4 mr-1" />
                           {t('common.view')}
@@ -482,6 +473,7 @@ export default function Partners() {
                             setSelectedPartner(partner)
                             setDetailOpen(true)
                           }}
+                          className="flex-1 sm:flex-none"
                         >
                           <Settings className="h-4 w-4 mr-1" />
                           {t('common.manage')}
@@ -688,4 +680,3 @@ export default function Partners() {
     </div>
   )
 }
-

@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
@@ -5,8 +7,8 @@ import { LogOut, User, Shield, Users, Menu, PanelLeftClose, PanelLeft, Home } fr
 import { ThemeCustomizer } from '@/components/admin/ThemeCustomizer'
 import { LanguageSelector } from '@/components/ui/language-selector'
 import { useLanguage } from '@/context/LanguageContext'
-import { getHeaderTitleByRole } from '@/config/menuConfig'
 import { Link } from 'react-router-dom'
+import InitialLoading from '@/components/ui/InitialLoading'
 
 /**
  * 관리자/파트너 페이지 헤더 컴포넌트
@@ -16,6 +18,7 @@ import { Link } from 'react-router-dom'
 export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }) {
   const { user, profile } = useAuth()
   const { t } = useLanguage()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   
   // 역할에 따른 헤더 타이틀
   const headerTitle = profile?.role === 'admin' ? t('title.adminPanel') : t('title.partnerCenter')
@@ -24,14 +27,32 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }) {
    * 로그아웃 처리 함수
    */
   const handleLogout = async () => {
-    debugger // 🔴 로그아웃 - F12 열고 테스트
     console.log('🔴 [LOGOUT] 로그아웃 시도:', { user: user?.email, profile })
+    
+    // 1. 로그아웃 UI 표시 (전체 화면 덮음)
+    setIsLoggingOut(true)
+    
     try {
-      await supabase.auth.signOut({ scope: 'local' })
-    } catch (error) {
-      console.warn('Logout error (ignored):', error)
+      // 2. 로컬 스토리지 수동 정리 (Supabase 토큰 등)
+      // signOut이 멈추는 경우를 대비해 확실하게 정리
+      const keys = Object.keys(localStorage)
+      keys.forEach(key => {
+        if (key.startsWith('sb-')) {
+          localStorage.removeItem(key)
+        }
+      })
+
+      // 3. 로그아웃 요청 (타임아웃 적용)
+      // 네트워크 문제 등으로 signOut이 응답하지 않을 경우를 대비해 2초 제한
+      const signOutPromise = supabase.auth.signOut({ scope: 'local' })
+      const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000))
+      
+      await Promise.race([signOutPromise, timeoutPromise])
+    } catch (err) {
+      console.warn('Logout error (ignored):', err)
     }
-    // 홈으로 이동
+
+    // 4. 홈으로 이동 (새로고침 발생)
     window.location.href = '/'
   }
 
@@ -75,6 +96,16 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }) {
 
   return (
     <header className="flex h-16 items-center gap-4 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md px-6 md:px-8 z-10 sticky top-0 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-colors duration-300">
+      {/* 로그아웃 중일 때 전체 화면 로딩 표시 */}
+      {isLoggingOut && createPortal(
+        <InitialLoading 
+          title="Signing Out" 
+          messages={['안전하게 로그아웃 중입니다...', '세션을 정리하고 있습니다...']}
+          speed={3}
+        />,
+        document.body
+      )}
+
       {/* Mobile Menu Button */}
       <Button
         variant="ghost"
@@ -121,18 +152,18 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }) {
                 : 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-200'
             }`}>
               {getRoleIcon()}
-              <span className="hidden sm:inline">{profile.role}</span>
+              <span className="hidden sm:inline">{t('user.type.' + profile.role, profile.role)}</span>
             </div>
 
             {/* 사용자 유형 배지 - hidden on mobile */}
             <div className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border shadow-sm ${getUserTypeBadgeColor()}`}>
               <Users className="h-3 w-3" />
-              <span>{profile.userType}</span>
+              <span>{t('user.type.' + (profile.userType === 'general' ? 'user' : profile.userType), profile.userType)}</span>
             </div>
 
             {/* 상태 배지 - hidden on mobile */}
             <div className={`hidden md:block px-3 py-1.5 rounded-full text-xs font-semibold border shadow-sm ${getStatusBadgeColor()}`}>
-              {profile.status}
+              {t('status.' + profile.status, profile.status)}
             </div>
           </div>
         )}

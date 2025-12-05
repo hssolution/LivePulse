@@ -32,7 +32,9 @@ import {
   ExternalLink,
   MoreVertical,
   XCircle,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Mic,
+  Monitor
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -53,9 +55,6 @@ import PartnerInfoDialog from '@/components/common/PartnerInfoDialog'
 
 /**
  * 관리자: 세션 관리 페이지
- * - 모든 파트너의 세션을 조회
- * - 파트너별, 상태별 필터링
- * - 세션 상세 정보 표시
  */
 export default function AdminSessions() {
   const { t } = useLanguage()
@@ -225,79 +224,101 @@ export default function AdminSessions() {
    * 통계 계산
    */
   const stats = {
-    total: sessions.length,
+    total: sessions.length, // 전체 세션 수 (필터 적용된) - 필터가 all일 때만 의미있지만 일단 씀
+    // 실제 전체 카운트가 아니라 현재 리스트 기준임. 정확하게 하려면 별도 쿼리 필요하나 UI 통일성 위해 현재 데이터 기반으로 함
     draft: sessions.filter(s => s.status === 'draft').length,
     published: sessions.filter(s => s.status === 'published').length,
     active: sessions.filter(s => s.status === 'active').length,
     ended: sessions.filter(s => s.status === 'ended').length,
-    totalParticipants: sessions.reduce((sum, s) => sum + (s.participant_count || 0), 0),
   }
+
+  // 탭 아이템 컴포넌트
+  const TabItem = ({ id, label, count, icon: Icon, colorClass }) => (
+    <button
+      onClick={() => setStatusFilter(id)}
+      className={`
+        flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
+        ${statusFilter === id 
+          ? `border-primary text-primary bg-primary/5` 
+          : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'}
+      `}
+    >
+      <Icon className={`h-4 w-4 ${statusFilter === id ? colorClass : 'text-muted-foreground'}`} />
+      {label}
+      {statusFilter === id && ( // 선택된 필터일 때만 카운트 표시 (필터링된 결과 수이므로)
+        <span className="ml-1 text-xs rounded-full px-2 py-0.5 bg-primary/10">
+          {sessions.length}
+        </span>
+      )}
+    </button>
+  )
 
   return (
     <div className="h-full flex flex-col p-3 sm:p-4 md:p-6 min-w-0">
       {/* 헤더 */}
-      <div className="flex flex-col gap-2 mb-4 sm:mb-6">
-        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight truncate">{t('admin.sessionManagement')}</h2>
-        <p className="text-sm text-muted-foreground line-clamp-2">{t('admin.sessionManagementDesc')}</p>
+      <div className="flex flex-col gap-4 mb-6">
+        <div>
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight truncate">{t('admin.sessionManagement')}</h2>
+          <p className="text-sm text-muted-foreground line-clamp-2">{t('admin.sessionManagementDesc')}</p>
+        </div>
+
+        {/* Compact Tabs */}
+        <div className="flex items-center border-b overflow-x-auto">
+          <TabItem 
+            id="all" 
+            label={t('common.all')} 
+            count={stats.total} 
+            icon={Video}
+            colorClass="text-primary"
+          />
+          <TabItem 
+            id="active" 
+            label={t('session.statusActive')} 
+            count={stats.active} 
+            icon={Play}
+            colorClass="text-green-500"
+          />
+           <TabItem 
+            id="published" 
+            label={t('session.statusPublished')} 
+            count={stats.published} 
+            icon={Eye}
+            colorClass="text-blue-500"
+          />
+          <TabItem 
+            id="ended" 
+            label={t('session.statusEnded')} 
+            count={stats.ended} 
+            icon={CheckCircle}
+            colorClass="text-purple-500"
+          />
+          <TabItem 
+            id="draft" 
+            label={t('session.statusDraft')} 
+            count={stats.draft} 
+            icon={Edit}
+            colorClass="text-gray-500"
+          />
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto space-y-4 sm:space-y-6 min-w-0">
-        {/* 통계 카드 - 세로 레이아웃 */}
-        <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-          {/* 전체 */}
-          <div className="flex flex-col items-center p-2 sm:p-3 rounded-lg border bg-card text-center">
-            <Video className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground mb-1" />
-            <span className="text-lg sm:text-2xl font-bold">{stats.total}</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">{t('session.total')}</span>
-          </div>
-          {/* 초안 */}
-          <div className="flex flex-col items-center p-2 sm:p-3 rounded-lg border bg-card text-center">
-            <Edit className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 mb-1" />
-            <span className="text-lg sm:text-2xl font-bold text-gray-600">{stats.draft}</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">{t('session.statusDraft')}</span>
-          </div>
-          {/* 공개 */}
-          <div className="flex flex-col items-center p-2 sm:p-3 rounded-lg border bg-card text-center">
-            <Eye className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 mb-1" />
-            <span className="text-lg sm:text-2xl font-bold text-blue-600">{stats.published}</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">{t('session.statusPublished')}</span>
-          </div>
-          {/* 진행중 */}
-          <div className="flex flex-col items-center p-2 sm:p-3 rounded-lg border bg-card text-center">
-            <Play className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 mb-1" />
-            <span className="text-lg sm:text-2xl font-bold text-green-600">{stats.active}</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">{t('session.statusActive')}</span>
-          </div>
-          {/* 종료됨 */}
-          <div className="flex flex-col items-center p-2 sm:p-3 rounded-lg border bg-card text-center">
-            <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500 mb-1" />
-            <span className="text-lg sm:text-2xl font-bold text-purple-600">{stats.ended}</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">{t('session.statusEnded')}</span>
-          </div>
-          {/* 총 참여자 */}
-          <div className="flex flex-col items-center p-2 sm:p-3 rounded-lg border bg-card text-center">
-            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500 mb-1" />
-            <span className="text-lg sm:text-2xl font-bold text-orange-600">{stats.totalParticipants}</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">{t('admin.totalParticipants')}</span>
-          </div>
-        </div>
-
-        {/* 필터 */}
-        <Card>
-          <CardContent className="pt-4 sm:pt-6">
+        {/* 검색 및 파트너 필터 */}
+        <Card className="border-0 shadow-none sm:border sm:shadow-sm">
+          <CardContent className="pt-4 sm:pt-6 px-0 sm:px-6">
             <div className="flex flex-col gap-3 sm:gap-4">
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={t('admin.sessionSearchPlaceholder')}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 sm:gap-4">
+              <div className="grid grid-cols-1 sm:flex sm:flex-row gap-2 sm:gap-4">
+                 <div className="relative w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={t('admin.sessionSearchPlaceholder')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
                 <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px] md:w-[200px]">
+                  <SelectTrigger className="w-full sm:w-[200px]">
                     <SelectValue placeholder={t('admin.filterByPartner')} />
                   </SelectTrigger>
                   <SelectContent>
@@ -309,39 +330,30 @@ export default function AdminSessions() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-[140px] md:w-[160px]">
-                    <SelectValue placeholder={t('session.filterStatus')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t('common.all')}</SelectItem>
-                    <SelectItem value="draft">{t('session.statusDraft')}</SelectItem>
-                    <SelectItem value="published">{t('session.statusPublished')}</SelectItem>
-                    <SelectItem value="active">{t('session.statusActive')}</SelectItem>
-                    <SelectItem value="ended">{t('session.statusEnded')}</SelectItem>
-                    <SelectItem value="cancelled">{t('session.statusCancelled')}</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* 세션 목록 */}
-        <Card className="flex-1 min-w-0">
-          <CardHeader className="pb-3 sm:pb-4 px-3 sm:px-6">
-            <CardTitle className="text-base sm:text-lg">{t('admin.sessionList')}</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
-              {t('admin.sessionListDesc', { count: sessions.length })}
-            </CardDescription>
+        <Card className="flex-1 min-w-0 border-0 shadow-none sm:border sm:shadow-sm">
+          <CardHeader className="pb-3 sm:pb-4 px-0 sm:px-6 pt-0 sm:pt-6">
+            <div className="flex items-center justify-between">
+               <div>
+                <CardTitle className="text-base sm:text-lg">{t('admin.sessionList')}</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  {t('admin.sessionListDesc', { count: sessions.length })}
+                </CardDescription>
+               </div>
+            </div>
           </CardHeader>
-          <CardContent className="pt-0 px-3 sm:px-6">
+          <CardContent className="pt-0 px-0 sm:px-6">
             {loading ? (
               <div className="flex justify-center items-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : sessions.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-muted/10 rounded-lg border border-dashed">
                 <Video className="h-12 w-12 mb-4 opacity-20" />
                 <p>{t('admin.noSessions')}</p>
               </div>
@@ -416,12 +428,6 @@ export default function AdminSessions() {
                             <span>{session.participant_count || 0} / {session.max_participants}</span>
                           </div>
                         </div>
-                        
-                        {/* 생성일 */}
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3 flex-shrink-0" />
-                          <span>{t('admin.createdAt')}: {format(new Date(session.created_at), 'yyyy.MM.dd HH:mm')}</span>
-                        </div>
                       </div>
 
                       {/* 액션 버튼 */}
@@ -487,6 +493,29 @@ export default function AdminSessions() {
                               </a>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem asChild>
+                              <a 
+                                href={`/presenter/${session.code}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center"
+                              >
+                                <Mic className="h-4 w-4 mr-2" />
+                                {t('session.presenterScreen')}
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <a 
+                                href={`/broadcast/${session.code}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center"
+                              >
+                                <Monitor className="h-4 w-4 mr-2" />
+                                {t('session.broadcastScreen')}
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={(e) => handleOpenPartnerInfo(session.partner?.id, e)}>
                               <Building2 className="h-4 w-4 mr-2" />
                               {t('admin.viewPartner')}
@@ -513,4 +542,3 @@ export default function AdminSessions() {
     </div>
   )
 }
-

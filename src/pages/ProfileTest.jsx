@@ -45,15 +45,15 @@ export default function ProfileTest() {
         <CardContent className="space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-500">User ID</p>
+              <p className="text-sm font-medium text-muted-foreground">User ID</p>
               <p className="text-sm">{user.id}</p>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Email</p>
+              <p className="text-sm font-medium text-muted-foreground">Email</p>
               <p className="text-sm">{user.email}</p>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Created At</p>
+              <p className="text-sm font-medium text-muted-foreground">Created At</p>
               <p className="text-sm">{new Date(user.created_at).toLocaleString('ko-KR')}</p>
             </div>
           </div>
@@ -72,28 +72,28 @@ export default function ProfileTest() {
           {profile ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <p className="text-sm font-medium text-gray-500">Email</p>
+                <p className="text-sm font-medium text-muted-foreground">Email</p>
                 <p className="text-sm">{profile.email || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">Role</p>
+                <p className="text-sm font-medium text-muted-foreground">Role</p>
                 <p className="text-sm font-semibold text-blue-600">{profile.role || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">User Type</p>
+                <p className="text-sm font-medium text-muted-foreground">User Type</p>
                 <p className="text-sm font-semibold text-green-600">{profile.userType || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">Status</p>
+                <p className="text-sm font-medium text-muted-foreground">Status</p>
                 <p className="text-sm font-semibold text-purple-600">{profile.status || 'N/A'}</p>
               </div>
               <div className="col-span-2">
-                <p className="text-sm font-medium text-gray-500">Description</p>
+                <p className="text-sm font-medium text-muted-foreground">Description</p>
                 <p className="text-sm">{profile.description || 'N/A'}</p>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-500">프로필 정보가 없습니다.</p>
+            <p className="text-sm text-muted-foreground">프로필 정보가 없습니다.</p>
           )}
         </CardContent>
       </Card>
@@ -107,7 +107,7 @@ export default function ProfileTest() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-xs">
+          <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs">
             {JSON.stringify(userClaims, null, 2)}
           </pre>
         </CardContent>
@@ -137,7 +137,7 @@ export default function ProfileTest() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-xs">
+          <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs">
 {`import { useAuth } from '@/context/AuthContext'
 
 function MyComponent() {

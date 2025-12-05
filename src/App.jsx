@@ -4,9 +4,11 @@ import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { PublicThemeProvider } from './context/PublicThemeContext'
 import { AdminThemeProvider } from './context/AdminThemeContext'
+import { AppInitProvider, useAppInit } from './context/AppInitContext'
 import { Toaster } from './components/ui/sonner'
 import ErrorBoundary from './components/ErrorBoundary'
 import { PageLoading } from './components/ui/loading'
+import InitialLoading from './components/ui/InitialLoading'
 
 // Auth Components (not lazy - needed immediately)
 import PublicRoute from './components/auth/PublicRoute'
@@ -15,6 +17,9 @@ import { PartnerRoute } from './components/auth/PartnerRoute'
 
 // Lazy loaded pages
 const Home = lazy(() => import('./pages/Home'))
+const Lectures = lazy(() => import('./pages/Lectures'))
+const Instructors = lazy(() => import('./pages/Instructors'))
+const Agencies = lazy(() => import('./pages/Agencies'))
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
 const ServicePage = lazy(() => import('./pages/ServicePage'))
@@ -78,16 +83,57 @@ const TemplatePreviewPublic = lazy(() => import('./pages/TemplatePreviewPublic')
  */
 function SuspenseWrapper({ children }) {
   return (
-    <Suspense fallback={<PageLoading />}>
+    <Suspense fallback={
+      <InitialLoading 
+        title="LivePulse"
+        messages={['페이지를 불러오고 있습니다...', '잠시만 기다려주세요...']}
+        speed={2}
+      />
+    }>
       {children}
     </Suspense>
   )
 }
 
-function App() {
+/**
+ * 관리자 페이지 로딩용 래퍼
+ */
+function AdminSuspenseWrapper({ children }) {
   return (
-    <ErrorBoundary>
-      <LanguageProvider>
+    <Suspense fallback={
+      <InitialLoading 
+        title="Administrator"
+        messages={['관리자 화면을 불러오고 있습니다...']}
+        speed={3}
+      />
+    }>
+      {children}
+    </Suspense>
+  )
+}
+
+/**
+ * 파트너 페이지 로딩용 래퍼
+ */
+function PartnerSuspenseWrapper({ children }) {
+  return (
+    <Suspense fallback={
+      <InitialLoading 
+        title="Partner Center"
+        messages={['파트너 센터를 불러오고 있습니다...']}
+        speed={3}
+      />
+    }>
+      {children}
+    </Suspense>
+  )
+}
+
+function AppContent() {
+  const initData = useAppInit()
+
+  return (
+    <LanguageProvider initialData={initData}>
         <AuthProvider>
           <Toaster position="top-right" richColors closeButton />
           <Router>
@@ -97,6 +143,27 @@ function App() {
               <PublicThemeProvider>
                 <SuspenseWrapper>
                   <Home />
+                </SuspenseWrapper>
+              </PublicThemeProvider>
+            } />
+            <Route path="/lectures" element={
+              <PublicThemeProvider>
+                <SuspenseWrapper>
+                  <Lectures />
+                </SuspenseWrapper>
+              </PublicThemeProvider>
+            } />
+            <Route path="/instructors" element={
+              <PublicThemeProvider>
+                <SuspenseWrapper>
+                  <Instructors />
+                </SuspenseWrapper>
+              </PublicThemeProvider>
+            } />
+            <Route path="/agencies" element={
+              <PublicThemeProvider>
+                <SuspenseWrapper>
+                  <Agencies />
                 </SuspenseWrapper>
               </PublicThemeProvider>
             } />
@@ -133,14 +200,14 @@ function App() {
               </SuspenseWrapper>
             } />
             
-            {/* 실시간 참여 페이지 (청중용) */}
+            {/* 실시간 참여 페이지 (청중용) - Q&A, 설문, 정보 탭 포함 */}
             <Route path="/live/:code" element={
               <SuspenseWrapper>
                 <LiveSession />
               </SuspenseWrapper>
             } />
             
-            {/* 강연자 Q&A 컨트롤 페이지 */}
+            {/* 강연자/좌장 Q&A 컨트롤 페이지 */}
             <Route path="/presenter/:code" element={
               <SuspenseWrapper>
                 <PresenterQnA />
@@ -183,11 +250,11 @@ function App() {
 
             {/* Admin Routes (Protected, role: admin) - with AdminThemeProvider */}
             <Route path="/adm" element={
-              <AdminThemeProvider>
+            <AdminThemeProvider initialTheme={initData.adminTheme}>
                 <AdminRoute>
-                  <SuspenseWrapper>
+                <AdminSuspenseWrapper>
                     <AdminLayout />
-                  </SuspenseWrapper>
+                </AdminSuspenseWrapper>
                 </AdminRoute>
               </AdminThemeProvider>
             }>
@@ -224,11 +291,11 @@ function App() {
 
             {/* Partner Routes (Protected, user_type: partner) - 동일한 레이아웃, 다른 메뉴 */}
             <Route path="/partner" element={
-              <AdminThemeProvider>
+            <AdminThemeProvider initialTheme={initData.adminTheme}>
                 <PartnerRoute>
-                  <SuspenseWrapper>
+                <PartnerSuspenseWrapper>
                     <AdminLayout />
-                  </SuspenseWrapper>
+                </PartnerSuspenseWrapper>
                 </PartnerRoute>
               </AdminThemeProvider>
             }>
@@ -267,6 +334,15 @@ function App() {
         </Router>
         </AuthProvider>
       </LanguageProvider>
+  )
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <AppInitProvider>
+        <AppContent />
+      </AppInitProvider>
     </ErrorBoundary>
   )
 }

@@ -183,7 +183,7 @@ SELECT _seed_trans('auth.password', '00000000-0000-0000-0001-000000000002'::uuid
 SELECT _seed_trans('auth.confirmPassword', '00000000-0000-0000-0001-000000000002'::uuid, '비밀번호 확인', 'Confirm Password');
 SELECT _seed_trans('auth.forgotPassword', '00000000-0000-0000-0001-000000000002'::uuid, '비밀번호를 잊으셨나요?', 'Forgot password?');
 SELECT _seed_trans('auth.resetPassword', '00000000-0000-0000-0001-000000000002'::uuid, '비밀번호 재설정', 'Reset Password');
-SELECT _seed_trans('auth.backToHome', '00000000-0000-0000-0001-000000000002'::uuid, '← 홈으로', '← Back to Home');
+SELECT _seed_trans('auth.backToHome', '00000000-0000-0000-0001-000000000002'::uuid, '홈으로', 'Back to Home');
 SELECT _seed_trans('auth.createAdminAccount', '00000000-0000-0000-0001-000000000002'::uuid, '관리자 계정 생성', 'Create Admin Account');
 SELECT _seed_trans('auth.createAccount', '00000000-0000-0000-0001-000000000002'::uuid, '계정 생성', 'Create Account');
 SELECT _seed_trans('auth.agreeTerms', '00000000-0000-0000-0001-000000000002'::uuid, '가입 시 이용약관 및 개인정보처리방침에 동의합니다.', 'By signing up, you agree to our Terms of Service and Privacy Policy.');

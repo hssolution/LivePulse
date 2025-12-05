@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthContext'
 
@@ -6,18 +6,26 @@ const AdminThemeContext = createContext({})
 
 export const useAdminTheme = () => useContext(AdminThemeContext)
 
-export const AdminThemeProvider = ({ children }) => {
+export const AdminThemeProvider = ({ children, initialTheme }) => {
   const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [theme, setTheme] = useState({
+  // 초기 테마가 있으면 로딩 완료 상태로 시작
+  const [loading, setLoading] = useState(!initialTheme)
+  
+  const [theme, setTheme] = useState(() => {
+    if (initialTheme) return initialTheme
+    
+    return {
     mode: 'light',
     preset: 'theme-d',
     customColors: {},
     fontSize: 'medium'
+    }
   })
 
   // Load theme from database
   const loadTheme = useCallback(async () => {
+    // 초기 테마가 있고 아직 한 번도 로드 안 했으면 스킵 가능하지만,
+    // 최신 상태 보장을 위해 로드하되 로딩 스피너는 안 띄움
     if (!user) {
       setLoading(false)
       return
@@ -93,8 +101,8 @@ export const AdminThemeProvider = ({ children }) => {
     }
   }, [user])
 
-  // Apply theme to DOM
-  useEffect(() => {
+  // Apply theme to DOM - useLayoutEffect to prevent flickering
+  useLayoutEffect(() => {
     const root = window.document.documentElement
     
     // Remove previous theme classes
@@ -124,8 +132,11 @@ export const AdminThemeProvider = ({ children }) => {
 
   // Load theme on mount or user change
   useEffect(() => {
+    // 초기 데이터가 없거나 유저가 바뀌었을 때만 로드
+    if (!initialTheme || (user && initialTheme && initialTheme.userId !== user.id)) {
     loadTheme()
-  }, [loadTheme])
+    }
+  }, [loadTheme, initialTheme, user])
 
   const updateTheme = async (updates) => {
     setTheme(prev => ({ ...prev, ...updates }))
@@ -175,4 +186,3 @@ export const AdminThemeProvider = ({ children }) => {
     </AdminThemeContext.Provider>
   )
 }
-

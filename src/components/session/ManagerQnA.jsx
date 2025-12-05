@@ -543,10 +543,10 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   /**
    * 질문 목록 로드
    */
-  const loadQuestions = useCallback(async () => {
+  const loadQuestions = useCallback(async (showLoading = true) => {
     if (!sessionId) return
     
-    setLoading(true)
+    if (showLoading) setLoading(true)
     try {
       let query = supabase
         .from('questions')
@@ -578,7 +578,7 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
     } catch (error) {
       console.error('Error loading questions:', error)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }, [sessionId, filter])
 
@@ -605,17 +605,11 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
           filter: `session_id=eq.${sessionId}`
         },
         (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setQuestions(prev => [payload.new, ...prev])
-            if (payload.new.status === 'pending') {
-              toast.info(t('qna.newQuestion'))
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            setQuestions(prev => 
-              prev.map(q => q.id === payload.new.id ? payload.new : q)
-            )
-          } else if (payload.eventType === 'DELETE') {
-            setQuestions(prev => prev.filter(q => q.id !== payload.old.id))
+          // 데이터 변경 시 목록 조용히 새로고침
+          loadQuestions(false)
+
+          if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
+            toast.info(t('qna.newQuestion'))
           }
         }
       )
@@ -624,7 +618,7 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [sessionId, t])
+  }, [sessionId, t, loadQuestions])
 
   /**
    * 질문 상태 변경
@@ -988,6 +982,17 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
             <Settings className="h-4 w-4 mr-2" />
             {t('broadcast.settings')}
           </Button>
+          
+          {/* 질문 화면 버튼 (참가자용) */}
+          {sessionCode && (
+            <Link to={`/live/${sessionCode}?tab=qna&preview=true`} target="_blank">
+              <Button variant="outline" className="bg-blue-500 hover:bg-blue-600 text-white border-blue-500">
+                <MessageCircle className="h-4 w-4 mr-2" />
+                {t('qna.participantScreen', '질문 화면')}
+                <ExternalLink className="h-3 w-3 ml-2" />
+              </Button>
+            </Link>
+          )}
           
           {/* 좌장 선택 버튼 */}
           {sessionCode && (

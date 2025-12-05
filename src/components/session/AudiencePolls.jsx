@@ -24,8 +24,9 @@ import {
  * 
  * @param {string} sessionId - 세션 ID
  * @param {string} sessionTitle - 세션 제목 (상단 표시용)
+ * @param {boolean} isPreview - 미리보기 모드 여부
  */
-export default function AudiencePolls({ sessionId, sessionTitle }) {
+export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
   const { t } = useLanguage()
   
   const [loading, setLoading] = useState(true)
@@ -85,6 +86,9 @@ export default function AudiencePolls({ sessionId, sessionTitle }) {
    * 모든 설문 응답 여부 확인
    */
   const checkIfAllResponded = async (pollList) => {
+    // 미리보기 모드에서는 응답 여부 체크 안함
+    if (isPreview) return
+
     try {
       const pollIds = pollList.map(p => p.id)
       
@@ -117,6 +121,9 @@ export default function AudiencePolls({ sessionId, sessionTitle }) {
    * 결과 로드
    */
   const loadResults = async (pollId) => {
+    // 미리보기 모드이고 이미 결과가 있다면(방금 제출해서 만든 가짜 결과), 새로 로드하지 않음
+    if (isPreview && pollResults[pollId]) return
+
     try {
       const { data, error } = await supabase.rpc('get_poll_results', {
         p_poll_id: pollId
@@ -228,6 +235,51 @@ export default function AudiencePolls({ sessionId, sessionTitle }) {
    * 개별 응답 제출
    */
   const submitResponse = async (poll, response) => {
+    // 미리보기 모드에서는 실제 제출 없이 성공 처리 (테스트용)
+    if (isPreview) {
+      await new Promise(resolve => setTimeout(resolve, 300)) // 약간의 지연 효과
+      
+      // 가짜 결과 업데이트 (화면에 반영하기 위함)
+      setPollResults(prev => {
+        const currentResults = prev[poll.id] || { total_responses: 0, results: [] }
+        const newTotal = currentResults.total_responses + 1
+        
+        let newResults = []
+        if (poll.poll_type === 'open') {
+          // 주관식: 응답 추가
+          newResults = [{ text: response.text }, ...(currentResults.results || [])]
+        } else {
+          // 객관식: 카운트 증가
+          // 기존 옵션 정보가 없으면 polls에서 가져와야 함
+          const pollOptions = poll.poll_options || []
+          
+          newResults = pollOptions.map(opt => {
+            const existing = currentResults.results?.find(r => r.option_id === opt.id)
+            const isSelected = response.optionIds.includes(opt.id)
+            const count = (existing?.count || 0) + (isSelected ? 1 : 0)
+            
+            return {
+              option_id: opt.id,
+              option_text: opt.option_text,
+              count: count,
+              percentage: newTotal > 0 ? Math.round((count / newTotal) * 100) : 0
+            }
+          })
+        }
+
+        return {
+          ...prev,
+          [poll.id]: {
+            poll_id: poll.id,
+            poll_type: poll.poll_type,
+            total_responses: newTotal,
+            results: newResults
+          }
+        }
+      })
+      return
+    }
+
     const { data, error } = await supabase.rpc('submit_poll_response', {
       p_poll_id: poll.id,
       p_option_ids: poll.poll_type !== 'open' ? response.optionIds : null,

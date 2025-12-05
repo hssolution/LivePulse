@@ -44,7 +44,9 @@ export function Footer() {
           <span className="font-medium truncate max-w-[100px] md:max-w-[200px]">{profile?.email}</span>
         </div>
         <div className="hidden sm:flex items-center gap-1">
-          <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">{profile?.role}</span>
+          <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+            {t('user.type.' + profile.role, profile.role)}
+          </span>
         </div>
       </div>
 

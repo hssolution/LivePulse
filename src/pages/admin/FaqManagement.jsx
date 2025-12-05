@@ -34,26 +34,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { 
   Plus, 
   Loader2, 
-  Edit,
-  Trash2,
-  Eye,
-  EyeOff,
-  HelpCircle,
-  Building2,
-  Briefcase,
-  Mic,
-  Globe,
-  GripVertical,
+  Edit, 
+  Trash2, 
+  Eye, 
+  EyeOff, 
+  HelpCircle, 
+  Building2, 
+  Briefcase, 
+  Mic, 
+  Globe, 
+  GripVertical, 
   Search
 } from 'lucide-react'
 import { format } from 'date-fns'
@@ -195,10 +189,10 @@ export default function FaqManagement() {
   )
 
   const categories = [
-    { id: 'common', labelKey: 'faq.categoryCommon', icon: Globe },
-    { id: 'organizer', labelKey: 'faq.categoryOrganizer', icon: Briefcase },
-    { id: 'agency', labelKey: 'faq.categoryAgency', icon: Building2 },
-    { id: 'instructor', labelKey: 'faq.categoryInstructor', icon: Mic },
+    { id: 'common', labelKey: 'faq.categoryCommon', icon: Globe, colorClass: 'text-blue-500' },
+    { id: 'organizer', labelKey: 'faq.categoryOrganizer', icon: Briefcase, colorClass: 'text-purple-500' },
+    { id: 'agency', labelKey: 'faq.categoryAgency', icon: Building2, colorClass: 'text-orange-500' },
+    { id: 'instructor', labelKey: 'faq.categoryInstructor', icon: Mic, colorClass: 'text-green-500' },
   ]
 
   /**
@@ -383,90 +377,105 @@ export default function FaqManagement() {
     faq.answer.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  // 탭 아이템 컴포넌트
+  const TabItem = ({ id, label, icon: Icon, colorClass }) => (
+    <button
+      onClick={() => setActiveCategory(id)}
+      className={`
+        flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
+        ${activeCategory === id 
+          ? `border-primary text-primary bg-primary/5` 
+          : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'}
+      `}
+    >
+      <Icon className={`h-4 w-4 ${activeCategory === id ? colorClass : 'text-muted-foreground'}`} />
+      {label}
+    </button>
+  )
+
   return (
     <div className="h-full flex flex-col p-4 md:p-6">
       {/* 헤더 */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('faq.management')}</h2>
-          <p className="text-muted-foreground mt-1">{t('faq.managementDesc')}</p>
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('faq.management')}</h2>
+            <p className="text-muted-foreground mt-1">{t('faq.managementDesc')}</p>
+          </div>
+          <Button onClick={openNewDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            {t('faq.create')}
+          </Button>
         </div>
-        <Button onClick={openNewDialog}>
-          <Plus className="h-4 w-4 mr-2" />
-          {t('faq.create')}
-        </Button>
+
+        {/* Compact Tabs */}
+        <div className="flex items-center border-b overflow-x-auto">
+          {categories.map(cat => (
+            <TabItem 
+              key={cat.id}
+              id={cat.id} 
+              label={t(cat.labelKey)} 
+              icon={cat.icon}
+              colorClass={cat.colorClass}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* 카테고리 탭 */}
-      <Tabs value={activeCategory} onValueChange={setActiveCategory} className="flex-1 flex flex-col">
-        <TabsList className="mb-4">
-          {categories.map(cat => {
-            const Icon = cat.icon
-            return (
-              <TabsTrigger key={cat.id} value={cat.id} className="gap-2">
-                <Icon className="h-4 w-4" />
-                {t(cat.labelKey)}
-              </TabsTrigger>
-            )
-          })}
-        </TabsList>
+      {/* 검색 */}
+      <div className="relative mb-4 w-full sm:w-64">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder={t('common.search')}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+        />
+      </div>
 
-        {/* 검색 */}
-        <div className="relative mb-4 w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={t('common.search')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-
-        {categories.map(cat => (
-          <TabsContent key={cat.id} value={cat.id} className="flex-1 mt-0">
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      {/* FAQ 리스트 */}
+      <div className="flex-1 overflow-auto">
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : filteredFaqs.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12">
+              <HelpCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+              <p className="text-muted-foreground">{t('faq.noFaqs')}</p>
+              <Button variant="outline" className="mt-4" onClick={openNewDialog}>
+                <Plus className="h-4 w-4 mr-2" />
+                {t('faq.createFirst')}
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredFaqs.map(f => f.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-3">
+                {filteredFaqs.map((faq) => (
+                  <SortableFaqCard
+                    key={faq.id}
+                    faq={faq}
+                    onEdit={openEditDialog}
+                    onDelete={(f) => { setDeletingFaq(f); setShowDeleteDialog(true) }}
+                    onToggle={handleToggle}
+                    t={t}
+                  />
+                ))}
               </div>
-            ) : filteredFaqs.length === 0 ? (
-              <Card>
-                <CardContent className="text-center py-12">
-                  <HelpCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground">{t('faq.noFaqs')}</p>
-                  <Button variant="outline" className="mt-4" onClick={openNewDialog}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    {t('faq.createFirst')}
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={filteredFaqs.map(f => f.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-3">
-                    {filteredFaqs.map((faq) => (
-                      <SortableFaqCard
-                        key={faq.id}
-                        faq={faq}
-                        onEdit={openEditDialog}
-                        onDelete={(f) => { setDeletingFaq(f); setShowDeleteDialog(true) }}
-                        onToggle={handleToggle}
-                        t={t}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            )}
-          </TabsContent>
-        ))}
-      </Tabs>
+            </SortableContext>
+          </DndContext>
+        )}
+      </div>
 
       {/* 편집 다이얼로그 */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
@@ -565,4 +574,3 @@ export default function FaqManagement() {
     </div>
   )
 }
-

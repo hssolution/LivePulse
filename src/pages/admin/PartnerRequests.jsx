@@ -313,89 +313,74 @@ export default function PartnerRequests() {
     }
   }
 
+  // 탭 아이템 컴포넌트
+  const TabItem = ({ id, label, count, icon: Icon, colorClass }) => (
+    <button
+      onClick={() => setFilter(id)}
+      className={`
+        flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors
+        ${filter === id 
+          ? `border-primary text-primary bg-primary/5` 
+          : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'}
+      `}
+    >
+      <Icon className={`h-4 w-4 ${filter === id ? colorClass : 'text-muted-foreground'}`} />
+      {label}
+      <span className={`ml-1 text-xs rounded-full px-2 py-0.5 ${filter === id ? 'bg-primary/10' : 'bg-muted'}`}>
+        {count}
+      </span>
+    </button>
+  )
+
   return (
     <div className="h-full flex flex-col p-4 md:p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col gap-4 mb-6">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('admin.partnerRequestsTitle')}</h2>
           <p className="text-muted-foreground mt-1">{t('admin.partnerRequestsDesc')}</p>
         </div>
+
+        {/* Compact Tabs */}
+        <div className="flex items-center border-b overflow-x-auto">
+          <TabItem 
+            id="all" 
+            label={t('common.all')} 
+            count={stats.total} 
+            icon={Users}
+            colorClass="text-primary"
+          />
+          <TabItem 
+            id="pending" 
+            label={t('admin.pendingRequests')} 
+            count={stats.pending} 
+            icon={Clock}
+            colorClass="text-yellow-500"
+          />
+          <TabItem 
+            id="approved" 
+            label={t('admin.approvedRequests')} 
+            count={stats.approved} 
+            icon={CheckCircle}
+            colorClass="text-green-500"
+          />
+          <TabItem 
+            id="rejected" 
+            label={t('admin.rejectedRequests')} 
+            count={stats.rejected} 
+            icon={XCircle}
+            colorClass="text-red-500"
+          />
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto space-y-6">
-        {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card 
-            className={`cursor-pointer transition-all ${filter === 'all' ? 'ring-2 ring-primary' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('common.all')}</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className={`cursor-pointer transition-all ${filter === 'pending' ? 'ring-2 ring-yellow-500' : ''}`}
-            onClick={() => setFilter('pending')}
-          >
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('admin.pendingRequests')}</p>
-                <p className="text-2xl font-bold">{stats.pending}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className={`cursor-pointer transition-all ${filter === 'approved' ? 'ring-2 ring-green-500' : ''}`}
-            onClick={() => setFilter('approved')}
-          >
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('admin.approvedRequests')}</p>
-                <p className="text-2xl font-bold">{stats.approved}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className={`cursor-pointer transition-all ${filter === 'rejected' ? 'ring-2 ring-red-500' : ''}`}
-            onClick={() => setFilter('rejected')}
-          >
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-                <XCircle className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('admin.rejectedRequests')}</p>
-                <p className="text-2xl font-bold">{stats.rejected}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
+      <div className="flex-1 overflow-auto">
         {/* Search & List */}
-        <Card className="flex-1">
-          <CardHeader className="pb-4">
+        <Card className="h-full flex flex-col border-0 shadow-none sm:border sm:shadow-sm">
+          <CardHeader className="pb-4 px-0 sm:px-6 pt-0 sm:pt-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <CardTitle>{t('admin.partnerRequests')}</CardTitle>
-                <CardDescription>
-                  {filter === 'all' ? t('common.all') : getStatusLabel(filter)} {filteredRequests.length}
-                </CardDescription>
+              <div className="hidden sm:block">
+                <CardTitle className="text-lg">{t('admin.partnerRequests')}</CardTitle>
               </div>
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -408,13 +393,13 @@ export default function PartnerRequests() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="flex-1 overflow-auto px-0 sm:px-6 pb-0 sm:pb-6">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : filteredRequests.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
+              <div className="text-center py-12 text-muted-foreground bg-muted/10 rounded-lg border border-dashed">
                 <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
                 <p>{t('admin.noRequests')}</p>
               </div>
@@ -425,11 +410,11 @@ export default function PartnerRequests() {
                   return (
                     <div
                       key={request.id}
-                      className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors gap-4 bg-card"
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-1">
-                          <p className="font-medium truncate">{request.representative_name}</p>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <p className="font-medium truncate text-base">{request.representative_name}</p>
                           <Badge variant="outline" className={getPartnerTypeStyle(request.partner_type)}>
                             <TypeIcon className="h-3 w-3 mr-1" />
                             {getPartnerTypeLabel(request.partner_type)}
@@ -439,21 +424,32 @@ export default function PartnerRequests() {
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                          <span>{request.email}</span>
-                          {request.company_name && <span>· {request.company_name}</span>}
-                          {request.display_name && <span>· {request.display_name}</span>}
-                          <span>· {format(new Date(request.created_at), 'yyyy-MM-dd HH:mm')}</span>
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            {request.email}
+                          </div>
+                          {request.company_name && (
+                            <div className="flex items-center gap-1">
+                              <Building2 className="h-3 w-3" />
+                              {request.company_name}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {format(new Date(request.created_at), 'yyyy-MM-dd HH:mm')}
+                          </div>
                         </div>
                       </div>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => {
                           setSelectedRequest(request)
                           setDetailOpen(true)
                         }}
+                        className="w-full sm:w-auto"
                       >
-                        <Eye className="h-4 w-4 mr-1" />
+                        <Eye className="h-4 w-4 mr-2" />
                         {t('admin.viewAll')}
                       </Button>
                     </div>

@@ -668,8 +668,10 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('poll.results')}</DialogTitle>
-            <DialogDescription>
-              {selectedPoll?.question}
+            <DialogDescription asChild>
+              <div className="mt-2">
+                <HtmlContent html={selectedPoll?.question || ''} />
+              </div>
             </DialogDescription>
           </DialogHeader>
           
@@ -686,7 +688,8 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
                     pollResults.results.map((r, i) => (
                       <Card key={i}>
                         <CardContent className="p-3">
-                          <p className="text-sm">{r.text}</p>
+                          {/* 응답 내용이 HTML일 수 있으므로 HtmlContent 사용하거나 텍스트로 처리 */}
+                          <p className="text-sm whitespace-pre-wrap">{r.text}</p>
                         </CardContent>
                       </Card>
                     ))

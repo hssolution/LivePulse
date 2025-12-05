@@ -364,9 +364,11 @@ export default function Signup() {
             <span className="text-2xl font-bold">LivePulse</span>
           </div>
 
-          <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            {t('auth.backToHome')}
+          <Link to="/" className="inline-flex items-center gap-2 font-medium text-slate-600 hover:text-primary dark:text-slate-400 dark:hover:text-primary mb-8 transition-colors group">
+            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+              <ArrowLeft className="h-4 w-4" />
+            </div>
+            {t('auth.backToHome').replace(/←|<-/g, '').trim()}
           </Link>
 
           <div className="mb-8">

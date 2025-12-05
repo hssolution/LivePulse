@@ -214,12 +214,14 @@ https://[PROJECT_NAME].vercel.app
 
 ## Part C: 환경변수 설정
 
-### 로컬 개발용 (.env.local)
+### 로컬 개발 환경 (.env.local)
+
+로컬 개발 시에도 운영 DB(또는 개발용 리모트 DB)에 연결합니다. 로컬 Supabase 인스턴스는 사용하지 않습니다.
 
 프로젝트 루트에 `.env.local` 파일 생성:
 ```env
-# Supabase 로컬 개발 환경
-VITE_SUPABASE_URL=http://127.0.0.1:54321
+# Supabase 리모트 프로젝트 연결
+VITE_SUPABASE_URL=https://[PROJECT_REF].supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 

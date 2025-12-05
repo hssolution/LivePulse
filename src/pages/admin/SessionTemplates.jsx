@@ -65,22 +65,32 @@ import { useNavigate, useParams } from 'react-router-dom'
 const SCREEN_TYPE_CONFIG = {
   main: {
     titleKey: 'template.mainScreen',
-    descKey: 'template.mainScreenDesc',
-    title: '메인 화면 템플릿',
-    desc: '세션 참여 페이지에 표시되는 메인 화면 템플릿을 관리합니다.'
+    descKey: 'template.mainScreenDesc'
   },
   qna: {
     titleKey: 'template.qnaScreen',
-    descKey: 'template.qnaScreenDesc',
-    title: '질문 화면 템플릿',
-    desc: '질문 송출 시 프로젝터/대형 스크린에 표시되는 템플릿을 관리합니다.'
+    descKey: 'template.qnaScreenDesc'
   },
   poll: {
     titleKey: 'template.pollScreen',
-    descKey: 'template.pollScreenDesc',
-    title: '설문 화면 템플릿',
-    desc: '설문 진행 시 표시되는 화면 템플릿을 관리합니다.'
+    descKey: 'template.pollScreenDesc'
   }
+}
+
+/**
+ * 템플릿 코드별 번역 키 매핑 (시스템 기본 템플릿용)
+ */
+const TEMPLATE_TRANS_KEYS = {
+  // Main
+  'symposium': { name: 'template.symposium', desc: 'template.symposiumDesc' },
+  'conference': { name: 'template.conference', desc: 'template.conferenceDesc' },
+  'workshop': { name: 'template.workshop', desc: 'template.workshopDesc' },
+  // QnA
+  'qna_default': { name: 'template.qnaDefault', desc: 'template.qnaDefaultDesc' },
+  'qna_minimal': { name: 'template.qnaMinimal', desc: 'template.qnaMinimalDesc' },
+  // Poll
+  'poll_default': { name: 'template.pollDefault', desc: 'template.pollDefaultDesc' },
+  'poll_chart': { name: 'template.pollChart', desc: 'template.pollChartDesc' },
 }
 
 /**
@@ -425,8 +435,8 @@ export default function SessionTemplates() {
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">{t(screenConfig.titleKey) || screenConfig.title}</h1>
-          <p className="text-muted-foreground mt-1">{t(screenConfig.descKey) || screenConfig.desc}</p>
+          <h1 className="text-3xl font-bold">{t(screenConfig.titleKey)}</h1>
+          <p className="text-muted-foreground mt-1">{t(screenConfig.descKey)}</p>
         </div>
         <Button onClick={() => openEditDialog()}>
           <Plus className="h-4 w-4 mr-2" />
@@ -464,10 +474,16 @@ export default function SessionTemplates() {
                     <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{template.name}</p>
-                        {template.description && (
+                        <p className="font-medium">
+                          {TEMPLATE_TRANS_KEYS[template.code] 
+                            ? t(TEMPLATE_TRANS_KEYS[template.code].name) 
+                            : template.name}
+                        </p>
+                        {(template.description || TEMPLATE_TRANS_KEYS[template.code]) && (
                           <p className="text-sm text-muted-foreground truncate max-w-xs">
-                            {template.description}
+                            {TEMPLATE_TRANS_KEYS[template.code]
+                              ? t(TEMPLATE_TRANS_KEYS[template.code].desc)
+                              : template.description}
                           </p>
                         )}
                       </div>
@@ -477,7 +493,7 @@ export default function SessionTemplates() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {template.session_template_fields?.[0]?.count || 0} {t('template.fieldsCount')}
+                        {t('template.fieldCount', { count: template.session_template_fields?.[0]?.count || 0 })}
                       </Badge>
                     </TableCell>
                     <TableCell>

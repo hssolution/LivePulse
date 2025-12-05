@@ -16,12 +16,16 @@ import {
   AlertCircle,
   Calendar,
   MapPin,
-  Mic
+  Mic,
+  Send,
+  Vote
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import AudienceQnA from '@/components/session/AudienceQnA'
 import AudiencePolls from '@/components/session/AudiencePolls'
+
+import SEO from '@/components/common/SEO'
 
 /**
  * 청중용 실시간 참여 페이지
@@ -42,6 +46,16 @@ export default function LiveSession() {
   const [presenters, setPresenters] = useState([])
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState(initialTab)
+
+  // 이 페이지는 항상 라이트 모드로 표시
+  useEffect(() => {
+    document.documentElement.classList.remove('dark')
+    document.documentElement.classList.add('light')
+    return () => {
+      // 페이지를 벗어날 때 정리 (필요한 경우)
+      document.documentElement.classList.remove('light')
+    }
+  }, [])
 
   /**
    * 세션 데이터 로드
@@ -211,6 +225,12 @@ export default function LiveSession() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {session && (
+        <SEO 
+          title={session.title}
+          description={session.description || `[Live] ${session.title} - ${session.venue_name}`}
+        />
+      )}
       {/* 헤더 */}
       <header className="bg-white border-b sticky top-0 z-40">
         <div className="container mx-auto px-4 py-3">
@@ -258,6 +278,7 @@ export default function LiveSession() {
             <AudienceQnA 
               sessionId={session.id} 
               sessionStatus={session.status}
+              isPreview={isPreview}
             />
           </TabsContent>
 
@@ -266,6 +287,7 @@ export default function LiveSession() {
             <AudiencePolls 
               sessionId={session.id} 
               sessionTitle={session.title}
+              isPreview={isPreview}
             />
           </TabsContent>
 

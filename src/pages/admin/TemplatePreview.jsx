@@ -47,13 +47,24 @@ const SAMPLE_IMAGES = {
   bottom_banner: 'https://placehold.co/1200x100/6B7280/FFFFFF?text=Footer',
 }
 
-// 샘플 텍스트
-const SAMPLE_TEXTS = {
-  title: '2024 글로벌 테크 컨퍼런스',
-  subtitle: '미래를 만나는 시간',
-  description: '전 세계 최고의 전문가들과 함께하는 기술 혁신의 장.',
-  date: '2024년 12월 15일 (금)',
-  location: '서울 코엑스 그랜드볼룸',
+// 샘플 텍스트 키 매핑
+const SAMPLE_TEXT_KEYS = {
+  title: 'sample.conferenceTitle',
+  subtitle: 'sample.conferenceSubtitle',
+  description: 'sample.conferenceDesc',
+  date: 'sample.date',
+  location: 'sample.location',
+}
+
+// 템플릿 코드별 번역 키 매핑 (SessionTemplates와 동일)
+const TEMPLATE_TRANS_KEYS = {
+  'symposium': { name: 'template.symposium', desc: 'template.symposiumDesc' },
+  'conference': { name: 'template.conference', desc: 'template.conferenceDesc' },
+  'workshop': { name: 'template.workshop', desc: 'template.workshopDesc' },
+  'qna_default': { name: 'template.qnaDefault', desc: 'template.qnaDefaultDesc' },
+  'qna_minimal': { name: 'template.qnaMinimal', desc: 'template.qnaMinimalDesc' },
+  'poll_default': { name: 'template.pollDefault', desc: 'template.pollDefaultDesc' },
+  'poll_chart': { name: 'template.pollChart', desc: 'template.pollChartDesc' },
 }
 
 /**
@@ -168,7 +179,7 @@ export default function TemplatePreview() {
     if (field.field_type === 'image') {
       return SAMPLE_IMAGES[field.field_key] || `https://placehold.co/800x400/3B82F6/FFFFFF?text=${encodeURIComponent(field.field_name)}`
     } else if (field.field_type === 'text') {
-      return SAMPLE_TEXTS[field.field_key] || `샘플 ${field.field_name}`
+      return SAMPLE_TEXT_KEYS[field.field_key] ? t(SAMPLE_TEXT_KEYS[field.field_key]) : t('template.samplePrefix', { name: field.field_name })
     } else if (field.field_type === 'boolean') {
       return true
     } else if (field.field_type === 'url') {
@@ -335,7 +346,11 @@ export default function TemplatePreview() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">{template.name}</h1>
+            <h1 className="text-2xl font-bold">
+              {template && TEMPLATE_TRANS_KEYS[template.code] 
+                ? t(TEMPLATE_TRANS_KEYS[template.code].name) 
+                : template?.name}
+            </h1>
             <p className="text-sm text-muted-foreground">{t('template.previewAndEdit')}</p>
           </div>
         </div>
@@ -356,7 +371,7 @@ export default function TemplatePreview() {
             <div className="flex items-center justify-between sticky top-0 bg-card py-2 z-10">
               <div>
                 <h2 className="font-semibold">{t('template.fieldSettings')}</h2>
-                <p className="text-xs text-muted-foreground">{fields.length}개 필드</p>
+                <p className="text-xs text-muted-foreground">{t('template.fieldCount', { count: fields.length })}</p>
               </div>
               <Button size="sm" onClick={() => setShowAddField(true)}>
                 <Plus className="h-4 w-4 mr-1" />
@@ -374,7 +389,7 @@ export default function TemplatePreview() {
                       <Input
                         value={newField.field_name}
                         onChange={(e) => setNewField({ ...newField, field_name: e.target.value })}
-                        placeholder="예: 배경 이미지"
+                        placeholder={t('template.fieldNameExample')}
                         className="h-8 text-sm"
                       />
                     </div>
@@ -383,7 +398,7 @@ export default function TemplatePreview() {
                       <Input
                         value={newField.field_key}
                         onChange={(e) => setNewField({ ...newField, field_key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                        placeholder="예: background_image"
+                        placeholder={t('template.fieldKeyExample')}
                         className="h-8 text-sm"
                       />
                     </div>
@@ -489,7 +504,7 @@ export default function TemplatePreview() {
                               <Input
                                 value={sampleData[field.field_key] || ''}
                                 onChange={(e) => setSampleData({ ...sampleData, [field.field_key]: e.target.value })}
-                                placeholder="이미지 URL"
+                                placeholder={t('template.imageUrlPlaceholder')}
                                 className="h-7 text-xs flex-1"
                               />
                               {sampleData[field.field_key] && (
@@ -506,7 +521,7 @@ export default function TemplatePreview() {
                             <Input
                               value={sampleData[field.field_key] || ''}
                               onChange={(e) => setSampleData({ ...sampleData, [field.field_key]: e.target.value })}
-                              placeholder={`샘플 텍스트`}
+                              placeholder={t('template.sampleTextPlaceholder')}
                               className="h-7 text-xs"
                             />
                           )}
@@ -517,7 +532,7 @@ export default function TemplatePreview() {
                                 onCheckedChange={(checked) => setSampleData({ ...sampleData, [field.field_key]: checked })}
                               />
                               <span className="text-xs text-muted-foreground">
-                                {sampleData[field.field_key] ? '활성화' : '비활성화'}
+                                {sampleData[field.field_key] ? t('common.enabled') : t('common.disabled')}
                               </span>
                             </div>
                           )}
@@ -739,7 +754,7 @@ function DynamicTemplateRenderer({ fields, sampleData, device }) {
         {booleanFields.some(f => f.field_key.includes('button') && getFieldValue(f.field_key)) && (
           <div className="flex justify-center pt-4">
             <button className={`bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold rounded-full shadow-lg ${device === 'mobile' ? 'px-6 py-2 text-sm' : 'px-8 py-3 text-lg'}`}>
-              지금 참여하기
+              {t('session.joinNow')}
             </button>
           </div>
         )}

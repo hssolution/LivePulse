@@ -157,7 +157,7 @@ export default function Login() {
       ])
 
       // AuthContext 프로필 갱신 후 리다이렉트 (AdminRoute 등에서 올바른 role 체크를 위해)
-      await refreshProfile()
+      const profile = await refreshProfile()
       
       // 대기 중인 초대가 있는지 확인
       const { data: pendingInvites } = await supabase
@@ -174,8 +174,31 @@ export default function Login() {
         return
       }
       
-      // redirect URL이 있으면 해당 페이지로, 없으면 홈으로
-      navigate(redirectUrl || '/')
+      // 1. 트랜지션 잠금 (관리자 화면 등으로 이동 시 테마 변경 애니메이션 방지)
+      document.body.classList.add('preload')
+
+      // 2. redirect URL이 있으면 해당 페이지로 최우선 이동
+      if (redirectUrl) {
+        navigate(redirectUrl)
+        return
+      }
+
+      // 3. 관리자인 경우 관리자 대시보드로 이동
+      if (profile?.role === 'admin') {
+        navigate('/adm')
+        return
+      }
+
+      // 4. 파트너인 경우 파트너 대시보드로 이동
+      if (profile?.userType === 'partner') {
+        navigate('/partner')
+        return
+      }
+      
+      // 5. 그 외(일반 유저)는 홈으로 이동
+      // 홈으로 갈 때는 애니메이션이 필요할 수 있으므로 preload 제거 (홈은 라이트모드 유지라 상관없지만 안전하게)
+      document.body.classList.remove('preload')
+      navigate('/')
     } catch (error) {
       if (!error.message?.includes('locked')) {
         console.error('Login error:', error)
@@ -229,9 +252,11 @@ export default function Login() {
             <span className="text-2xl font-bold">LivePulse</span>
           </div>
 
-          <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            {t('auth.backToHome')}
+          <Link to="/" className="inline-flex items-center gap-2 font-medium text-slate-600 hover:text-primary dark:text-slate-400 dark:hover:text-primary mb-8 transition-colors group">
+            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+              <ArrowLeft className="h-4 w-4" />
+            </div>
+            {t('auth.backToHome').replace(/←|<-/g, '').trim()}
           </Link>
 
           <div className="mb-8">
@@ -251,12 +276,13 @@ export default function Login() {
                 required
                 className="h-12"
                 disabled={lockInfo?.isLocked}
+                tabIndex={1}
               />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">{t('auth.password')}</Label>
-                <a href="#" className="text-sm text-primary hover:underline">{t('auth.forgotPassword')}</a>
+                <a href="#" className="text-sm text-primary hover:underline" tabIndex={4}>{t('auth.forgotPassword')}</a>
               </div>
               <Input 
                 id="password" 
@@ -266,6 +292,7 @@ export default function Login() {
                 required
                 className="h-12"
                 disabled={lockInfo?.isLocked}
+                tabIndex={2}
               />
             </div>
 
@@ -296,6 +323,7 @@ export default function Login() {
               className="w-full h-12 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600" 
               type="submit" 
               disabled={loading || lockInfo?.isLocked}
+              tabIndex={3}
             >
               {loading ? t('auth.loggingIn') : t('auth.login')}
             </Button>
@@ -303,7 +331,7 @@ export default function Login() {
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {t('auth.noAccount')}{' '}
-            <Link to="/signup" className="text-primary hover:underline font-medium">
+            <Link to="/signup" className="text-primary hover:underline font-medium" tabIndex={5}>
               {t('auth.signup')}
             </Link>
           </div>

@@ -29,7 +29,7 @@ import { ko } from 'date-fns/locale'
  * - 좋아요
  * - 실시간 업데이트
  */
-export default function AudienceQnA({ sessionId, sessionStatus }) {
+export default function AudienceQnA({ sessionId, sessionStatus, isPreview = false }) {
   const { t, language } = useLanguage()
   
   const [loading, setLoading] = useState(true)
@@ -61,16 +61,16 @@ export default function AudienceQnA({ sessionId, sessionStatus }) {
   /**
    * 질문 목록 로드
    */
-  const loadQuestions = useCallback(async () => {
+  const loadQuestions = useCallback(async (showLoading = true) => {
     if (!sessionId) return
     
-    setLoading(true)
+    if (showLoading) setLoading(true)
     try {
       let query = supabase
         .from('questions')
         .select('*')
         .eq('session_id', sessionId)
-        .in('status', ['approved', 'answered'])
+        .eq('status', 'approved') // 답변 완료된 질문은 숨김 (기획 미정)
       
       // 정렬
       if (sortBy === 'newest') {
@@ -97,7 +97,7 @@ export default function AudienceQnA({ sessionId, sessionStatus }) {
     } catch (error) {
       console.error('Error loading questions:', error)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }, [sessionId, sortBy])
 
@@ -141,19 +141,14 @@ export default function AudienceQnA({ sessionId, sessionStatus }) {
           filter: `session_id=eq.${sessionId}`
         },
         (payload) => {
+          // 데이터 변경 시 목록 조용히 새로고침
+          loadQuestions(false)
+
           if (payload.eventType === 'INSERT') {
-            // 새 질문 (approved 상태만 표시)
-            if (payload.new.status === 'approved' || payload.new.status === 'answered') {
-              setQuestions(prev => [payload.new, ...prev])
+            // 새 질문 알림 (approved 상태만)
+            if (payload.new.status === 'approved') {
               toast.info(t('qna.newQuestion'))
             }
-          } else if (payload.eventType === 'UPDATE') {
-            setQuestions(prev => 
-              prev.map(q => q.id === payload.new.id ? payload.new : q)
-                .filter(q => q.status === 'approved' || q.status === 'answered')
-            )
-          } else if (payload.eventType === 'DELETE') {
-            setQuestions(prev => prev.filter(q => q.id !== payload.old.id))
           }
         }
       )
@@ -162,7 +157,7 @@ export default function AudienceQnA({ sessionId, sessionStatus }) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [sessionId, t])
+  }, [sessionId, t, loadQuestions])
 
   /**
    * 질문 등록
@@ -265,8 +260,8 @@ export default function AudienceQnA({ sessionId, sessionStatus }) {
     return format(date, 'MM.dd HH:mm')
   }
 
-  // 세션이 활성 상태가 아니면 질문 폼 숨김
-  const canSubmit = sessionStatus === 'active'
+  // 세션이 활성 상태가 아니면 질문 폼 숨김 (미리보기 모드에서는 항상 표시)
+  const canSubmit = sessionStatus === 'active' || isPreview
 
   return (
     <div className="space-y-4">
@@ -421,30 +416,12 @@ export default function AudienceQnA({ sessionId, sessionStatus }) {
                           {t('qna.highlight')}
                         </Badge>
                       )}
-                      {question.status === 'answered' && (
-                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          {t('qna.statusAnswered')}
-                        </Badge>
-                      )}
                     </div>
                     
                     {/* 질문 텍스트 */}
                     <p className="text-foreground whitespace-pre-wrap break-words">
                       {question.content}
                     </p>
-                    
-                    {/* 답변 */}
-                    {question.answer && (
-                      <div className="mt-3 p-3 bg-muted/50 rounded-lg border-l-4 border-primary">
-                        <p className="text-sm font-medium text-primary mb-1">
-                          {t('qna.answer')}
-                        </p>
-                        <p className="text-sm text-foreground whitespace-pre-wrap">
-                          {question.answer}
-                        </p>
-                      </div>
-                    )}
                     
                     {/* 메타 정보 */}
                     <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
