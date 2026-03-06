@@ -42,62 +42,66 @@ export function AppInitProvider({ children }) {
           // 세션 체크
           const { data: { session } } = await supabase.auth.getSession()
           
-          // 언어 목록 로드
-          const { data: languages } = await supabase
-            .from('languages')
-            .select('*')
-            .eq('is_active', true)
-            .order('sort_order')
-
           // 초기 언어 결정 (유저 설정 > 로컬 스토리지 > 브라우저 > 기본값)
           let langCode = 'ko'
           
           // 관리자 테마 설정 (로그인 시)
           let adminTheme = null
+          let languages = []
+          let translations = {}
 
           if (session?.user) {
-            // 병렬로 유저 관련 데이터 로드
-            const [profileResult, themeResult] = await Promise.all([
-              supabase
-                .from('profiles')
-                .select('preferred_language')
-                .eq('id', session.user.id)
-                .single(),
-              supabase
-                .from('user_theme_settings')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .maybeSingle()
-            ])
+            // 단일 RPC로 모든 초기 데이터 로드
+            const { data: initData } = await supabase.rpc('sp_init_q', {
+              p_user_id: session.user.id,
+              p_language_code: langCode // 기본값으로 먼저 호출
+            })
             
-            if (profileResult.data?.preferred_language) {
-              langCode = profileResult.data.preferred_language
-            }
-
-            if (themeResult.data) {
-              adminTheme = {
-                mode: themeResult.data.mode || 'light',
-                preset: themeResult.data.preset || 'theme-d',
-                customColors: themeResult.data.custom_colors || {},
-                fontSize: themeResult.data.font_size || 'medium'
+            if (initData) {
+              languages = initData.languages || []
+              translations = initData.translations || {}
+              
+              // 유저 선호 언어가 있으면 번역 다시 로드
+              if (initData.userProfile?.preferred_language && initData.userProfile.preferred_language !== langCode) {
+                langCode = initData.userProfile.preferred_language
+                const { data: userTranslations } = await supabase.rpc('get_translations', { lang_code: langCode })
+                translations = userTranslations || {}
+              }
+              
+              // 테마 설정
+              if (initData.themeSettings) {
+                adminTheme = {
+                  mode: initData.themeSettings.mode || 'light',
+                  preset: initData.themeSettings.preset || 'theme-d',
+                  customColors: initData.themeSettings.custom_colors || {},
+                  fontSize: initData.themeSettings.font_size || 'medium',
+                  userId: session.user.id
+                }
               }
             }
-          } 
-          
-          // 2순위: 로컬 스토리지 (비로그인)
-          if (!session?.user && typeof window !== 'undefined') {
-            const stored = localStorage.getItem('livepulse_language')
-            if (stored) langCode = stored
+          } else {
+            // 비로그인 사용자: 로컬 스토리지에서 언어 가져오기
+            if (typeof window !== 'undefined') {
+              const stored = localStorage.getItem('livepulse_language')
+              if (stored) langCode = stored
+            }
+            
+            // 단일 RPC로 초기 데이터 로드 (user_id 없이)
+            const { data: initData } = await supabase.rpc('sp_init_q', {
+              p_user_id: null,
+              p_language_code: langCode
+            })
+            
+            if (initData) {
+              languages = initData.languages || []
+              translations = initData.translations || {}
+            }
           }
-
-          // 번역 데이터 로드
-          const { data: translations } = await supabase
-            .rpc('get_translations', { lang_code: langCode })
 
           return {
             session,
-            languages: languages || [],
-            translations: translations || {},
+            languages,
+            translations,
             initialLanguage: langCode,
             adminTheme
           }

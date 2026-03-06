@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { PublicThemeProvider } from './context/PublicThemeContext'
 import { AdminThemeProvider } from './context/AdminThemeContext'
+import { PartnerProvider } from './context/PartnerContext'
 import { AppInitProvider, useAppInit } from './context/AppInitContext'
 import { Toaster } from './components/ui/sonner'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -30,9 +31,9 @@ const MyPage = lazy(() => import('./pages/MyPage'))
 const AdminLayout = lazy(() => import('./components/layout/AdminLayout'))
 
 // Admin Pages
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const UsersPage = lazy(() => import('./pages/Users'))
-const ProfileTest = lazy(() => import('./pages/ProfileTest'))
+const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
+const UsersPage = lazy(() => import('./pages/admin/Users'))
+const ProfileTest = lazy(() => import('./pages/admin/ProfileTest'))
 const PartnerRequests = lazy(() => import('./pages/admin/PartnerRequests'))
 const Partners = lazy(() => import('./pages/admin/Partners'))
 const AdminSessions = lazy(() => import('./pages/admin/Sessions'))
@@ -135,6 +136,7 @@ function AppContent() {
   return (
     <LanguageProvider initialData={initData}>
         <AuthProvider>
+          <PartnerProvider>
           <Toaster position="top-right" richColors closeButton />
           <Router>
           <Routes>
@@ -332,6 +334,7 @@ function AppContent() {
             } />
           </Routes>
         </Router>
+        </PartnerProvider>
         </AuthProvider>
       </LanguageProvider>
   )

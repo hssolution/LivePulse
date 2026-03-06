@@ -22,23 +22,26 @@ export const AdminThemeProvider = ({ children, initialTheme }) => {
     }
   })
 
-  // Load theme from database
+  // Load theme from database (프로시저 사용)
   const loadTheme = useCallback(async () => {
-    // 초기 테마가 있고 아직 한 번도 로드 안 했으면 스킵 가능하지만,
-    // 최신 상태 보장을 위해 로드하되 로딩 스피너는 안 띄움
+    // 초기 테마가 있으면 DB 조회 스킵 (AppInitContext에서 이미 로드됨)
+    if (initialTheme) {
+      setLoading(false)
+      return
+    }
+
+    // 유저가 없으면 스킵
     if (!user) {
       setLoading(false)
       return
     }
 
     try {
-      const { data, error } = await supabase
-        .from('user_theme_settings')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
+      const { data, error } = await supabase.rpc('sp_theme_q', {
+        p_user_id: user.id
+      })
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error loading theme:', error)
         setLoading(false)
         return
@@ -51,24 +54,16 @@ export const AdminThemeProvider = ({ children, initialTheme }) => {
           customColors: data.custom_colors || {},
           fontSize: data.font_size || 'medium'
         })
-      } else {
-        // Create default theme settings using upsert to avoid duplicate key errors
-        const { error: insertError } = await supabase
-          .from('user_theme_settings')
-          .upsert({
-            user_id: user.id,
-            mode: 'light',
-            preset: 'theme-d',
-            custom_colors: {},
-            font_size: 'medium'
-          }, {
-            onConflict: 'user_id',
-            ignoreDuplicates: true
+        
+        // If this is a new user with default theme, save it to DB
+        if (!data.user_id) {
+          await supabase.rpc('sp_theme_s', {
+            p_user_id: user.id,
+            p_mode: 'light',
+            p_preset: 'theme-d',
+            p_custom_colors: {},
+            p_font_size: 'medium'
           })
-
-        if (insertError && insertError.code !== '23505') {
-          // 23505 = duplicate key error, ignore it
-          console.error('Error creating default theme:', insertError)
         }
       }
     } catch (error) {
@@ -76,22 +71,20 @@ export const AdminThemeProvider = ({ children, initialTheme }) => {
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, initialTheme])
 
-  // Save theme to database (with debounce)
+  // Save theme to database (프로시저 사용)
   const saveTheme = useCallback(async (newTheme) => {
     if (!user) return
 
     try {
-      const { error } = await supabase
-        .from('user_theme_settings')
-        .upsert({
-          user_id: user.id,
-          mode: newTheme.mode,
-          preset: newTheme.preset,
-          custom_colors: newTheme.customColors,
-          font_size: newTheme.fontSize
-        })
+      const { error } = await supabase.rpc('sp_theme_s', {
+        p_user_id: user.id,
+        p_mode: newTheme.mode,
+        p_preset: newTheme.preset,
+        p_custom_colors: newTheme.customColors,
+        p_font_size: newTheme.fontSize
+      })
 
       if (error) {
         console.error('Error saving theme:', error)
@@ -132,9 +125,15 @@ export const AdminThemeProvider = ({ children, initialTheme }) => {
 
   // Load theme on mount or user change
   useEffect(() => {
-    // 초기 데이터가 없거나 유저가 바뀌었을 때만 로드
-    if (!initialTheme || (user && initialTheme && initialTheme.userId !== user.id)) {
-    loadTheme()
+    // 초기 테마가 있으면 DB 조회 불필요 (이미 AppInitContext에서 로드됨)
+    if (initialTheme) {
+      setLoading(false)
+      return
+    }
+    
+    // 초기 테마가 없고 유저가 있으면 로드
+    if (user) {
+      loadTheme()
     }
   }, [loadTheme, initialTheme, user])
 

@@ -105,11 +105,9 @@ export function LanguageProvider({ children, initialData }) {
    */
   const loadUserLanguage = useCallback(async (userId) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('preferred_language')
-        .eq('id', userId)
-        .single()
+      const { data, error } = await supabase.rpc('sp_user_language_q', {
+        p_user_id: userId
+      })
 
       if (error) throw error
       
@@ -131,10 +129,10 @@ export function LanguageProvider({ children, initialData }) {
     if (!user) return false
     
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ preferred_language: langCode })
-        .eq('id', user.id)
+      const { error } = await supabase.rpc('sp_user_language_s', {
+        p_user_id: user.id,
+        p_language_code: langCode
+      })
 
       if (error) throw error
       console.log('[Language] DB update successful')

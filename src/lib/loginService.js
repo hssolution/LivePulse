@@ -61,7 +61,7 @@ export const checkLoginAttempt = async (email) => {
   const ip = await getClientIP() || 'unknown'
   
   const { data, error } = await supabase
-    .rpc('check_login_attempt', {
+    .rpc('sp_login_attempt_c', {
       p_email: email,
       p_ip_address: ip
     })
@@ -90,7 +90,7 @@ export const recordLoginFailure = async (email) => {
   const ip = await getClientIP() || 'unknown'
   
   const { data, error } = await supabase
-    .rpc('record_login_failure', {
+    .rpc('sp_login_failure_s', {
       p_email: email,
       p_ip_address: ip
     })
@@ -116,7 +116,7 @@ export const recordLoginFailure = async (email) => {
 export const clearLoginAttempts = async (email) => {
   const ip = await getClientIP() || 'unknown'
   
-  await supabase.rpc('clear_login_attempts', {
+  await supabase.rpc('sp_login_attempt_clear_s', {
     p_email: email,
     p_ip_address: ip
   })
@@ -133,7 +133,7 @@ export const logLoginEvent = async (email, eventType, failureReason = null, sess
   const ip = await getClientIP()
   const deviceInfo = getDeviceInfo()
   
-  const { error } = await supabase.rpc('log_login_event', {
+  const { error } = await supabase.rpc('sp_login_event_s', {
     p_email: email,
     p_event_type: eventType,
     p_failure_reason: failureReason,
@@ -162,7 +162,7 @@ export const registerSession = async (userId, sessionToken) => {
   const ip = await getClientIP()
   const deviceInfo = getDeviceInfo()
   
-  const { data, error } = await supabase.rpc('register_session', {
+  const { data, error } = await supabase.rpc('sp_user_session_register_s', {
     p_user_id: userId,
     p_session_token: sessionToken,
     p_ip_address: ip,
@@ -192,7 +192,7 @@ export const registerSession = async (userId, sessionToken) => {
  * @param {string} sessionToken - 세션 토큰
  */
 export const updateSessionActivity = async (sessionToken) => {
-  await supabase.rpc('update_session_activity', {
+  await supabase.rpc('sp_user_session_activity_s', {
     p_session_token: sessionToken
   })
 }
@@ -202,7 +202,7 @@ export const updateSessionActivity = async (sessionToken) => {
  * @param {string} sessionToken - 세션 토큰
  */
 export const endSession = async (sessionToken) => {
-  const { error } = await supabase.rpc('end_session', {
+  const { error } = await supabase.rpc('sp_user_session_end_s', {
     p_session_token: sessionToken
   })
   
