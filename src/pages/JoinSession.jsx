@@ -86,7 +86,7 @@ export default function JoinSession() {
   })
 
   /**
-   * 세션 데이터 로드
+   * 세션 데이터 로드 (프로시저 사용)
    */
   const loadSession = useCallback(async () => {
     if (!code) {
@@ -96,61 +96,25 @@ export default function JoinSession() {
     }
     
     try {
-      // 세션 정보 조회 - 미리보기 모드면 상태 필터 없이 조회
-      let query = supabase
-        .from('sessions')
-        .select(`
-          *,
-          template:session_templates!sessions_template_id_fkey(*),
-          partner:partners(profile_id)
-        `)
-        .eq('code', code.toUpperCase())
+      const { data, error: rpcError } = await supabase.rpc('sp_join_session_q', {
+        p_code: code.toUpperCase(),
+        p_user_id: user?.id || null,
+        p_is_preview: isPreview
+      })
       
-      // 미리보기 모드가 아니면 공개된 세션만 조회
-      if (!isPreview) {
-        query = query.in('status', ['published', 'active'])
-      }
+      if (rpcError) throw rpcError
       
-      const { data: sessionData, error: sessionError } = await query.single()
-      
-      if (sessionError) {
-        if (sessionError.code === 'PGRST116') {
-          setError('not_found')
-        } else {
-          throw sessionError
-        }
+      if (data?.error === 'NOT_FOUND') {
+        setError('not_found')
         setLoading(false)
         return
       }
       
-      // 미리보기 모드인데 비공개 세션인 경우, 권한 확인 (로그인한 경우에만)
-      if (isPreview && !['published', 'active'].includes(sessionData.status)) {
-        // 로그인하지 않은 경우: 미리보기는 허용하되, 소유자 플래그는 false
-        if (!user) {
-          setIsOwner(false)
-        } else {
-          // 로그인한 경우: 권한 확인
-          const isAdmin = profile?.role === 'admin'
-          const isSessionOwner = sessionData.partner?.profile_id === user?.id
-          
-          setIsOwner(isSessionOwner || isAdmin)
-        }
-      }
-      
-      setSession(sessionData)
-      setTemplate(sessionData.template)
-      
-      // 에셋 로드
-      const { data: assetsData } = await supabase
-        .from('session_assets')
-        .select('*')
-        .eq('session_id', sessionData.id)
-      
-      const assetsMap = {}
-      assetsData?.forEach(asset => {
-        assetsMap[asset.field_key] = asset
-      })
-      setAssets(assetsMap)
+      setSession(data.session)
+      setTemplate(data.template)
+      setAssets(data.assets || {})
+      setIsParticipating(data.isParticipating || false)
+      setIsOwner(data.isOwner || false)
       
     } catch (err) {
       console.error('Error loading session:', err)
@@ -158,44 +122,13 @@ export default function JoinSession() {
       setError('load_failed')
     } finally {
       setLoading(false)
+      setCheckingParticipation(false)
     }
-  }, [code, isPreview, user, profile])
+  }, [code, isPreview, user])
 
   useEffect(() => {
     loadSession()
   }, [loadSession])
-
-  /**
-   * 참여 여부 확인 (로그인한 사용자만)
-   */
-  const checkParticipation = useCallback(async () => {
-    if (!user || !session) return
-    
-    setCheckingParticipation(true)
-    try {
-      const { data, error } = await supabase
-        .from('session_members')
-        .select('id, role')
-        .eq('session_id', session.id)
-        .eq('user_id', user.id)
-        .maybeSingle()
-      
-      if (error) throw error
-      
-      setIsParticipating(!!data)
-    } catch (err) {
-      console.error('Error checking participation:', err)
-      console.error('Error details:', JSON.stringify(err, null, 2))
-    } finally {
-      setCheckingParticipation(false)
-    }
-  }, [user, session])
-
-  useEffect(() => {
-    if (session && user) {
-      checkParticipation()
-    }
-  }, [session, user, checkParticipation])
 
   /**
    * 참여하기 버튼 클릭
@@ -211,43 +144,30 @@ export default function JoinSession() {
   }
 
   /**
-   * 로그인한 사용자 참여 처리
+   * 로그인한 사용자 참여 처리 (프로시저 사용)
    */
   const handleJoinWithAuth = async () => {
     if (!user || !profile || !session) return
     
     setJoining(true)
     try {
-      // 세션 멤버로 추가
-      const { error } = await supabase
-        .from('session_members')
-        .insert({
-          session_id: session.id,
-          user_id: user.id,
-          role: 'participant',
-          assigned_by: user.id
-        })
-      
-      if (error) {
-        // 이미 참여 중인 경우
-        if (error.code === '23505') {
-          toast.info(t('join.alreadyParticipating'))
-          setIsParticipating(true)
-          return
-        }
-        throw error
-      }
-      
-      // 참여자 수 증가
-      await supabase.rpc('increment_participant_count', {
-        session_id: session.id
+      const { data, error } = await supabase.rpc('sp_join_session_auth_s', {
+        p_session_id: session.id,
+        p_user_id: user.id
       })
       
-      toast.success(t('join.success'))
-      setIsParticipating(true)
+      if (error) throw error
       
-      // 세션 정보 새로고침
-      await loadSession()
+      if (data?.success) {
+        toast.success(t('join.success'))
+        setIsParticipating(true)
+        await loadSession()
+      } else if (data?.error === 'ALREADY_PARTICIPATING') {
+        toast.info(t('join.alreadyParticipating'))
+        setIsParticipating(true)
+      } else {
+        throw new Error(data?.error || 'Unknown error')
+      }
     } catch (err) {
       console.error('Error joining session:', err)
       toast.error(t('join.error.joinFailed'))
@@ -257,32 +177,27 @@ export default function JoinSession() {
   }
 
   /**
-   * 참여 취소
+   * 참여 취소 (프로시저 사용)
    */
   const handleCancelParticipation = async () => {
     if (!user || !session) return
     
     setJoining(true)
     try {
-      // 세션 멤버에서 제거
-      const { error } = await supabase
-        .from('session_members')
-        .delete()
-        .eq('session_id', session.id)
-        .eq('user_id', user.id)
+      const { data, error } = await supabase.rpc('sp_leave_session_auth_s', {
+        p_session_id: session.id,
+        p_user_id: user.id
+      })
       
       if (error) throw error
       
-      // 참여자 수 감소
-      await supabase.rpc('decrement_participant_count', {
-        session_id: session.id
-      })
-      
-      toast.success(t('join.cancelSuccess'))
-      setIsParticipating(false)
-      
-      // 세션 정보 새로고침
-      await loadSession()
+      if (data?.success) {
+        toast.success(t('join.cancelSuccess'))
+        setIsParticipating(false)
+        await loadSession()
+      } else {
+        throw new Error(data?.error || 'Unknown error')
+      }
     } catch (err) {
       console.error('Error canceling participation:', err)
       toast.error(t('join.error.cancelFailed'))
@@ -311,33 +226,7 @@ export default function JoinSession() {
   }
 
   /**
-   * 이메일/전화번호 중복 체크
-   */
-  const checkDuplicate = async (fieldName, value) => {
-    if (!session || !value.trim()) return false
-    
-    try {
-      const { data, error } = await supabase
-        .from('anonymous_participants')
-        .select('id')
-        .eq('session_id', session.id)
-        .eq(fieldName, value.trim())
-        .maybeSingle()
-      
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error checking duplicate:', error)
-        return false
-      }
-      
-      return !!data // 데이터가 있으면 중복
-    } catch (err) {
-      console.error('Error checking duplicate:', err)
-      return false
-    }
-  }
-
-  /**
-   * 실시간 유효성 검사 (중복 체크 제외)
+   * 실시간 유효성 검사
    */
   const validateField = (fieldName, value) => {
     let error = ''
@@ -370,7 +259,7 @@ export default function JoinSession() {
   }
 
   /**
-   * 비로그인 사용자 참여 처리
+   * 비로그인 사용자 참여 처리 (프로시저 사용)
    */
   const handleJoinWithForm = async (e) => {
     e.preventDefault()
@@ -402,70 +291,39 @@ export default function JoinSession() {
       toast.error(t('join.error.invalidPhone'))
       return
     }
-
-    // 중복 체크 (제출 시에만)
-    const emailDuplicate = await checkDuplicate('email', formData.email.trim())
-    if (emailDuplicate) {
-      setDuplicateAlert({
-        open: true,
-        title: t('join.error.duplicateTitle'),
-        message: t('join.error.emailAlreadyParticipating')
-      })
-      return
-    }
-
-    const phoneDuplicate = await checkDuplicate('phone', formData.phone.trim())
-    if (phoneDuplicate) {
-      setDuplicateAlert({
-        open: true,
-        title: t('join.error.duplicateTitle'),
-        message: t('join.error.phoneAlreadyParticipating')
-      })
-      return
-    }
     
     setJoining(true)
     try {
-      // 익명 참여자 정보 저장
-      const { error: insertError } = await supabase
-        .from('anonymous_participants')
-        .insert({
-          session_id: session.id,
-          name: formData.name.trim(),
-          email: formData.email.trim(),
-          phone: formData.phone.trim()
-        })
-      
-      if (insertError) {
-        // 중복 에러 처리
-        if (insertError.code === '23505') {
-          if (insertError.message.includes('email')) {
-            toast.error(t('join.error.emailDuplicate'))
-          } else if (insertError.message.includes('phone')) {
-            toast.error(t('join.error.phoneDuplicate'))
-          } else {
-            toast.error(t('join.error.alreadyJoined'))
-          }
-        } else {
-          throw insertError
-        }
-        return
-      }
-      
-      // 참여자 수 증가
-      const { error: countError } = await supabase.rpc('increment_participant_count', {
-        session_id: session.id
+      const { data, error } = await supabase.rpc('sp_join_session_anon_s', {
+        p_session_id: session.id,
+        p_name: formData.name.trim(),
+        p_email: formData.email.trim(),
+        p_phone: formData.phone.trim()
       })
       
-      if (countError) throw countError
+      if (error) throw error
       
-      toast.success(t('join.success'))
-      setShowJoinForm(false)
-      setFormData({ name: '', email: '', phone: '' })
-      setFormErrors({ name: '', email: '', phone: '' })
-      
-      // 세션 정보 새로고침
-      await loadSession()
+      if (data?.success) {
+        toast.success(t('join.success'))
+        setShowJoinForm(false)
+        setFormData({ name: '', email: '', phone: '' })
+        setFormErrors({ name: '', email: '', phone: '' })
+        await loadSession()
+      } else if (data?.error === 'EMAIL_DUPLICATE') {
+        setDuplicateAlert({
+          open: true,
+          title: t('join.error.duplicateTitle'),
+          message: t('join.error.emailAlreadyParticipating')
+        })
+      } else if (data?.error === 'PHONE_DUPLICATE') {
+        setDuplicateAlert({
+          open: true,
+          title: t('join.error.duplicateTitle'),
+          message: t('join.error.phoneAlreadyParticipating')
+        })
+      } else {
+        throw new Error(data?.error || 'Unknown error')
+      }
     } catch (err) {
       console.error('Error joining session:', err)
       toast.error(t('join.error.joinFailedDesc'))

@@ -87,8 +87,6 @@ export default function Login() {
    */
   const handleLogin = async (e) => {
     e.preventDefault()
-    debugger // 🔴 로그인 - F12 열고 테스트
-    console.log('🔴 [LOGIN] 로그인 시도:', { email, redirectUrl })
     setLoading(true)
     setError(null)
 
@@ -144,12 +142,6 @@ export default function Login() {
       }
 
       // 로그인 성공
-      console.log('🔴 [LOGIN] 성공:', {
-        userId: data.user?.id,
-        email: data.user?.email,
-        session: !!data.session
-      })
-      
       // 부가 작업들은 백그라운드에서 실행 (실패해도 로그인은 성공)
       Promise.all([
         clearLoginAttempts(email).catch(e => console.warn('clearLoginAttempts error:', e)),
@@ -160,16 +152,12 @@ export default function Login() {
       const profile = await refreshProfile()
       
       // 대기 중인 초대가 있는지 확인
-      const { data: pendingInvites } = await supabase
-        .from('partner_members')
-        .select('id')
-        .eq('email', email)
-        .eq('status', 'pending')
-        .limit(1)
+      const { data: pendingResult } = await supabase.rpc('sp_pending_invites_c', {
+        p_email: email
+      })
       
-      if (pendingInvites && pendingInvites.length > 0) {
+      if (pendingResult?.has_pending_invites) {
         // 초대가 있으면 마이페이지로 이동 (초대 수락 안내)
-        console.log('🔗 [LOGIN] 대기 중인 초대 발견, 마이페이지로 이동')
         navigate('/mypage?tab=invites')
         return
       }
@@ -225,18 +213,10 @@ export default function Login() {
 
         <div className="relative">
           <blockquote className="text-white">
-            <p className="text-2xl font-medium leading-relaxed mb-6">
-              "{t('auth.testimonial')}"
+            <p className="text-xl md:text-2xl font-medium leading-relaxed mb-6">
+              "LivePulse 덕분에 청중과의 소통이 놀랍도록 쉬워졌습니다.<br/>
+              강연의 질이 완전히 달라졌어요."
             </p>
-            <footer className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold">
-                K
-              </div>
-              <div>
-                <div className="font-semibold">{t('auth.testimonialAuthor')}</div>
-                <div className="text-white/70 text-sm">{t('auth.testimonialRole')}</div>
-              </div>
-            </footer>
           </blockquote>
         </div>
       </div>

@@ -63,19 +63,16 @@ export default function Signup() {
    */
   const checkSystemStatus = async () => {
     try {
-      const { data, error } = await supabase
-        .from('app_config')
-        .select('*')
-        .eq('key', 'admin_initialized')
-        .maybeSingle()
+      const { data, error } = await supabase.rpc('sp_check_admin_initialized_q')
       
       if (error) {
-        console.warn('app_config 조회 에러:', error.message)
+        console.warn('시스템 상태 조회 에러:', error.message)
         setIsFirstUser(true)
         return
       }
       
-      setIsFirstUser(!data)
+      // data.is_initialized가 false이면 첫 번째 사용자
+      setIsFirstUser(!data?.is_initialized)
     } catch (err) {
       console.error('시스템 상태 확인 에러:', err)
       setIsFirstUser(true)
@@ -93,8 +90,6 @@ export default function Signup() {
    */
   const handleSignup = async (e) => {
     e.preventDefault()
-    debugger // 🔴 회원가입 - F12 열고 테스트
-    console.log('🔴 [SIGNUP] 회원가입 시도:', { email, isFirstUser, currentLanguage })
     setLoading(true)
     setError(null)
 
@@ -114,14 +109,6 @@ export default function Signup() {
       if (authData.user) {
         const hasIdentities = authData.user.identities && authData.user.identities.length > 0
         const isEmailConfirmed = authData.user.email_confirmed_at
-        
-        console.log('🔴 [SIGNUP] 응답:', {
-          hasSession: !!authData.session,
-          hasIdentities,
-          identitiesCount: authData.user.identities?.length,
-          isEmailConfirmed,
-          userId: authData.user.id
-        })
         
         if (hasIdentities) {
           // 새 사용자 가입 성공

@@ -22,18 +22,16 @@ export default function Profile() {
   const [loadingName, setLoadingName] = useState(true)
   
   /**
-   * DB에서 display_name 직접 로드
+   * DB에서 display_name 로드 (프로시저 사용)
    */
   const loadDisplayName = useCallback(async () => {
     if (!user?.id) return
     
     setLoadingName(true)
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('id', user.id)
-        .single()
+      const { data, error } = await supabase.rpc('sp_profile_q', {
+        p_user_id: user.id
+      })
       
       if (error) throw error
       
@@ -53,7 +51,7 @@ export default function Profile() {
   }, [loadDisplayName])
 
   /**
-   * 사용자명 저장
+   * 사용자명 저장 (프로시저 사용)
    */
   const handleSaveDisplayName = async () => {
     if (!displayName.trim()) {
@@ -63,14 +61,15 @@ export default function Profile() {
     
     setSavingName(true)
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ display_name: displayName.trim() })
-        .eq('id', user.id)
+      const { data, error } = await supabase.rpc('sp_profile_s', {
+        p_user_id: user.id,
+        p_display_name: displayName.trim()
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error(data?.message || 'Failed to save')
       
-      setOriginalDisplayName(displayName.trim())
+      setOriginalDisplayName(data.display_name || displayName.trim())
       toast.success(t('common.saved'))
       
       // JWT 갱신 시도 (다음 로그인에 반영될 수 있음)
