@@ -68,69 +68,31 @@ export default function ParticipantManager({ sessionId, sessionCode }) {
   const [showUserDetail, setShowUserDetail] = useState(false)
 
   /**
-   * 참가자 목록 로드
+   * 참가자 목록 로드 (프로시저 사용)
    */
   const loadParticipants = async (showLoading = true) => {
     if (showLoading) setLoading(true)
     else setRefreshing(true)
     
     try {
-      // 인증된 참가자 (session_members) - user_id만 가져오기
-      const { data: authMembers, error: authError } = await supabase
-        .from('session_members')
-        .select('id, created_at, role, user_id')
-        .eq('session_id', sessionId)
-        .eq('role', 'participant')
-        .order('created_at', { ascending: false })
-
-      if (authError) throw authError
-
-      // user_id 목록 추출
-      const userIds = (authMembers || [])
-        .map(m => m.user_id)
-        .filter(id => id != null)
-
-      // profiles 정보 별도로 가져오기
-      let profilesMap = {}
-      if (userIds.length > 0) {
-        const { data: profiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('id, email, display_name')
-          .in('id', userIds)
-
-        if (profileError) throw profileError
-
-        // Map으로 변환
-        profilesMap = (profiles || []).reduce((acc, profile) => {
-          acc[profile.id] = profile
-          return acc
-        }, {})
-      }
-
-      // 익명 참가자 (anonymous_participants)
-      const { data: anonMembers, error: anonError } = await supabase
-        .from('anonymous_participants')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: false })
-
-      if (anonError) throw anonError
-
-      // 데이터 합치기
-      const authList = (authMembers || []).map(member => {
-        const profile = profilesMap[member.user_id]
-        return {
-          id: member.id,
-          type: 'authenticated',
-          name: profile?.display_name || t('participant.noName'),
-          email: profile?.email || '',
-          phone: '',
-          userId: member.user_id,
-          createdAt: member.created_at
-        }
+      const { data, error } = await supabase.rpc('sp_partner_participants_q', {
+        p_session_id: sessionId
       })
 
-      const anonList = (anonMembers || []).map(member => ({
+      if (error) throw error
+
+      // 데이터 변환
+      const authList = (data.authenticated || []).map(member => ({
+        id: member.id,
+        type: 'authenticated',
+        name: member.profile?.display_name || t('participant.noName'),
+        email: member.profile?.email || '',
+        phone: '',
+        userId: member.user_id,
+        createdAt: member.created_at
+      }))
+
+      const anonList = (data.anonymous || []).map(member => ({
         id: member.id,
         type: 'anonymous',
         name: member.name,

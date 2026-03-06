@@ -476,21 +476,19 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }
 
   /**
-   * 송출 설정 로드
+   * 송출 설정 로드 (프로시저 사용)
    */
   const loadBroadcastSettings = useCallback(async () => {
     if (!sessionId) return
     
     try {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('broadcast_settings')
-        .eq('id', sessionId)
-        .single()
+      const { data, error } = await supabase.rpc('sp_partner_broadcast_settings_q', {
+        p_session_id: sessionId
+      })
       
       if (error) throw error
-      if (data?.broadcast_settings) {
-        setBroadcastSettings(prev => ({ ...prev, ...data.broadcast_settings }))
+      if (data) {
+        setBroadcastSettings(prev => ({ ...prev, ...data }))
       }
     } catch (error) {
       console.error('Error loading broadcast settings:', error)
@@ -498,17 +496,18 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }, [sessionId])
 
   /**
-   * 송출 설정 저장
+   * 송출 설정 저장 (프로시저 사용)
    */
   const handleSaveBroadcastSettings = async () => {
     setSavingSettings(true)
     try {
-      const { error } = await supabase
-        .from('sessions')
-        .update({ broadcast_settings: broadcastSettings })
-        .eq('id', sessionId)
+      const { data, error } = await supabase.rpc('sp_partner_broadcast_settings_s', {
+        p_session_id: sessionId,
+        p_settings: broadcastSettings
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to save broadcast settings')
       toast.success(t('common.saved'))
       setShowBroadcastSettings(false)
     } catch (error) {
@@ -520,18 +519,15 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }
 
   /**
-   * 강사 목록 로드
+   * 강사 목록 로드 (프로시저 사용)
    */
   const loadPresenters = useCallback(async () => {
     if (!sessionId) return
     
     try {
-      const { data, error } = await supabase
-        .from('session_presenters')
-        .select('*')
-        .eq('session_id', sessionId)
-        .eq('status', 'confirmed')
-        .order('display_order')
+      const { data, error } = await supabase.rpc('sp_partner_qna_presenters_q', {
+        p_session_id: sessionId
+      })
       
       if (error) throw error
       setPresenters(data || [])
@@ -541,38 +537,33 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }, [sessionId])
 
   /**
-   * 질문 목록 로드
+   * 질문 목록 로드 (프로시저 사용)
    */
   const loadQuestions = useCallback(async (showLoading = true) => {
     if (!sessionId) return
     
     if (showLoading) setLoading(true)
     try {
-      let query = supabase
-        .from('questions')
-        .select('*, presenter:session_presenters(id, display_name)')
-        .eq('session_id', sessionId)
-        .order('display_order', { ascending: true })
-        .order('is_pinned', { ascending: false })
-        .order('is_highlighted', { ascending: false })
-        .order('created_at', { ascending: false })
-      
-      // 필터 적용
-      if (filter === 'pending') {
-        query = query.eq('status', 'pending')
-      } else if (filter === 'approved') {
-        query = query.eq('status', 'approved')
-      } else if (filter === 'answered') {
-        query = query.eq('status', 'answered')
-      }
-      
-      const { data, error } = await query
+      const { data, error } = await supabase.rpc('sp_partner_qna_q', {
+        p_session_id: sessionId
+      })
       
       if (error) throw error
-      setQuestions(data || [])
+      
+      // 필터 적용 (클라이언트 측)
+      let filteredData = data || []
+      if (filter === 'pending') {
+        filteredData = filteredData.filter(q => q.status === 'pending')
+      } else if (filter === 'approved') {
+        filteredData = filteredData.filter(q => q.status === 'approved')
+      } else if (filter === 'answered') {
+        filteredData = filteredData.filter(q => q.status === 'answered')
+      }
+      
+      setQuestions(filteredData)
       
       // 송출 중인 질문 확인
-      const broadcasting = data?.find(q => q.is_broadcasting)
+      const broadcasting = filteredData?.find(q => q.is_broadcasting)
       setBroadcastingId(broadcasting?.id || null)
       
     } catch (error) {
@@ -621,23 +612,21 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }, [sessionId, t, loadQuestions])
 
   /**
-   * 질문 상태 변경
+   * 질문 상태 변경 (프로시저 사용)
    */
   const updateQuestionStatus = async (questionId, status, additionalData = {}) => {
     try {
-      const updateData = {
-        status,
-        moderated_by: user.id,
-        moderated_at: new Date().toISOString(),
-        ...additionalData
-      }
-      
-      const { error } = await supabase
-        .from('questions')
-        .update(updateData)
-        .eq('id', questionId)
+      const { data, error } = await supabase.rpc('sp_partner_qna_update_s', {
+        p_action: 'update_status',
+        p_question_id: questionId,
+        p_session_id: sessionId,
+        p_status: status,
+        p_moderated_by: user.id,
+        p_reject_reason: additionalData.reject_reason || null
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to update question status')
       
       toast.success(t('common.saved'))
     } catch (error) {
@@ -677,16 +666,18 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }
 
   /**
-   * 고정/고정해제
+   * 고정/고정해제 (프로시저 사용)
    */
   const handleTogglePin = async (question) => {
     try {
-      const { error } = await supabase
-        .from('questions')
-        .update({ is_pinned: !question.is_pinned })
-        .eq('id', question.id)
+      const { data, error } = await supabase.rpc('sp_partner_qna_update_s', {
+        p_action: 'toggle_pin',
+        p_question_id: question.id,
+        p_session_id: sessionId
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to toggle pin')
       toast.success(t('common.saved'))
     } catch (error) {
       console.error('Error toggling pin:', error)
@@ -695,25 +686,18 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }
 
   /**
-   * 하이라이트/해제
+   * 하이라이트/해제 (프로시저 사용)
    */
   const handleToggleHighlight = async (question) => {
     try {
-      // 다른 질문의 하이라이트 해제
-      if (!question.is_highlighted) {
-        await supabase
-          .from('questions')
-          .update({ is_highlighted: false })
-          .eq('session_id', sessionId)
-          .eq('is_highlighted', true)
-      }
-      
-      const { error } = await supabase
-        .from('questions')
-        .update({ is_highlighted: !question.is_highlighted })
-        .eq('id', question.id)
+      const { data, error } = await supabase.rpc('sp_partner_qna_update_s', {
+        p_action: 'toggle_highlight',
+        p_question_id: question.id,
+        p_session_id: sessionId
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to toggle highlight')
       toast.success(t('common.saved'))
     } catch (error) {
       console.error('Error toggling highlight:', error)
@@ -722,24 +706,23 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }
 
   /**
-   * 답변 등록
+   * 답변 등록 (프로시저 사용)
    */
   const handleSubmitAnswer = async () => {
     if (!answeringQuestion || !answerText.trim()) return
     
     setSubmittingAnswer(true)
     try {
-      const { error } = await supabase
-        .from('questions')
-        .update({
-          answer: answerText.trim(),
-          answered_by: user.id,
-          answered_at: new Date().toISOString(),
-          status: 'answered'
-        })
-        .eq('id', answeringQuestion.id)
+      const { data, error } = await supabase.rpc('sp_partner_qna_update_s', {
+        p_action: 'answer',
+        p_question_id: answeringQuestion.id,
+        p_session_id: sessionId,
+        p_answer: answerText.trim(),
+        p_answered_by: user.id
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to submit answer')
       
       toast.success(t('qna.answerSubmitted'))
       setShowAnswerDialog(false)
@@ -754,16 +737,16 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }
 
   /**
-   * 질문 삭제
+   * 질문 삭제 (프로시저 사용)
    */
   const handleDelete = async (questionId) => {
     try {
-      const { error } = await supabase
-        .from('questions')
-        .delete()
-        .eq('id', questionId)
+      const { data, error } = await supabase.rpc('sp_partner_qna_delete_s', {
+        p_question_id: questionId
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to delete question')
       
       // 로컬 상태에서 즉시 제거
       setQuestions(prev => prev.filter(q => q.id !== questionId))
@@ -785,27 +768,18 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
     
     setAddingQuestion(true)
     try {
-      const insertData = {
-        session_id: sessionId,
-        content: newQuestion.content.trim(),
-        author_name: newQuestion.isAnonymous ? null : (newQuestion.authorName.trim() || null),
-        is_anonymous: newQuestion.isAnonymous,
-        status: newQuestion.autoApprove ? 'approved' : 'pending',
-        created_by_manager: true,
-        presenter_id: newQuestion.presenterId || null  // 강연자 지정 (선택사항)
-      }
-      
-      // 자동 승인인 경우 승인 정보 추가
-      if (newQuestion.autoApprove) {
-        insertData.moderated_by = user.id
-        insertData.moderated_at = new Date().toISOString()
-      }
-      
-      const { error } = await supabase
-        .from('questions')
-        .insert(insertData)
+      const { data, error } = await supabase.rpc('sp_partner_qna_s', {
+        p_session_id: sessionId,
+        p_content: newQuestion.content.trim(),
+        p_author_name: newQuestion.isAnonymous ? null : (newQuestion.authorName.trim() || null),
+        p_is_anonymous: newQuestion.isAnonymous,
+        p_status: newQuestion.autoApprove ? 'approved' : 'pending',
+        p_presenter_id: newQuestion.presenterId || null,
+        p_moderated_by: newQuestion.autoApprove ? user.id : null
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to add question')
       
       toast.success(t('qna.questionAdded'))
       setShowAddDialog(false)
@@ -825,16 +799,19 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }
 
   /**
-   * 강사 지정
+   * 강사 지정 (프로시저 사용)
    */
   const handleAssignPresenter = async (questionId, presenterId) => {
     try {
-      const { error } = await supabase
-        .from('questions')
-        .update({ presenter_id: presenterId || null })
-        .eq('id', questionId)
+      const { data, error } = await supabase.rpc('sp_partner_qna_update_s', {
+        p_action: 'assign_presenter',
+        p_question_id: questionId,
+        p_session_id: sessionId,
+        p_presenter_id: presenterId || null
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to assign presenter')
       toast.success(t('qna.presenterAssigned'))
     } catch (error) {
       console.error('Error assigning presenter:', error)
@@ -843,11 +820,11 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }
 
   /**
-   * 질문 송출 토글
+   * 질문 송출 토글 (프로시저 사용)
    */
   const handleToggleBroadcast = async (question) => {
     try {
-      const { data, error } = await supabase.rpc('toggle_question_broadcast', {
+      const { data, error } = await supabase.rpc('sp_partner_qna_broadcast_s', {
         p_question_id: question.id
       })
       
@@ -864,16 +841,18 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }
 
   /**
-   * 화면 표시 토글
+   * 화면 표시 토글 (프로시저 사용)
    */
   const handleToggleDisplay = async (question) => {
     try {
-      const { error } = await supabase
-        .from('questions')
-        .update({ is_displayed: !question.is_displayed })
-        .eq('id', question.id)
+      const { data, error } = await supabase.rpc('sp_partner_qna_update_s', {
+        p_action: 'toggle_display',
+        p_question_id: question.id,
+        p_session_id: sessionId
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to toggle display')
       toast.success(t('common.saved'))
     } catch (error) {
       console.error('Error toggling display:', error)

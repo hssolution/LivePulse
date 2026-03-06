@@ -100,19 +100,16 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
   const [deletingPoll, setDeletingPoll] = useState(null)
 
   /**
-   * 설문 목록 로드
+   * 설문 목록 로드 (프로시저 사용)
    */
   const loadPolls = useCallback(async () => {
     if (!sessionId) return
     
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('polls')
-        .select('*, poll_options(id, option_text, display_order)')
-        .eq('session_id', sessionId)
-        .order('display_order')
-        .order('created_at', { ascending: false })
+      const { data, error } = await supabase.rpc('sp_partner_polls_q', {
+        p_session_id: sessionId
+      })
       
       if (error) throw error
       setPolls(data || [])
@@ -190,7 +187,7 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
   }
 
   /**
-   * 설문 저장
+   * 설문 저장 (프로시저 사용)
    */
   const handleSave = async () => {
     if (!pollForm.question.trim()) {
@@ -209,80 +206,32 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
     
     setSaving(true)
     try {
-      if (editingPoll) {
-        // 수정
-        const { error: pollError } = await supabase
-          .from('polls')
-          .update({
-            question: pollForm.question,
-            poll_type: pollForm.poll_type,
-            is_required: pollForm.is_required,
-            show_results: pollForm.show_results,
-            allow_anonymous: pollForm.allow_anonymous,
-            max_selections: pollForm.poll_type === 'multiple' ? pollForm.max_selections : null,
-          })
-          .eq('id', editingPoll.id)
-        
-        if (pollError) throw pollError
-        
-        // 보기 업데이트 (삭제 후 재생성)
-        if (pollForm.poll_type !== 'open') {
-          await supabase.from('poll_options').delete().eq('poll_id', editingPoll.id)
-          
-          const validOptions = options.filter(o => o.text.trim())
-          if (validOptions.length > 0) {
-            const { error: optionsError } = await supabase
-              .from('poll_options')
-              .insert(validOptions.map((o, i) => ({
-                poll_id: editingPoll.id,
-                option_text: o.text.trim(),
-                display_order: i
-              })))
-            
-            if (optionsError) throw optionsError
-          }
-        }
-        
-        toast.success(t('common.saved'))
-      } else {
-        // 새로 생성 (기본 상태: active - 노출)
-        const { data: newPoll, error: pollError } = await supabase
-          .from('polls')
-          .insert({
-            session_id: sessionId,
-            question: pollForm.question,
-            poll_type: pollForm.poll_type,
-            is_required: pollForm.is_required,
-            show_results: pollForm.show_results,
-            allow_anonymous: pollForm.allow_anonymous,
-            max_selections: pollForm.poll_type === 'multiple' ? pollForm.max_selections : null,
-            display_order: polls.length,
-            status: 'active', // 기본 노출
-          })
-          .select()
-          .single()
-        
-        if (pollError) throw pollError
-        
-        // 보기 생성
-        if (pollForm.poll_type !== 'open') {
-          const validOptions = options.filter(o => o.text.trim())
-          if (validOptions.length > 0) {
-            const { error: optionsError } = await supabase
-              .from('poll_options')
-              .insert(validOptions.map((o, i) => ({
-                poll_id: newPoll.id,
-                option_text: o.text.trim(),
-                display_order: i
-              })))
-            
-            if (optionsError) throw optionsError
-          }
-        }
-        
-        toast.success(t('poll.created'))
-      }
+      const validOptions = pollForm.poll_type !== 'open' 
+        ? options.filter(o => o.text.trim()).map((o, i) => ({
+            text: o.text.trim(),
+            order: i
+          }))
+        : []
       
+      const { data, error } = await supabase.rpc('sp_partner_poll_s', {
+        p_action: editingPoll ? 'update' : 'create',
+        p_poll_id: editingPoll?.id || null,
+        p_session_id: sessionId,
+        p_question: pollForm.question.trim(),
+        p_poll_type: pollForm.poll_type,
+        p_is_required: pollForm.is_required,
+        p_show_results: pollForm.show_results,
+        p_allow_anonymous: pollForm.allow_anonymous,
+        p_max_selections: pollForm.poll_type === 'multiple' ? pollForm.max_selections : null,
+        p_display_order: editingPoll ? editingPoll.display_order : polls.length,
+        p_status: editingPoll ? editingPoll.status : 'active',
+        p_options: validOptions
+      })
+      
+      if (error) throw error
+      if (!data?.success) throw new Error('Failed to save poll')
+      
+      toast.success(editingPoll ? t('common.saved') : t('poll.created'))
       setShowEditDialog(false)
       loadPolls()
     } catch (error) {
@@ -294,13 +243,13 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
   }
 
   /**
-   * 결과 보기
+   * 결과 보기 (프로시저 사용)
    */
   const handleViewResults = async (poll) => {
     setSelectedPoll(poll)
     
     try {
-      const { data, error } = await supabase.rpc('get_poll_results', {
+      const { data, error } = await supabase.rpc('sp_partner_poll_results_q', {
         p_poll_id: poll.id
       })
       
@@ -314,18 +263,19 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
   }
 
   /**
-   * 노출/비노출 토글
+   * 노출/비노출 토글 (프로시저 사용)
    */
   const handleToggleVisibility = async (poll) => {
     const newStatus = poll.status === 'active' ? 'draft' : 'active'
     
     try {
-      const { error } = await supabase
-        .from('polls')
-        .update({ status: newStatus })
-        .eq('id', poll.id)
+      const { data, error } = await supabase.rpc('sp_partner_poll_toggle_s', {
+        p_poll_id: poll.id,
+        p_status: newStatus
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to toggle visibility')
       
       toast.success(newStatus === 'active' ? t('poll.shown') : t('poll.hidden'))
       loadPolls()
@@ -336,18 +286,18 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
   }
 
   /**
-   * 설문 삭제
+   * 설문 삭제 (프로시저 사용)
    */
   const handleDelete = async () => {
     if (!deletingPoll) return
     
     try {
-      const { error } = await supabase
-        .from('polls')
-        .delete()
-        .eq('id', deletingPoll.id)
+      const { data, error } = await supabase.rpc('sp_partner_poll_delete_s', {
+        p_poll_id: deletingPoll.id
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to delete poll')
       
       toast.success(t('common.deleted'))
       setShowDeleteDialog(false)

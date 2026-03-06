@@ -282,130 +282,19 @@ export default function CollaborationPanel({ sessionId, partnerId, partnerType, 
     
     setLoading(true)
     try {
-      // 세션 소유자 정보 (파트너)
-      const { data: sessionData } = await supabase
-        .from('sessions')
-        .select(`
-          partner_id,
-          partner:partners(
-            id,
-            partner_type,
-            representative_name,
-            phone,
-            profile:profiles(email)
-          )
-        `)
-        .eq('id', sessionId)
-        .single()
+      // 협업 정보 (프로시저 사용 - 세션 소유자, 초대 파트너, 강사, 팀원 한 번에 조회)
+      const { data: collabData, error: collabError } = await supabase.rpc('sp_partner_collaboration_q', {
+        p_session_id: sessionId,
+        p_partner_id: partnerId
+      })
       
-      if (sessionData?.partner) {
-        // 파트너 타입별 상세 정보
-        let ownerDetails = null
-        if (sessionData.partner.partner_type === 'organizer') {
-          const { data } = await supabase
-            .from('partner_organizers')
-            .select('company_name')
-            .eq('partner_id', sessionData.partner.id)
-            .single()
-          ownerDetails = data
-        } else if (sessionData.partner.partner_type === 'agency') {
-          const { data } = await supabase
-            .from('partner_agencies')
-            .select('company_name')
-            .eq('partner_id', sessionData.partner.id)
-            .single()
-          ownerDetails = data
-        }
-        
-        setSessionOwner({
-          ...sessionData.partner,
-          details: ownerDetails,
-          isOwner: true
-        })
-      }
+      if (collabError) throw collabError
       
-      // 초대된 파트너
-      const { data: inviteData } = await supabase
-        .from('session_partners')
-        .select(`
-          *,
-          partner:partners(
-            id,
-            partner_type,
-            representative_name,
-            phone,
-            profile:profiles(email)
-          )
-        `)
-        .eq('session_id', sessionId)
-        .maybeSingle()
-      
-      if (inviteData?.partner) {
-        let inviteDetails = null
-        if (inviteData.partner.partner_type === 'organizer') {
-          const { data } = await supabase
-            .from('partner_organizers')
-            .select('company_name')
-            .eq('partner_id', inviteData.partner.id)
-            .single()
-          inviteDetails = data
-        } else if (inviteData.partner.partner_type === 'agency') {
-          const { data } = await supabase
-            .from('partner_agencies')
-            .select('company_name')
-            .eq('partner_id', inviteData.partner.id)
-            .single()
-          inviteDetails = data
-        }
-        
-        setInvitedPartner({
-          ...inviteData,
-          partnerDetails: inviteDetails
-        })
-      } else {
-        setInvitedPartner(null)
-      }
-      
-      // 강사 목록
-      const { data: presenterData } = await supabase
-        .from('session_presenters')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('display_order')
-      
-      setPresenters(presenterData || [])
-      
-      // 팀원 목록 (user_id로 profiles 조회)
-      const { data: memberData } = await supabase
-        .from('partner_members')
-        .select('id, user_id, email, role')
-        .eq('partner_id', partnerId)
-        .eq('status', 'accepted')
-      
-      // profiles 정보 추가 조회
-      if (memberData && memberData.length > 0) {
-        const userIds = memberData.filter(m => m.user_id).map(m => m.user_id)
-        if (userIds.length > 0) {
-          const { data: profilesData } = await supabase
-            .from('profiles')
-            .select('id, email')
-            .in('id', userIds)
-          
-          const profilesMap = (profilesData || []).reduce((acc, p) => {
-            acc[p.id] = p
-            return acc
-          }, {})
-          
-          const enrichedMembers = memberData.map(m => ({
-            ...m,
-            profile: m.user_id ? profilesMap[m.user_id] : null
-          }))
-          setTeamMembers(enrichedMembers)
-        } else {
-          setTeamMembers(memberData)
-        }
-      } else {
-        setTeamMembers([])
+      if (collabData) {
+        setSessionOwner(collabData.session_owner)
+        setInvitedPartner(collabData.invited_partner)
+        setPresenters(collabData.presenters || [])
+        setTeamMembers(collabData.team_members || [])
       }
       
     } catch (error) {
@@ -416,11 +305,44 @@ export default function CollaborationPanel({ sessionId, partnerId, partnerType, 
   }, [sessionId, partnerId])
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    let isMounted = true
+    
+    const fetchData = async () => {
+      if (!sessionId || !partnerId || !isMounted) return
+      
+      setLoading(true)
+      try {
+        const { data: collabData, error: collabError } = await supabase.rpc('sp_partner_collaboration_q', {
+          p_session_id: sessionId,
+          p_partner_id: partnerId
+        })
+        
+        if (collabError) throw collabError
+        
+        if (isMounted && collabData) {
+          setSessionOwner(collabData.session_owner)
+          setInvitedPartner(collabData.invited_partner)
+          setPresenters(collabData.presenters || [])
+          setTeamMembers(collabData.team_members || [])
+        }
+      } catch (error) {
+        console.error('Error loading collaboration data:', error)
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+    
+    fetchData()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [sessionId, partnerId])
 
   /**
-   * 파트너 검색
+   * 파트너 검색 (프로시저 사용)
    */
   const handlePartnerSearch = async () => {
     if (!partnerSearchQuery.trim()) return
@@ -429,39 +351,17 @@ export default function CollaborationPanel({ sessionId, partnerId, partnerType, 
     try {
       const targetType = partnerType === 'organizer' ? 'agency' : 'organizer'
       
-      const { data: partners } = await supabase
-        .from('partners')
-        .select('id, partner_type, representative_name, phone, is_active, profile:profiles(email)')
-        .eq('partner_type', targetType)
-        .eq('is_active', true)
-        .neq('id', partnerId)
+      const { data: partners, error } = await supabase.rpc('sp_partner_search_q', {
+        p_partner_type: targetType,
+        p_exclude_partner_id: partnerId,
+        p_search_query: partnerSearchQuery.toLowerCase()
+      })
       
-      const resultsWithDetails = await Promise.all(
-        (partners || []).map(async (partner) => {
-          let details = null
-          if (partner.partner_type === 'organizer') {
-            const { data } = await supabase
-              .from('partner_organizers')
-              .select('company_name')
-              .eq('partner_id', partner.id)
-              .single()
-            details = data
-          } else if (partner.partner_type === 'agency') {
-            const { data } = await supabase
-              .from('partner_agencies')
-              .select('company_name')
-              .eq('partner_id', partner.id)
-              .single()
-            details = data
-          }
-          return { ...partner, details }
-        })
-      )
+      if (error) throw error
       
-      const query = partnerSearchQuery.toLowerCase()
-      const filtered = resultsWithDetails.filter(p => 
-        p.details?.company_name?.toLowerCase().includes(query) ||
-        p.representative_name?.toLowerCase().includes(query)
+      const filtered = (partners || []).filter(p => 
+        p.details?.company_name?.toLowerCase().includes(partnerSearchQuery.toLowerCase()) ||
+        p.representative_name?.toLowerCase().includes(partnerSearchQuery.toLowerCase())
       )
       
       setPartnerSearchResults(filtered)
