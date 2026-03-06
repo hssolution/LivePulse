@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -33,85 +34,52 @@ import {
  */
 export default function Faq() {
   const { user } = useAuth()
+  const { partner, loading: partnerLoading } = usePartner()
   const { t } = useLanguage()
   
   const [loading, setLoading] = useState(true)
   const [faqs, setFaqs] = useState([])
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [partnerType, setPartnerType] = useState(null)
   const [categories, setCategories] = useState([
     { id: 'all', labelKey: 'faq.categoryAll', icon: List },
     { id: 'common', labelKey: 'faq.categoryCommon', icon: Globe },
   ])
 
   /**
-   * 파트너 타입 조회
+   * 파트너 타입에 따라 카테고리 설정
    */
   useEffect(() => {
-    const loadPartnerType = async () => {
-      if (!user?.id) return
-      
-      try {
-        const { data, error } = await supabase
-          .from('partners')
-          .select('partner_type')
-          .eq('profile_id', user.id)
-          .single()
-        
-        if (error) throw error
-        
-        if (data?.partner_type) {
-          setPartnerType(data.partner_type)
-          
-          // 파트너 타입에 따라 카테고리 추가
-          const newCategories = [
-            { id: 'all', labelKey: 'faq.categoryAll', icon: List },
-            { id: 'common', labelKey: 'faq.categoryCommon', icon: Globe },
-          ]
-          
-          if (data.partner_type === 'organizer') {
-            newCategories.push({ id: 'organizer', labelKey: 'faq.categoryOrganizer', icon: Briefcase })
-          } else if (data.partner_type === 'agency') {
-            newCategories.push({ id: 'agency', labelKey: 'faq.categoryAgency', icon: Building2 })
-          } else if (data.partner_type === 'instructor') {
-            newCategories.push({ id: 'instructor', labelKey: 'faq.categoryInstructor', icon: Mic })
-          }
-          
-          setCategories(newCategories)
-        }
-      } catch (error) {
-        console.error('Error loading partner type:', error)
-      }
+    if (!partner) return
+    
+    const newCategories = [
+      { id: 'all', labelKey: 'faq.categoryAll', icon: List },
+      { id: 'common', labelKey: 'faq.categoryCommon', icon: Globe },
+    ]
+    
+    if (partner.partner_type === 'organizer') {
+      newCategories.push({ id: 'organizer', labelKey: 'faq.categoryOrganizer', icon: Briefcase })
+    } else if (partner.partner_type === 'agency') {
+      newCategories.push({ id: 'agency', labelKey: 'faq.categoryAgency', icon: Building2 })
+    } else if (partner.partner_type === 'instructor') {
+      newCategories.push({ id: 'instructor', labelKey: 'faq.categoryInstructor', icon: Mic })
     }
     
-    loadPartnerType()
-  }, [user?.id])
+    setCategories(newCategories)
+  }, [partner])
 
   /**
    * FAQ 목록 로드
    */
   const loadFaqs = useCallback(async () => {
+    if (!partner) return
+    
     setLoading(true)
     try {
-      let query = supabase
-        .from('faqs')
-        .select('*')
-        .eq('is_active', true)
-        .order('display_order', { ascending: true })
-      
-      // 'all'이면 common + 자기 파트너 타입의 FAQ만 가져옴
-      if (activeCategory === 'all') {
-        const allowedCategories = ['common']
-        if (partnerType) {
-          allowedCategories.push(partnerType)
-        }
-        query = query.in('category', allowedCategories)
-      } else {
-        query = query.eq('category', activeCategory)
-      }
-      
-      const { data, error } = await query
+      // FAQ 목록 조회 (프로시저 사용)
+      const { data, error } = await supabase.rpc('sp_partner_faqs_q', {
+        p_category: activeCategory
+      })
       
       if (error) throw error
       setFaqs(data || [])
@@ -120,11 +88,40 @@ export default function Faq() {
     } finally {
       setLoading(false)
     }
-  }, [activeCategory, partnerType])
+  }, [activeCategory, partner])
 
   useEffect(() => {
-    loadFaqs()
-  }, [loadFaqs])
+    let isMounted = true
+    
+    const fetchData = async () => {
+      if (!partner || !isMounted) return
+      
+      setLoading(true)
+      try {
+        const { data, error } = await supabase.rpc('sp_partner_faqs_q', {
+          p_category: activeCategory
+        })
+        
+        if (error) throw error
+        
+        if (isMounted) {
+          setFaqs(data || [])
+        }
+      } catch (error) {
+        console.error('Error loading FAQs:', error)
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+    
+    fetchData()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [activeCategory, partner])
 
   // 검색 필터링
   const filteredFaqs = faqs.filter(faq => 

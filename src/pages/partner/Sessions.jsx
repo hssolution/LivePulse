@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -57,75 +58,89 @@ import { ko } from 'date-fns/locale'
  */
 export default function Sessions() {
   const { user } = useAuth()
+  const { partner, loading: partnerLoading } = usePartner()
   const { t } = useLanguage()
   const navigate = useNavigate()
   
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
-  const [partner, setPartner] = useState(null)
   
   // 필터
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  
+  // 검색어 디바운스 (500ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 500)
+    
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   /**
-   * 파트너 정보 및 세션 목록 로드
+   * 세션 목록 로드 (단일 RPC 호출로 최적화)
    */
   const loadData = useCallback(async () => {
-    if (!user) return
+    if (!user || !partner) return
     
     setLoading(true)
     try {
-      // 파트너 정보 조회
-      const { data: partnerData, error: partnerError } = await supabase
-        .from('partners')
-        .select('*')
-        .eq('profile_id', user.id)
-        .single()
-      
-      if (partnerError) {
-        if (partnerError.code === 'PGRST116') {
-          setPartner(null)
-          setLoading(false)
-          return
-        }
-        throw partnerError
-      }
-      
-      setPartner(partnerData)
-      
-      // 세션 목록 조회
-      let query = supabase
-        .from('sessions')
-        .select('*')
-        .eq('partner_id', partnerData.id)
-        .order('created_at', { ascending: false })
-      
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter)
-      }
-      
-      if (searchQuery) {
-        query = query.ilike('title', `%${searchQuery}%`)
-      }
-      
-      const { data: sessionsData, error: sessionsError } = await query
+      // 세션 목록 조회 (프로시저 사용)
+      const { data: sessionsData, error: sessionsError } = await supabase.rpc('sp_partner_sessions_q', {
+        p_partner_id: partner.id,
+        p_status: statusFilter === 'all' ? null : statusFilter,
+        p_search: debouncedSearchQuery || null
+      })
       
       if (sessionsError) throw sessionsError
       
-      setSessions(sessionsData || [])
+      // 프로시저는 { sessions: [...], total: N } 형태로 반환
+      setSessions(sessionsData?.sessions || [])
       
     } catch (error) {
       console.error('Error loading sessions:', error)
-      toast.error(t('error.loadFailed'))
+      // toast.error는 여기서 직접 호출하지 않음 (t 의존성 제거)
     } finally {
       setLoading(false)
     }
-  }, [user, statusFilter, searchQuery, t])
+  }, [user, partner, statusFilter, debouncedSearchQuery])
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    let isMounted = true
+    
+    const fetchData = async () => {
+      if (!user || !partner || !isMounted) return
+      
+      setLoading(true)
+      try {
+        const { data: sessionsData, error: sessionsError } = await supabase.rpc('sp_partner_sessions_q', {
+          p_partner_id: partner.id,
+          p_status: statusFilter === 'all' ? null : statusFilter,
+          p_search: debouncedSearchQuery || null
+        })
+        
+        if (sessionsError) throw sessionsError
+        
+        if (isMounted) {
+          setSessions(sessionsData?.sessions || [])
+        }
+      } catch (error) {
+        console.error('Error loading sessions:', error)
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+    
+    fetchData()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [user, partner, statusFilter, debouncedSearchQuery])
 
   /**
    * 참여 코드 복사
@@ -192,7 +207,7 @@ export default function Sessions() {
     ended: sessions.filter(s => s.status === 'ended').length,
   }
 
-  if (loading) {
+  if (loading || partnerLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -66,12 +67,11 @@ import {
  */
 export default function TeamMembers() {
   const { user, profile } = useAuth()
+  const { partner, myRole, loading: partnerLoading } = usePartner()
   const { t, currentLanguage } = useLanguage()
   
   const [loading, setLoading] = useState(true)
   const [members, setMembers] = useState([])
-  const [partner, setPartner] = useState(null)
-  const [myRole, setMyRole] = useState(null)
   
   // 초대 다이얼로그
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -91,94 +91,57 @@ export default function TeamMembers() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
-    loadData()
-  }, [user])
+    let isMounted = true
+    
+    const fetchData = async () => {
+      if (!user || !partner || !isMounted) return
+      
+      setLoading(true)
+      try {
+        const { data: membersData, error: membersError } = await supabase.rpc('sp_partner_team_q', {
+          p_partner_id: partner.id
+        })
+        
+        if (membersError) throw membersError
+        
+        if (isMounted) {
+          setMembers(membersData || [])
+        }
+      } catch (error) {
+        console.error('Error loading data:', error)
+        if (isMounted) {
+          toast.error(t('error.loadFailed'))
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+    
+    fetchData()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [user, partner, t])
 
   /**
-   * 파트너 정보 및 팀원 목록 로드
+   * 팀원 목록 로드 (단일 RPC 호출로 최적화)
    */
   const loadData = async () => {
-    if (!user) return
+    if (!user || !partner) return
     
     setLoading(true)
     try {
-      // 내 파트너 정보 조회 (이메일 발송을 위해 회사명 등 포함)
-      const { data: partnerData, error: partnerError } = await supabase
-        .from('partners')
-        .select('*, partner_organizers(*), partner_agencies(*)')
-        .eq('profile_id', user.id)
-        .single()
-      
-      if (partnerError) {
-        if (partnerError.code === 'PGRST116') {
-          // 파트너가 아닌 경우
-          setPartner(null)
-          setLoading(false)
-          return
-        }
-        throw partnerError
-      }
-      
-      setPartner(partnerData)
-      
-      // 팀원 목록 조회 (profiles 조인 제거)
-      const { data: membersData, error: membersError } = await supabase
-        .from('partner_members')
-        .select('*')
-        .eq('partner_id', partnerData.id)
-        .order('role', { ascending: true })
-        .order('created_at', { ascending: true })
+      // 팀원 목록 조회 (프로시저 사용 - 프로필 + 로그인 시간 포함)
+        const { data: membersData, error: membersError } = await supabase.rpc('sp_partner_team_q', {
+          p_partner_id: partner.id
+        })
       
       if (membersError) throw membersError
       
-      // user_id로 profiles 정보 및 마지막 로그인 시간 매핑 (user_id가 있는 멤버만)
-      const userIds = membersData?.filter(m => m.user_id).map(m => m.user_id) || []
-      if (userIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, email, display_name')
-          .in('id', userIds)
-        
-        // 마지막 로그인 시간 조회
-        const { data: loginLogsData, error: loginLogsError } = await supabase
-          .from('login_logs')
-          .select('user_id, created_at')
-          .in('user_id', userIds)
-          .eq('event_type', 'login_success')
-          .order('created_at', { ascending: false })
-        
-        console.log('🔍 [TeamMembers] Login logs query:', { userIds, loginLogsData, loginLogsError })
-        
-        // 사용자별 마지막 로그인 시간 매핑 (첫 번째 레코드가 최신)
-        const lastLoginMap = {}
-        loginLogsData?.forEach(log => {
-          if (!lastLoginMap[log.user_id]) {
-            lastLoginMap[log.user_id] = log.created_at
-          }
-        })
-        
-        const profileMap = {}
-        profilesData?.forEach(p => {
-          profileMap[p.id] = { email: p.email, display_name: p.display_name }
-        })
-        
-        // 멤버에 프로필 정보 및 마지막 로그인 시간 매핑
-        membersData?.forEach(m => {
-          if (m.user_id && profileMap[m.user_id]) {
-            m.profileEmail = profileMap[m.user_id].email
-            m.displayName = profileMap[m.user_id].display_name
-          }
-          if (m.user_id && lastLoginMap[m.user_id]) {
-            m.lastLoginAt = lastLoginMap[m.user_id]
-          }
-        })
-      }
-      
       setMembers(membersData || [])
-      
-      // 내 역할 확인
-      const myMember = membersData?.find(m => m.user_id === user.id)
-      setMyRole(myMember?.role || null)
       
     } catch (error) {
       console.error('Error loading data:', error)
@@ -419,7 +382,7 @@ export default function TeamMembers() {
   // 관리 권한 확인 (owner 또는 admin)
   const canManage = myRole === 'owner' || myRole === 'admin'
 
-  if (loading) {
+  if (loading || partnerLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

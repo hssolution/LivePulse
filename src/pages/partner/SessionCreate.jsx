@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,11 +24,11 @@ import { ArrowLeft, Calendar, MapPin, Phone, Mail, Users, Save, Loader2, Eye, Ex
  */
 export default function SessionCreate() {
   const { user } = useAuth()
+  const { partner, loading: partnerLoading } = usePartner()
   const { t } = useLanguage()
   const navigate = useNavigate()
   
   const [loading, setLoading] = useState(false)
-  const [partner, setPartner] = useState(null)
   const [templates, setTemplates] = useState([])
   
   // 폼 데이터
@@ -47,40 +48,57 @@ export default function SessionCreate() {
   const [errors, setErrors] = useState({})
 
   useEffect(() => {
-    loadInitialData()
-  }, [user])
+    let isMounted = true
+    
+    const fetchData = async () => {
+      if (!user || !partner || !isMounted) return
+      
+      try {
+        const { data, error } = await supabase.rpc('sp_partner_session_create_q')
+        
+        if (error) throw error
+        
+        if (isMounted) {
+          const mainTemplates = data?.main_templates || []
+          setTemplates(mainTemplates)
+          
+          if (mainTemplates.length > 0) {
+            setFormData(prev => ({ ...prev, template_id: mainTemplates[0].id }))
+          }
+        }
+      } catch (error) {
+        console.error('Error loading data:', error)
+        if (isMounted) {
+          toast.error(t('error.loadFailed'))
+        }
+      }
+    }
+    
+    fetchData()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [user, partner, t])
 
   /**
-   * 초기 데이터 로드
+   * 초기 데이터 로드 (프로시저 사용으로 최적화)
    */
   const loadInitialData = async () => {
-    if (!user) return
+    if (!user || !partner) return
     
     try {
-      // 파트너 정보 조회
-      const { data: partnerData, error: partnerError } = await supabase
-        .from('partners')
-        .select('*')
-        .eq('profile_id', user.id)
-        .single()
+      // 세션 생성에 필요한 모든 데이터를 한 번에 조회
+      const { data, error } = await supabase.rpc('sp_partner_session_create_q')
       
-      if (partnerError) throw partnerError
-      setPartner(partnerData)
+      if (error) throw error
       
-      // 템플릿 목록 조회 (메인 화면용만)
-      const { data: templatesData, error: templatesError } = await supabase
-        .from('session_templates')
-        .select('*')
-        .eq('is_active', true)
-        .eq('screen_type', 'main')
-        .order('sort_order')
-      
-      if (templatesError) throw templatesError
-      setTemplates(templatesData || [])
+      const mainTemplates = data?.main_templates || []
+      setTemplates(mainTemplates)
       
       // 기본 템플릿 설정
-      if (templatesData && templatesData.length > 0) {
-        setFormData(prev => ({ ...prev, template_id: templatesData[0].id }))
+      if (mainTemplates.length > 0) {
+        setFormData(prev => ({ ...prev, template_id: mainTemplates[0].id }))
       }
       
     } catch (error) {

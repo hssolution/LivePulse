@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -83,7 +84,8 @@ import QRCode from 'qrcode'
  */
 export default function SessionDetail() {
   const { id } = useParams()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
+  const { partner, loading: partnerLoading } = usePartner()
   const { t } = useLanguage()
   const navigate = useNavigate()
   
@@ -96,7 +98,6 @@ export default function SessionDetail() {
   const [templates, setTemplates] = useState([])
   const [qnaTemplates, setQnaTemplates] = useState([])
   const [pollTemplates, setPollTemplates] = useState([])
-  const [partner, setPartner] = useState(null)
   
   // QR 코드
   const [qrCodeUrl, setQrCodeUrl] = useState('')
@@ -113,6 +114,13 @@ export default function SessionDetail() {
   const [previewData, setPreviewData] = useState({}) // 미리보기용 데이터
   const [adminDefaultData, setAdminDefaultData] = useState({}) // 관리자 기본값
   const [activeTab, setActiveTab] = useState('basic')
+  
+  // 관리자/파트너 구분을 위한 state
+  const [sessionPartner, setSessionPartner] = useState(null) // 세션 소유자 파트너 정보
+  const [isAdmin, setIsAdmin] = useState(false) // 관리자 여부
+  
+  // 실제 사용할 파트너 정보 (파트너 로그인 시 partner, 관리자 로그인 시 sessionPartner)
+  const effectivePartner = partner || sessionPartner
   
   // 폼 데이터
   const [formData, setFormData] = useState({
@@ -174,22 +182,42 @@ export default function SessionDetail() {
   }
 
   /**
-   * 세션 데이터 로드
+   * 세션 데이터 로드 (프로시저 사용)
    */
   const loadSession = useCallback(async () => {
     if (!id) return
     
     setLoading(true)
     try {
-      // 세션 정보
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('id', id)
-        .single()
+      // 관리자 여부 확인 (profile.role이 'admin'이면 관리자)
+      const adminCheck = profile?.role === 'admin'
+      setIsAdmin(adminCheck)
       
-      if (sessionError) throw sessionError
+      // 모든 데이터를 하나의 프로시저로 조회
+      const { data, error } = await supabase.rpc('sp_partner_session_complete_q', {
+        p_session_id: id
+      })
+      
+      if (error) throw error
+      
+      const sessionData = data.session
+      const partnerData = data.partner  // 세션 소유자 파트너 정보
+      const templatesData = data.templates
+      const qnaTemplatesData = data.qna_templates
+      const pollTemplatesData = data.poll_templates
+      const fieldsData = data.template_fields
+      const assetsData = data.assets
+      
       setSession(sessionData)
+      
+      // 관리자일 경우 세션 소유 파트너 정보 설정 (프로시저에서 반환된 data.partner 사용)
+      if (adminCheck && partnerData) {
+        setSessionPartner({
+          id: partnerData.id,
+          partner_type: partnerData.partner_type || 'organizer',
+          representative_name: partnerData.representative_name
+        })
+      }
       
       // 폼 데이터 설정
       setFormData({
@@ -208,52 +236,17 @@ export default function SessionDetail() {
         status: sessionData.status || 'draft',
       })
       
-      // 템플릿 목록 - 메인 화면용
-      const { data: templatesData } = await supabase
-        .from('session_templates')
-        .select('*')
-        .eq('is_active', true)
-        .eq('screen_type', 'main')
-        .order('sort_order')
+      // 템플릿 목록 설정
       setTemplates(templatesData || [])
-      
-      // 템플릿 목록 - Q&A용
-      const { data: qnaTemplatesData } = await supabase
-        .from('session_templates')
-        .select('*')
-        .eq('is_active', true)
-        .eq('screen_type', 'qna')
-        .order('sort_order')
       setQnaTemplates(qnaTemplatesData || [])
-      
-      // 템플릿 목록 - 설문용
-      const { data: pollTemplatesData } = await supabase
-        .from('session_templates')
-        .select('*')
-        .eq('is_active', true)
-        .eq('screen_type', 'poll')
-        .order('sort_order')
       setPollTemplates(pollTemplatesData || [])
       
-      // 템플릿 필드
-      if (sessionData.template_id) {
-        const { data: fieldsData } = await supabase
-          .from('session_template_fields')
-          .select('*')
-          .eq('template_id', sessionData.template_id)
-          .order('sort_order')
-        setTemplateFields(fieldsData || [])
-        
-        const selectedTemplate = templatesData?.find(t => t.id === sessionData.template_id)
-        setTemplate(selectedTemplate)
-      }
+      // 템플릿 필드 설정
+      setTemplateFields(fieldsData || [])
+      const selectedTemplate = templatesData?.find(t => t.id === sessionData.template_id)
+      setTemplate(selectedTemplate)
       
       // 에셋 (이미지 등)
-      const { data: assetsData } = await supabase
-        .from('session_assets')
-        .select('*')
-        .eq('session_id', id)
-      
       const assetsMap = {}
       const previewMap = {}
       assetsData?.forEach(asset => {
@@ -265,32 +258,16 @@ export default function SessionDetail() {
       setPreviewData(previewMap)
       
       // 관리자 기본값 설정 (템플릿 필드에서 샘플값 생성)
-      if (sessionData.template_id) {
-        const { data: fieldsData } = await supabase
-          .from('session_template_fields')
-          .select('*')
-          .eq('template_id', sessionData.template_id)
-          .order('sort_order')
-        
-        const defaultMap = {}
-        fieldsData?.forEach(field => {
-          defaultMap[field.field_key] = getDefaultSampleValue(field)
-        })
-        setAdminDefaultData(defaultMap)
-      }
+      const defaultMap = {}
+      fieldsData?.forEach(field => {
+        defaultMap[field.field_key] = getDefaultSampleValue(field)
+      })
+      setAdminDefaultData(defaultMap)
       
       // QR 코드 생성
       const joinUrl = `${window.location.origin}/join/${sessionData.code}`
       const qr = await QRCode.toDataURL(joinUrl, { width: 256, margin: 2 })
       setQrCodeUrl(qr)
-      
-      // 파트너 정보 로드
-      const { data: partnerData } = await supabase
-        .from('partners')
-        .select('id, partner_type')
-        .eq('id', sessionData.partner_id)
-        .single()
-      setPartner(partnerData)
       
     } catch (error) {
       console.error('Error loading session:', error)
@@ -299,24 +276,132 @@ export default function SessionDetail() {
     } finally {
       setLoading(false)
     }
-  }, [id, t, navigate])
+  }, [id, navigate, profile?.role])
 
   useEffect(() => {
-    loadSession()
-  }, [loadSession])
+    let isMounted = true
+    
+    const fetchData = async () => {
+      if (!id || !isMounted) return
+      
+      setLoading(true)
+      try {
+        // 관리자 여부 확인 (profile.role이 'admin'이면 관리자)
+        const adminCheck = profile?.role === 'admin'
+        setIsAdmin(adminCheck)
+        
+        const { data, error } = await supabase.rpc('sp_partner_session_complete_q', {
+          p_session_id: id
+        })
+        
+        if (error) throw error
+        
+        if (!isMounted) return
+        
+        const sessionData = data.session
+        const partnerData = data.partner  // 세션 소유자 파트너 정보
+        const templatesData = data.templates
+        const qnaTemplatesData = data.qna_templates
+        const pollTemplatesData = data.poll_templates
+        const fieldsData = data.template_fields
+        const assetsData = data.assets
+        
+        setSession(sessionData)
+        
+        // 관리자일 경우 세션 소유 파트너 정보 설정 (프로시저에서 반환된 data.partner 사용)
+        if (adminCheck && partnerData) {
+          setSessionPartner({
+            id: partnerData.id,
+            partner_type: partnerData.partner_type || 'organizer',
+            representative_name: partnerData.representative_name
+          })
+        }
+        
+        // 폼 데이터 설정
+        setFormData({
+          title: sessionData.title || '',
+          venue_name: sessionData.venue_name || '',
+          venue_address: sessionData.venue_address || '',
+          start_at: sessionData.start_at ? sessionData.start_at.slice(0, 16) : '',
+          end_at: sessionData.end_at ? sessionData.end_at.slice(0, 16) : '',
+          contact_phone: sessionData.contact_phone || '',
+          contact_email: sessionData.contact_email || '',
+          max_participants: sessionData.max_participants || 100,
+          description: sessionData.description || '',
+          template_id: sessionData.template_id || '',
+          qna_template_id: sessionData.qna_template_id || '',
+          poll_template_id: sessionData.poll_template_id || '',
+          status: sessionData.status || 'draft',
+        })
+        
+        // 템플릿 목록 설정
+        setTemplates(templatesData || [])
+        setQnaTemplates(qnaTemplatesData || [])
+        setPollTemplates(pollTemplatesData || [])
+        
+        // 템플릿 필드 설정
+        setTemplateFields(fieldsData || [])
+        const selectedTemplate = templatesData?.find(t => t.id === sessionData.template_id)
+        setTemplate(selectedTemplate)
+        
+        // 에셋 (이미지 등)
+        const assetsMap = {}
+        const previewMap = {}
+        assetsData?.forEach(asset => {
+          assetsMap[asset.field_key] = asset
+          if (asset.value) previewMap[asset.field_key] = asset.value
+        })
+        setAssets(assetsMap)
+        setPreviewData(previewMap)
+        
+        // 관리자 기본값 설정
+        const defaultMap = {}
+        fieldsData?.forEach(field => {
+          defaultMap[field.field_key] = getDefaultSampleValue(field)
+        })
+        setAdminDefaultData(defaultMap)
+        
+        // QR 코드 생성
+        const joinUrl = `${window.location.origin}/join/${sessionData.code}`
+        const qr = await QRCode.toDataURL(joinUrl, { width: 256, margin: 2 })
+        setQrCodeUrl(qr)
+        
+      } catch (error) {
+        console.error('Error loading session:', error)
+        if (isMounted) {
+          toast.error(t('error.loadFailed'))
+          navigate('/partner/sessions')
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+    
+    fetchData()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [id, navigate, t, profile?.role])
 
   /**
-   * 템플릿 변경 시 필드 로드
+   * 템플릿 변경 시 필드 로드 (프로시저 사용)
    */
   const handleTemplateChange = async (templateId) => {
     setFormData(prev => ({ ...prev, template_id: templateId }))
     
     if (templateId) {
-      const { data: fieldsData } = await supabase
-        .from('session_template_fields')
-        .select('*')
-        .eq('template_id', templateId)
-        .order('sort_order')
+      const { data: fieldsData, error } = await supabase.rpc('sp_template_fields_q', {
+        p_template_id: templateId
+      })
+      
+      if (error) {
+        console.error('Error loading template fields:', error)
+        return
+      }
+      
       setTemplateFields(fieldsData || [])
       
       const selectedTemplate = templates.find(t => t.id === templateId)
@@ -328,30 +413,30 @@ export default function SessionDetail() {
   }
 
   /**
-   * 기본 정보 저장
+   * 기본 정보 저장 (프로시저 사용)
    */
   const handleSaveBasic = async () => {
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('sessions')
-        .update({
-          title: formData.title,
-          venue_name: formData.venue_name,
-          venue_address: formData.venue_address || null,
-          start_at: formData.start_at,
-          end_at: formData.end_at,
-          contact_phone: formData.contact_phone,
-          contact_email: formData.contact_email,
-          max_participants: formData.max_participants,
-          description: formData.description || null,
-          template_id: formData.template_id || null,
-          qna_template_id: formData.qna_template_id || null,
-          poll_template_id: formData.poll_template_id || null,
-        })
-        .eq('id', id)
+      const { data, error } = await supabase.rpc('sp_partner_session_basic_s', {
+        p_session_id: id,
+        p_title: formData.title,
+        p_venue_name: formData.venue_name,
+        p_venue_address: formData.venue_address || null,
+        p_start_at: formData.start_at,
+        p_end_at: formData.end_at,
+        p_contact_phone: formData.contact_phone,
+        p_contact_email: formData.contact_email,
+        p_max_participants: formData.max_participants,
+        p_description: formData.description || null,
+        p_template_id: formData.template_id || null,
+        p_qna_template_id: formData.qna_template_id || null,
+        p_poll_template_id: formData.poll_template_id || null
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to save session')
+      
       toast.success(t('common.saved'))
       loadSession()
     } catch (error) {
@@ -387,16 +472,17 @@ export default function SessionDetail() {
       
       const imageUrl = urlData.publicUrl
       
-      // DB에 저장
-      const { error: dbError } = await supabase
-        .from('session_assets')
-        .upsert({
-          session_id: id,
-          field_key: fieldKey,
-          value: imageUrl,
-        }, { onConflict: 'session_id,field_key' })
+      // DB에 저장 (프로시저 사용)
+      const { data: dbData, error: dbError } = await supabase.rpc('sp_partner_session_asset_s', {
+        p_action: 'upsert',
+        p_session_id: id,
+        p_field_key: fieldKey,
+        p_value: imageUrl,
+        p_url: null
+      })
       
       if (dbError) throw dbError
+      if (!dbData?.success) throw new Error('Failed to save asset')
       
       // 상태 업데이트
       setAssets(prev => ({
@@ -418,17 +504,20 @@ export default function SessionDetail() {
   }
 
   /**
-   * 이미지 삭제
+   * 이미지 삭제 (프로시저 사용)
    */
   const handleImageDelete = async (fieldKey) => {
     try {
-      const { error } = await supabase
-        .from('session_assets')
-        .delete()
-        .eq('session_id', id)
-        .eq('field_key', fieldKey)
+      const { data, error } = await supabase.rpc('sp_partner_session_asset_s', {
+        p_action: 'delete',
+        p_session_id: id,
+        p_field_key: fieldKey,
+        p_value: null,
+        p_url: null
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to delete asset')
       
       setAssets(prev => {
         const newAssets = { ...prev }
@@ -451,19 +540,20 @@ export default function SessionDetail() {
   }
 
   /**
-   * URL 저장 (배너 클릭 URL)
+   * URL 저장 (배너 클릭 URL) (프로시저 사용)
    */
   const handleUrlSave = async (fieldKey, url) => {
     try {
-      const { error } = await supabase
-        .from('session_assets')
-        .upsert({
-          session_id: id,
-          field_key: fieldKey,
-          url: url || null,
-        }, { onConflict: 'session_id,field_key' })
+      const { data, error } = await supabase.rpc('sp_partner_session_asset_s', {
+        p_action: 'upsert',
+        p_session_id: id,
+        p_field_key: fieldKey,
+        p_value: null,
+        p_url: url || null
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to save URL')
       
       setAssets(prev => ({
         ...prev,
@@ -478,28 +568,17 @@ export default function SessionDetail() {
   }
 
   /**
-   * 상태 변경
+   * 상태 변경 (프로시저 사용)
    */
   const handleStatusChange = async (newStatus) => {
     try {
-      const updates = { status: newStatus }
-      
-      if (newStatus === 'published' && !session.published_at) {
-        updates.published_at = new Date().toISOString()
-      }
-      if (newStatus === 'active' && !session.started_at) {
-        updates.started_at = new Date().toISOString()
-      }
-      if (newStatus === 'ended' && !session.ended_at) {
-        updates.ended_at = new Date().toISOString()
-      }
-      
-      const { error } = await supabase
-        .from('sessions')
-        .update(updates)
-        .eq('id', id)
+      const { data, error } = await supabase.rpc('sp_partner_session_status_s', {
+        p_session_id: id,
+        p_status: newStatus
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to change status')
       
       toast.success(t('session.statusChanged'))
       loadSession()
@@ -755,7 +834,10 @@ export default function SessionDetail() {
   // 다운로드 가능 여부
   const canExport = ['participants', 'qna', 'poll'].includes(activeTab)
 
-  if (loading) {
+  // 로딩 조건: 관리자일 때는 partnerLoading을 기다리지 않음
+  const showLoading = loading || (!isAdmin && partnerLoading)
+
+  if (showLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -1328,13 +1410,19 @@ export default function SessionDetail() {
 
         {/* 협업 탭 */}
         <TabsContent value="collaboration">
-          {partner && (
+          {/* effectivePartner: 파트너 로그인 시 partner, 관리자 로그인 시 sessionPartner 사용 */}
+          {effectivePartner && (
             <CollaborationPanel 
               sessionId={id}
-              partnerId={partner.id}
-              partnerType={partner.partner_type}
+              partnerId={effectivePartner.id}
+              partnerType={effectivePartner.partner_type}
               onUpdate={loadSession}
             />
+          )}
+          {!effectivePartner && !loading && (
+            <div className="text-center py-8 text-muted-foreground">
+              {t('error.partnerInfoNotAvailable', '파트너 정보를 불러올 수 없습니다.')}
+            </div>
           )}
         </TabsContent>
 

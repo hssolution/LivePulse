@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -66,12 +67,11 @@ const PIE_COLORS = ['#f97316', '#3b82f6', '#22c55e', '#a855f7']
  */
 export default function PartnerDashboard() {
   const { user, profile } = useAuth()
+  const { partner, partnerDetails, loading: partnerLoading } = usePartner()
   const { t } = useLanguage()
   const navigate = useNavigate()
   
   const [loading, setLoading] = useState(true)
-  const [partner, setPartner] = useState(null)
-  const [partnerDetails, setPartnerDetails] = useState(null)
   const [stats, setStats] = useState({
     totalSessions: 0,
     activeSessions: 0,
@@ -91,388 +91,155 @@ export default function PartnerDashboard() {
   const [activityDistribution, setActivityDistribution] = useState([])
   
   /**
-   * 파트너 정보 로드
+   * 데이터 로드 (Single RPC)
+   * 파트너 정보는 Context에서 가져오므로 통계 데이터만 로드
    */
-  const loadPartnerInfo = useCallback(async () => {
-    if (!user) return null
+  const loadDashboardData = useCallback(async () => {
+    if (!user || !partner) return
     
+    setLoading(true)
     try {
-      const { data: partnerData, error } = await supabase
-        .from('partners')
-        .select('id, partner_type, representative_name, phone, profile:profiles(email)')
-        .eq('profile_id', user.id)
-        .single()
-      
-      if (error) throw error
-      
-      if (partnerData) {
-        setPartner(partnerData)
-        
-        // 타입별 상세 정보
-        let details = null
-        if (partnerData.partner_type === 'organizer') {
-          const { data } = await supabase
-            .from('partner_organizers')
-            .select('company_name, industry')
-            .eq('partner_id', partnerData.id)
-            .single()
-          details = data
-        } else if (partnerData.partner_type === 'agency') {
-          const { data } = await supabase
-            .from('partner_agencies')
-            .select('company_name, industry')
-            .eq('partner_id', partnerData.id)
-            .single()
-          details = data
-        } else if (partnerData.partner_type === 'instructor') {
-          const { data } = await supabase
-            .from('partner_instructors')
-            .select('display_name, specialty')
-            .eq('partner_id', partnerData.id)
-            .single()
-          details = data
-        }
-        setPartnerDetails(details)
-        return partnerData
-      }
-      return null
-    } catch (error) {
-      console.error('Error loading partner info:', error)
-      return null
-    }
-  }, [user])
-
-  /**
-   * 세션 통계 로드
-   */
-  const loadStats = useCallback(async (partnerId) => {
-    if (!partnerId) return
-    
-    try {
-      // 전체 세션 수
-      const { count: totalSessions } = await supabase
-        .from('sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('partner_id', partnerId)
-
-      // 활성 세션 수
-      const { count: activeSessions } = await supabase
-        .from('sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('partner_id', partnerId)
-        .eq('status', 'active')
-
-      // 세션 ID 목록 가져오기
-      const { data: sessions } = await supabase
-        .from('sessions')
-        .select('id')
-        .eq('partner_id', partnerId)
-      
-      const sessionIds = sessions?.map(s => s.id) || []
-
-      let totalParticipants = 0
-      let totalQuestions = 0
-      let totalPolls = 0
-
-      if (sessionIds.length > 0) {
-        // 총 참여자 수
-        const { count: participants } = await supabase
-          .from('session_participants')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', sessionIds)
-        totalParticipants = participants || 0
-
-        // 총 질문 수
-        const { count: questions } = await supabase
-          .from('questions')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', sessionIds)
-        totalQuestions = questions || 0
-
-        // 총 투표 수
-        const { count: polls } = await supabase
-          .from('polls')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', sessionIds)
-        totalPolls = polls || 0
-      }
-
-      // 평균 참여율 계산 (세션당 평균 참여자)
-      const avgParticipation = totalSessions > 0 
-        ? Math.round(totalParticipants / totalSessions) 
-        : 0
-
-      // 지난 주 대비 변화 계산
-      const oneWeekAgo = new Date()
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-      
-      const { count: lastWeekSessions } = await supabase
-        .from('sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('partner_id', partnerId)
-        .lt('created_at', oneWeekAgo.toISOString())
-
-      setStats({
-        totalSessions: totalSessions || 0,
-        activeSessions: activeSessions || 0,
-        totalParticipants,
-        totalQuestions,
-        totalPolls,
-        avgParticipation,
-        weeklyChange: {
-          sessions: (totalSessions || 0) - (lastWeekSessions || 0),
-          participants: Math.floor(Math.random() * 20) + 5,
-          questions: Math.floor(Math.random() * 10) + 2
-        }
+      const { data, error } = await supabase.rpc('sp_partner_dashboard_q', { 
+        p_user_id: user.id 
       })
-    } catch (error) {
-      console.error('Error loading stats:', error)
-    }
-  }, [])
 
-  /**
-   * 일별 참여자 추이 데이터 로드 (최근 14일)
-   */
-  const loadDailyParticipants = useCallback(async (partnerId) => {
-    if (!partnerId) return
-    
-    try {
-      // 최근 14일 날짜 생성
-      const days = []
-      for (let i = 13; i >= 0; i--) {
-        const date = new Date()
-        date.setDate(date.getDate() - i)
-        days.push({
-          date: date.toISOString().split('T')[0],
-          label: date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-          participants: 0,
-          questions: 0,
-          sessions: 0
-        })
-      }
-
-      // 세션 ID 가져오기
-      const { data: sessions } = await supabase
-        .from('sessions')
-        .select('id, created_at')
-        .eq('partner_id', partnerId)
-      
-      if (sessions && sessions.length > 0) {
-        const sessionIds = sessions.map(s => s.id)
-        
-        // 참여자 데이터
-        const { data: participants } = await supabase
-          .from('session_participants')
-          .select('created_at')
-          .in('session_id', sessionIds)
-          .gte('created_at', days[0].date)
-
-        // 질문 데이터
-        const { data: questions } = await supabase
-          .from('questions')
-          .select('created_at')
-          .in('session_id', sessionIds)
-          .gte('created_at', days[0].date)
-
-        // 날짜별 집계
-        participants?.forEach(p => {
-          const dateStr = p.created_at.split('T')[0]
-          const day = days.find(d => d.date === dateStr)
-          if (day) day.participants++
-        })
-
-        questions?.forEach(q => {
-          const dateStr = q.created_at.split('T')[0]
-          const day = days.find(d => d.date === dateStr)
-          if (day) day.questions++
-        })
-
-        sessions.forEach(s => {
-          const dateStr = s.created_at.split('T')[0]
-          const day = days.find(d => d.date === dateStr)
-          if (day) day.sessions++
-        })
-      }
-
-      // 데이터가 없으면 샘플 데이터 생성 (시각화를 위해)
-      const hasData = days.some(d => d.participants > 0 || d.questions > 0)
-      if (!hasData) {
-        days.forEach((day, i) => {
-          day.participants = Math.floor(Math.random() * 30) + 5
-          day.questions = Math.floor(Math.random() * 15) + 2
-          day.sessions = Math.floor(Math.random() * 3)
-        })
-      }
-
-      setDailyParticipants(days)
-    } catch (error) {
-      console.error('Error loading daily participants:', error)
-    }
-  }, [])
-
-  /**
-   * 세션별 성과 데이터 로드
-   */
-  const loadSessionPerformance = useCallback(async (partnerId) => {
-    if (!partnerId) return
-    
-    try {
-      const { data: sessions } = await supabase
-        .from('sessions')
-        .select(`
-          id,
-          title,
-          created_at,
-          session_participants(count)
-        `)
-        .eq('partner_id', partnerId)
-        .order('created_at', { ascending: false })
-        .limit(6)
-
-      if (sessions && sessions.length > 0) {
-        const sessionIds = sessions.map(s => s.id)
-        
-        // 각 세션별 질문 수 조회
-        const performanceData = await Promise.all(sessions.map(async (session) => {
-          const { count: questionCount } = await supabase
-            .from('questions')
-            .select('*', { count: 'exact', head: true })
-            .eq('session_id', session.id)
-
-          const { count: pollCount } = await supabase
-            .from('polls')
-            .select('*', { count: 'exact', head: true })
-            .eq('session_id', session.id)
-
-          return {
-            name: session.title.length > 12 ? session.title.substring(0, 12) + '...' : session.title,
-            fullName: session.title,
-            participants: session.session_participants?.[0]?.count || 0,
-            questions: questionCount || 0,
-            polls: pollCount || 0
-          }
-        }))
-
-        setSessionPerformance(performanceData.reverse())
-      } else {
-        // 샘플 데이터
-        setSessionPerformance([
-          { name: '세션 1', participants: 45, questions: 12, polls: 3 },
-          { name: '세션 2', participants: 32, questions: 8, polls: 2 },
-          { name: '세션 3', participants: 58, questions: 15, polls: 4 },
-          { name: '세션 4', participants: 41, questions: 10, polls: 2 },
-          { name: '세션 5', participants: 67, questions: 22, polls: 5 },
-        ])
-      }
-    } catch (error) {
-      console.error('Error loading session performance:', error)
-    }
-  }, [])
-
-  /**
-   * 활동 분포 데이터
-   */
-  const loadActivityDistribution = useCallback(async (partnerId) => {
-    if (!partnerId) return
-
-    try {
-      const { data: sessions } = await supabase
-        .from('sessions')
-        .select('id')
-        .eq('partner_id', partnerId)
-
-      if (sessions && sessions.length > 0) {
-        const sessionIds = sessions.map(s => s.id)
-
-        const { count: participants } = await supabase
-          .from('session_participants')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', sessionIds)
-
-        const { count: questions } = await supabase
-          .from('questions')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', sessionIds)
-
-        const { count: polls } = await supabase
-          .from('polls')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', sessionIds)
-
-        const { count: votes } = await supabase
-          .from('poll_votes')
-          .select('*', { count: 'exact', head: true })
-
-        setActivityDistribution([
-          { name: t('dashboard.participants'), value: participants || 0, color: CHART_COLORS.primary },
-          { name: t('dashboard.questions'), value: questions || 0, color: CHART_COLORS.secondary },
-          { name: t('dashboard.polls'), value: polls || 0, color: CHART_COLORS.success },
-          { name: t('dashboard.votes'), value: votes || 0, color: CHART_COLORS.purple },
-        ])
-      } else {
-        // 샘플 데이터
-        setActivityDistribution([
-          { name: t('dashboard.participants'), value: 156, color: CHART_COLORS.primary },
-          { name: t('dashboard.questions'), value: 48, color: CHART_COLORS.secondary },
-          { name: t('dashboard.polls'), value: 12, color: CHART_COLORS.success },
-          { name: t('dashboard.votes'), value: 234, color: CHART_COLORS.purple },
-        ])
-      }
-    } catch (error) {
-      console.error('Error loading activity distribution:', error)
-    }
-  }, [t])
-
-  /**
-   * 최근 세션 로드
-   */
-  const loadRecentSessions = useCallback(async (partnerId) => {
-    if (!partnerId) return
-    
-    try {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select(`
-          id,
-          title,
-          status,
-          start_time,
-          end_time,
-          created_at,
-          session_participants(count)
-        `)
-        .eq('partner_id', partnerId)
-        .order('created_at', { ascending: false })
-        .limit(5)
-      
       if (error) throw error
-      setRecentSessions(data || [])
-    } catch (error) {
-      console.error('Error loading recent sessions:', error)
-    }
-  }, [])
 
-  /**
-   * 데이터 로드
-   */
-  useEffect(() => {
-    const loadAllData = async () => {
-      setLoading(true)
-      const partnerData = await loadPartnerInfo()
-      if (partnerData) {
-        await Promise.all([
-          loadStats(partnerData.id),
-          loadRecentSessions(partnerData.id),
-          loadDailyParticipants(partnerData.id),
-          loadSessionPerformance(partnerData.id),
-          loadActivityDistribution(partnerData.id)
+      if (data) {
+        if (data.error) {
+          console.error('Dashboard data error:', data.error)
+          return
+        }
+
+        // 파트너 정보는 Context에서 이미 로드됨
+        setStats(prev => ({
+          ...prev,
+          ...data.stats
+        }))
+        
+        // Recent Sessions Data Mapping
+        setRecentSessions(data.recentSessions || [])
+
+        // Daily Activity Data
+        if (data.dailyActivity && data.dailyActivity.length > 0) {
+           setDailyParticipants(data.dailyActivity)
+        } else {
+           // Fallback sample data if empty
+           const days = []
+           for (let i = 13; i >= 0; i--) {
+             const date = new Date()
+             date.setDate(date.getDate() - i)
+             days.push({
+               date: date.toISOString().split('T')[0],
+               label: date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+               participants: Math.floor(Math.random() * 30) + 5,
+               questions: Math.floor(Math.random() * 15) + 2,
+               sessions: Math.floor(Math.random() * 3)
+             })
+           }
+           setDailyParticipants(days)
+        }
+
+        // Session Performance Data
+        if (data.sessionPerformance && data.sessionPerformance.length > 0) {
+           // Truncate name for chart
+           const formattedPerformance = data.sessionPerformance.map(item => ({
+             ...item,
+             name: item.fullName.length > 12 ? item.fullName.substring(0, 12) + '...' : item.fullName
+           }))
+           setSessionPerformance(formattedPerformance)
+        }
+
+        // Activity Distribution - i18n labels are applied in render, not here
+        setActivityDistribution([
+          { name: 'participants', value: data.stats.totalParticipants || 0, color: CHART_COLORS.primary },
+          { name: 'questions', value: data.stats.totalQuestions || 0, color: CHART_COLORS.secondary },
+          { name: 'polls', value: data.stats.totalPolls || 0, color: CHART_COLORS.success },
         ])
       }
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+    } finally {
       setLoading(false)
     }
+  }, [user, partner])
+
+  useEffect(() => {
+    let isMounted = true
     
-    loadAllData()
-  }, [loadPartnerInfo, loadStats, loadRecentSessions, loadDailyParticipants, loadSessionPerformance, loadActivityDistribution])
+    const fetchData = async () => {
+      if (!user || !partner || !isMounted) return
+      
+      setLoading(true)
+      try {
+        const { data, error } = await supabase.rpc('sp_partner_dashboard_q', { 
+          p_user_id: user.id 
+        })
+
+        if (error) throw error
+
+        if (!isMounted) return
+
+        if (data) {
+          if (data.error) {
+            console.error('Dashboard data error:', data.error)
+            return
+          }
+
+          setStats(prev => ({
+            ...prev,
+            ...data.stats
+          }))
+          
+          setRecentSessions(data.recentSessions || [])
+
+          if (data.dailyActivity && data.dailyActivity.length > 0) {
+             setDailyParticipants(data.dailyActivity)
+          } else {
+             const days = []
+             for (let i = 13; i >= 0; i--) {
+               const date = new Date()
+               date.setDate(date.getDate() - i)
+               days.push({
+                 date: date.toISOString().split('T')[0],
+                 label: date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                 participants: Math.floor(Math.random() * 30) + 5,
+                 questions: Math.floor(Math.random() * 15) + 2,
+                 sessions: Math.floor(Math.random() * 3)
+               })
+             }
+             setDailyParticipants(days)
+          }
+
+          if (data.sessionPerformance && data.sessionPerformance.length > 0) {
+             const formattedPerformance = data.sessionPerformance.map(item => ({
+               ...item,
+               name: item.fullName.length > 12 ? item.fullName.substring(0, 12) + '...' : item.fullName
+             }))
+             setSessionPerformance(formattedPerformance)
+          }
+
+          setActivityDistribution([
+            { name: 'participants', value: data.stats.totalParticipants || 0, color: CHART_COLORS.primary },
+            { name: 'questions', value: data.stats.totalQuestions || 0, color: CHART_COLORS.secondary },
+            { name: 'polls', value: data.stats.totalPolls || 0, color: CHART_COLORS.success },
+          ])
+        }
+      } catch (error) {
+        console.error('Error loading dashboard data:', error)
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+    
+    fetchData()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [user, partner])
   
   /**
    * 파트너 타입 레이블
@@ -545,7 +312,7 @@ export default function PartnerDashboard() {
   /**
    * 스켈레톤 로더
    */
-  if (loading) {
+  if (loading || partnerLoading) {
     return (
       <div className="h-full flex flex-col p-4 md:p-6 space-y-6">
         <div className="flex justify-between items-center">
@@ -848,7 +615,10 @@ export default function PartnerDashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={activityDistribution}
+                      data={activityDistribution.map(item => ({
+                        ...item,
+                        name: t(`dashboard.${item.name}`)
+                      }))}
                       cx="50%"
                       cy="50%"
                       innerRadius={50}
@@ -911,7 +681,7 @@ export default function PartnerDashboard() {
                           <p className="font-medium truncate">{session.title}</p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Users className="h-3 w-3" />
-                            <span>{session.session_participants?.[0]?.count || 0}명</span>
+                            <span>{session.count || 0}명</span>
                             <span>·</span>
                             <Clock className="h-3 w-3" />
                             <span>{formatDate(session.created_at)}</span>

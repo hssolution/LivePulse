@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,13 +30,11 @@ import {
  */
 export default function PartnerProfile() {
   const { user } = useAuth()
+  const { partner, partnerDetails, myRole, loading: partnerLoading, refreshPartner } = usePartner()
   const { t } = useLanguage()
   
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [partner, setPartner] = useState(null)
-  const [partnerDetails, setPartnerDetails] = useState(null)
-  const [myRole, setMyRole] = useState(null) // 'owner' | 'member'
   
   // 폼 데이터
   const [formData, setFormData] = useState({
@@ -55,84 +54,31 @@ export default function PartnerProfile() {
   })
 
   /**
-   * 데이터 로드
+   * 데이터 로드 (Context에서 파트너 정보 가져옴)
    */
   const loadData = useCallback(async () => {
-    if (!user) return
+    if (!partner || !partnerDetails) {
+      setLoading(false)
+      return
+    }
     
     setLoading(true)
     try {
-      // 내 파트너 정보 조회
-      const { data: partnerData, error: partnerError } = await supabase
-        .from('partners')
-        .select('*, profile:profiles(email)')
-        .eq('profile_id', user.id)
-        .single()
-      
-      if (partnerError) {
-        if (partnerError.code === 'PGRST116') {
-          // 파트너가 아닌 경우
-          setPartner(null)
-          setLoading(false)
-          return
-        }
-        throw partnerError
-      }
-      
-      setPartner(partnerData)
-      
-      // 내 역할 확인 (partner_members에서)
-      const { data: memberData } = await supabase
-        .from('partner_members')
-        .select('role')
-        .eq('partner_id', partnerData.id)
-        .eq('user_id', user.id)
-        .single()
-      
-      setMyRole(memberData?.role || 'owner')
-      
-      // 파트너 타입별 상세 정보 조회
-      let details = null
-      if (partnerData.partner_type === 'organizer') {
-        const { data } = await supabase
-          .from('partner_organizers')
-          .select('*')
-          .eq('partner_id', partnerData.id)
-          .single()
-        details = data
-      } else if (partnerData.partner_type === 'agency') {
-        const { data } = await supabase
-          .from('partner_agencies')
-          .select('*')
-          .eq('partner_id', partnerData.id)
-          .single()
-        details = data
-      } else if (partnerData.partner_type === 'instructor') {
-        const { data } = await supabase
-          .from('partner_instructors')
-          .select('*')
-          .eq('partner_id', partnerData.id)
-          .single()
-        details = data
-      }
-      
-      setPartnerDetails(details)
-      
-      // 폼 데이터 초기화
+      // 폼 데이터 초기화 (Context에서 가져온 데이터 사용)
       setFormData({
-        representativeName: partnerData.representative_name || '',
-        phone: partnerData.phone || '',
+        representativeName: partner.representative_name || '',
+        phone: partner.phone || '',
         // 행사자/대행사
-        companyName: details?.company_name || '',
-        businessNumber: details?.business_number || '',
-        address: details?.address || '',
-        industry: details?.industry || '',
-        expectedScale: details?.expected_scale || '',
-        clientType: details?.client_type || '',
+        companyName: partnerDetails?.company_name || '',
+        businessNumber: partnerDetails?.business_number || '',
+        address: partnerDetails?.address || '',
+        industry: partnerDetails?.industry || '',
+        expectedScale: partnerDetails?.expected_scale || '',
+        clientType: partnerDetails?.client_type || '',
         // 강사
-        displayName: details?.display_name || '',
-        specialty: details?.specialty || '',
-        bio: details?.bio || ''
+        displayName: partnerDetails?.display_name || '',
+        specialty: partnerDetails?.specialty || '',
+        bio: partnerDetails?.bio || ''
       })
       
     } catch (error) {
@@ -141,7 +87,7 @@ export default function PartnerProfile() {
     } finally {
       setLoading(false)
     }
-  }, [user, t])
+  }, [partner, partnerDetails, user])
 
   useEffect(() => {
     loadData()
@@ -158,7 +104,7 @@ export default function PartnerProfile() {
   }
 
   /**
-   * 저장
+   * 저장 (프로시저 사용)
    */
   const handleSave = async () => {
     if (myRole !== 'owner') {
@@ -168,56 +114,30 @@ export default function PartnerProfile() {
     
     setSaving(true)
     try {
-      // 기본 파트너 정보 업데이트
-      const { error: partnerError } = await supabase
-        .from('partners')
-        .update({
-          representative_name: formData.representativeName.trim(),
-          phone: formData.phone.trim()
-        })
-        .eq('id', partner.id)
+      const { data, error } = await supabase.rpc('sp_partner_profile_s', {
+        p_partner_id: partner.id,
+        p_partner_type: partner.partner_type,
+        p_representative_name: formData.representativeName.trim(),
+        p_phone: formData.phone.trim(),
+        // Organizer/Agency fields
+        p_company_name: formData.companyName.trim() || null,
+        p_business_number: formData.businessNumber.trim() || null,
+        p_address: formData.address.trim() || null,
+        p_industry: formData.industry.trim() || null,
+        p_expected_scale: formData.expectedScale || null,
+        p_client_type: formData.clientType.trim() || null,
+        // Instructor fields
+        p_display_name: formData.displayName.trim() || null,
+        p_specialty: formData.specialty.trim() || null,
+        p_bio: formData.bio.trim() || null
+      })
       
-      if (partnerError) throw partnerError
-      
-      // 타입별 상세 정보 업데이트
-      if (partner.partner_type === 'organizer') {
-        const { error } = await supabase
-          .from('partner_organizers')
-          .update({
-            company_name: formData.companyName.trim(),
-            business_number: formData.businessNumber.trim() || null,
-            address: formData.address.trim() || null,
-            industry: formData.industry.trim() || null,
-            expected_scale: formData.expectedScale || null
-          })
-          .eq('partner_id', partner.id)
-        if (error) throw error
-      } else if (partner.partner_type === 'agency') {
-        const { error } = await supabase
-          .from('partner_agencies')
-          .update({
-            company_name: formData.companyName.trim(),
-            business_number: formData.businessNumber.trim(),
-            address: formData.address.trim() || null,
-            industry: formData.industry.trim() || null,
-            expected_scale: formData.expectedScale || null,
-            client_type: formData.clientType.trim() || null
-          })
-          .eq('partner_id', partner.id)
-        if (error) throw error
-      } else if (partner.partner_type === 'instructor') {
-        const { error } = await supabase
-          .from('partner_instructors')
-          .update({
-            display_name: formData.displayName.trim(),
-            specialty: formData.specialty.trim() || null,
-            bio: formData.bio.trim() || null
-          })
-          .eq('partner_id', partner.id)
-        if (error) throw error
-      }
+      if (error) throw error
+      if (!data?.success) throw new Error('Failed to update profile')
       
       toast.success(t('partner.updateSuccess'))
+      // Context 새로고침
+      await refreshPartner()
       loadData()
     } catch (error) {
       console.error('Error saving partner data:', error)
@@ -254,7 +174,7 @@ export default function PartnerProfile() {
   // 수정 가능 여부
   const canEdit = myRole === 'owner'
 
-  if (loading) {
+  if (loading || partnerLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

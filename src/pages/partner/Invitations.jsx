@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -40,11 +41,10 @@ import { ko } from 'date-fns/locale'
  */
 export default function Invitations() {
   const { user } = useAuth()
+  const { partner, partnerDetails, loading: partnerLoading } = usePartner()
   const { t } = useLanguage()
   
   const [loading, setLoading] = useState(true)
-  const [partner, setPartner] = useState(null)
-  const [partnerDetails, setPartnerDetails] = useState(null)
   const [sessionInvites, setSessionInvites] = useState([])
   const [presenterInvites, setPresenterInvites] = useState([])
   
@@ -55,139 +55,22 @@ export default function Invitations() {
   const [responding, setResponding] = useState(false)
 
   /**
-   * 데이터 로드
+   * 데이터 로드 (단일 RPC 호출로 최적화)
    */
   const loadData = useCallback(async () => {
-    if (!user) return
+    if (!user || !partner) return
     
     setLoading(true)
     try {
-      // 내 파트너 정보
-      const { data: partnerData, error: partnerError } = await supabase
-        .from('partners')
-        .select('id, partner_type, representative_name, phone, profile:profiles(email)')
-        .eq('profile_id', user.id)
-        .single()
+      // 모든 초대 정보를 한 번에 조회 (프로시저 사용)
+      const { data, error } = await supabase.rpc('sp_partner_invitations_q', {
+        p_partner_id: partner.id
+      })
       
-      if (partnerError) throw partnerError
-      setPartner(partnerData)
+      if (error) throw error
       
-      // 내 파트너 상세 정보 (타입별)
-      let details = null
-      if (partnerData.partner_type === 'organizer') {
-        const { data } = await supabase
-          .from('partner_organizers')
-          .select('company_name, industry')
-          .eq('partner_id', partnerData.id)
-          .single()
-        details = data
-      } else if (partnerData.partner_type === 'agency') {
-        const { data } = await supabase
-          .from('partner_agencies')
-          .select('company_name, industry')
-          .eq('partner_id', partnerData.id)
-          .single()
-        details = data
-      } else if (partnerData.partner_type === 'instructor') {
-        const { data } = await supabase
-          .from('partner_instructors')
-          .select('display_name, specialty')
-          .eq('partner_id', partnerData.id)
-          .single()
-        details = data
-      }
-      setPartnerDetails(details)
-      
-      // 받은 세션 초대 (파트너 협업)
-      const { data: sessionInvitesData, error: sessionError } = await supabase
-        .from('session_partners')
-        .select(`
-          *,
-          session:sessions(
-            id,
-            title,
-            code,
-            status,
-            start_at,
-            venue_name,
-            max_participants,
-            partner_id
-          )
-        `)
-        .eq('partner_id', partnerData.id)
-        .order('created_at', { ascending: false })
-      
-      if (sessionError) throw sessionError
-      
-      // 세션 소유자 정보 로드
-      const invitesWithDetails = await Promise.all(
-        (sessionInvitesData || []).map(async (invite) => {
-          if (invite.session?.partner_id) {
-            // 세션 소유자 파트너 정보 조회
-            const { data: ownerPartner } = await supabase
-              .from('partners')
-              .select('id, partner_type, representative_name, profile:profiles(email)')
-              .eq('id', invite.session.partner_id)
-              .single()
-            
-            let ownerDetails = null
-            if (ownerPartner) {
-              if (ownerPartner.partner_type === 'organizer') {
-                const { data } = await supabase
-                  .from('partner_organizers')
-                  .select('company_name')
-                  .eq('partner_id', ownerPartner.id)
-                  .single()
-                ownerDetails = data
-              } else if (ownerPartner.partner_type === 'agency') {
-                const { data } = await supabase
-                  .from('partner_agencies')
-                  .select('company_name')
-                  .eq('partner_id', ownerPartner.id)
-                  .single()
-                ownerDetails = data
-              }
-            }
-            return { 
-              ...invite, 
-              sessionOwner: ownerPartner,
-              ownerDetails 
-            }
-          }
-          return invite
-        })
-      )
-      
-      setSessionInvites(invitesWithDetails)
-      
-      // 받은 강사 초대 (강사 파트너용)
-      if (partnerData.partner_type === 'instructor') {
-        const { data: presenterData, error: presenterError } = await supabase
-          .from('session_presenters')
-          .select(`
-            *,
-            session:sessions(
-              id,
-              title,
-              code,
-              status,
-              start_at,
-              venue_name,
-              partner:partners(
-                id,
-                partner_type,
-                representative_name,
-                profile:profiles(email)
-              )
-            )
-          `)
-          .eq('partner_id', partnerData.id)
-          .eq('presenter_type', 'partner')
-          .order('created_at', { ascending: false })
-        
-        if (presenterError) throw presenterError
-        setPresenterInvites(presenterData || [])
-      }
+      setSessionInvites(data?.session_invites || [])
+      setPresenterInvites(data?.presenter_invites || [])
       
     } catch (error) {
       console.error('Error loading invitations:', error)
@@ -195,11 +78,44 @@ export default function Invitations() {
     } finally {
       setLoading(false)
     }
-  }, [user, t])
+  }, [user, partner])
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    let isMounted = true
+    
+    const fetchData = async () => {
+      if (!user || !partner || !isMounted) return
+      
+      setLoading(true)
+      try {
+        const { data, error } = await supabase.rpc('sp_partner_invitations_q', {
+          p_partner_id: partner.id
+        })
+        
+        if (error) throw error
+        
+        if (isMounted) {
+          setSessionInvites(data?.session_invites || [])
+          setPresenterInvites(data?.presenter_invites || [])
+        }
+      } catch (error) {
+        console.error('Error loading invitations:', error)
+        if (isMounted) {
+          toast.error(t('error.loadFailed'))
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+    
+    fetchData()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [user, partner, t])
 
   /**
    * 세션 초대 응답
@@ -212,7 +128,7 @@ export default function Invitations() {
     
     setResponding(true)
     try {
-      const { data, error } = await supabase.rpc('respond_to_session_invite', {
+      const { data, error } = await supabase.rpc('sp_partner_invitation_respond_s', {
         p_invite_id: inviteId,
         p_accept: accept,
         p_reject_reason: accept ? null : rejectReason
@@ -326,7 +242,7 @@ export default function Invitations() {
     setShowRejectDialog(true)
   }
 
-  if (loading) {
+  if (loading || partnerLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -42,11 +43,11 @@ import { ko } from 'date-fns/locale'
  */
 export default function Inquiry() {
   const { user, profile } = useAuth()
+  const { partner, loading: partnerLoading } = usePartner()
   const { t, language } = useLanguage()
   
   const [loading, setLoading] = useState(true)
   const [inquiries, setInquiries] = useState([])
-  const [partnerId, setPartnerId] = useState(null)
   
   // 새 문의 다이얼로그
   const [showNewDialog, setShowNewDialog] = useState(false)
@@ -66,39 +67,16 @@ export default function Inquiry() {
   const [loadingReplies, setLoadingReplies] = useState(false)
 
   /**
-   * 파트너 ID 로드
-   */
-  useEffect(() => {
-    const loadPartnerId = async () => {
-      if (!user) return
-      
-      const { data } = await supabase
-        .from('partners')
-        .select('id')
-        .eq('profile_id', user.id)
-        .single()
-      
-      if (data) {
-        setPartnerId(data.id)
-      }
-    }
-    
-    loadPartnerId()
-  }, [user])
-
-  /**
-   * 문의 목록 로드
+   * 문의 목록 로드 (프로시저 사용)
    */
   const loadInquiries = useCallback(async () => {
-    if (!partnerId) return
+    if (!user || !partner) return
     
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('inquiries')
-        .select('*')
-        .eq('partner_id', partnerId)
-        .order('created_at', { ascending: false })
+      const { data, error } = await supabase.rpc('sp_partner_inquiries_q', {
+        p_partner_id: partner.id
+      })
       
       if (error) throw error
       setInquiries(data || [])
@@ -108,28 +86,53 @@ export default function Inquiry() {
     } finally {
       setLoading(false)
     }
-  }, [partnerId, t])
+  }, [user, partner])
 
   useEffect(() => {
-    if (partnerId) {
-      loadInquiries()
+    let isMounted = true
+    
+    const fetchData = async () => {
+      if (!user || !partner || !isMounted) return
+      
+      setLoading(true)
+      try {
+        const { data, error } = await supabase.rpc('sp_partner_inquiries_q', {
+          p_partner_id: partner.id
+        })
+        
+        if (error) throw error
+        
+        if (isMounted) {
+          setInquiries(data || [])
+        }
+      } catch (error) {
+        console.error('Error loading inquiries:', error)
+        if (isMounted) {
+          toast.error(t('error.loadFailed'))
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
     }
-  }, [partnerId, loadInquiries])
+    
+    fetchData()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [user, partner, t])
 
   /**
-   * 답변 로드
+   * 답변 로드 (프로시저 사용)
    */
   const loadReplies = async (inquiryId) => {
     setLoadingReplies(true)
     try {
-      const { data, error } = await supabase
-        .from('inquiry_replies')
-        .select(`
-          *,
-          user:profiles(email, display_name)
-        `)
-        .eq('inquiry_id', inquiryId)
-        .order('created_at', { ascending: true })
+      const { data, error } = await supabase.rpc('sp_partner_inquiry_replies_q', {
+        p_inquiry_id: inquiryId
+      })
       
       if (error) throw error
       setReplies(data || [])
@@ -141,7 +144,7 @@ export default function Inquiry() {
   }
 
   /**
-   * 새 문의 등록
+   * 새 문의 등록 (프로시저 사용)
    */
   const handleSubmitInquiry = async () => {
     if (!newInquiry.title.trim() || !newInquiry.content.trim()) {
@@ -151,16 +154,16 @@ export default function Inquiry() {
     
     setSubmitting(true)
     try {
-      const { error } = await supabase
-        .from('inquiries')
-        .insert({
-          partner_id: partnerId,
-          category: newInquiry.category,
-          title: newInquiry.title.trim(),
-          content: newInquiry.content.trim()
-        })
+      const { data, error } = await supabase.rpc('sp_partner_inquiry_s', {
+        p_action: 'create_inquiry',
+        p_partner_id: partner.id,
+        p_category: newInquiry.category,
+        p_title: newInquiry.title.trim(),
+        p_content: newInquiry.content.trim()
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to create inquiry')
       
       toast.success(t('inquiry.submitted'))
       setShowNewDialog(false)
@@ -185,23 +188,23 @@ export default function Inquiry() {
   }
 
   /**
-   * 답변 전송
+   * 답변 전송 (프로시저 사용)
    */
   const handleSendReply = async () => {
     if (!newReply.trim()) return
     
     setSending(true)
     try {
-      const { error } = await supabase
-        .from('inquiry_replies')
-        .insert({
-          inquiry_id: selectedInquiry.id,
-          user_id: user.id,
-          content: newReply.trim(),
-          is_admin: false
-        })
+      const { data, error } = await supabase.rpc('sp_partner_inquiry_s', {
+        p_action: 'create_reply',
+        p_inquiry_id: selectedInquiry.id,
+        p_user_id: user.id,
+        p_content: newReply.trim(),
+        p_is_admin: false
+      })
       
       if (error) throw error
+      if (!data?.success) throw new Error('Failed to send reply')
       
       setNewReply('')
       loadReplies(selectedInquiry.id)
