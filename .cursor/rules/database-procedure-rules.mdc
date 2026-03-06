@@ -1,0 +1,342 @@
+---
+type: always
+description: "데이터베이스 프로시저 및 쿼리 규칙"
+---
+
+## 데이터베이스 쿼리 규칙
+
+### 1. 프로시저 필수 사용
+
+**모든 데이터베이스 쿼리는 반드시 프로시저를 통해 실행합니다.**
+- ❌ 프론트엔드에서 직접 `supabase.from()` 사용 금지
+- ✅ `supabase.rpc('프로시저명', { 파라미터 })` 사용
+
+### 2. 프로시저 네이밍 규칙
+
+**형식**: `sp_[중간자]_[메인구분]_[타입]`
+
+#### 타입 접미사
+- `_q`: 조회(Query) - SELECT 작업
+- `_s`: 저장(Save) - INSERT, UPDATE, DELETE 작업
+- `_c`: 확인/체크(Check) - 존재 여부, 권한 확인 등
+
+#### 중간자 (역할별 구분)
+- `admin`: 관리자 전용 기능
+- `partner`: 파트너 전용 기능
+- 중간자 없음: 일반 사용자 또는 공통 기능
+
+#### 예시
+```sql
+-- 파트너 대시보드 조회
+sp_partner_dashboard_q
+
+-- 파트너 세션 목록 조회
+sp_partner_sessions_q
+
+-- 파트너 세션 생성/수정
+sp_partner_session_s
+
+-- 관리자 사용자 목록 조회
+sp_admin_users_q
+
+-- 관리자 파트너 승인
+sp_admin_partner_approve_s
+
+-- 일반 사용자 프로필 조회
+sp_profile_q
+
+-- 세션 참여 가능 여부 확인
+sp_session_joinable_c
+```
+
+### 3. 테이블 및 컬럼 주석 규칙
+
+**모든 테이블과 컬럼에는 반드시 주석을 작성합니다.**
+
+```sql
+-- 테이블 주석
+COMMENT ON TABLE sessions IS '세션 정보 테이블 - 라이브 방송 세션 관리';
+
+-- 컬럼 주석
+COMMENT ON COLUMN sessions.id IS '세션 고유 ID (UUID)';
+COMMENT ON COLUMN sessions.title IS '세션 제목';
+COMMENT ON COLUMN sessions.status IS '세션 상태: draft(준비중), published(공개), active(진행중), ended(종료)';
+COMMENT ON COLUMN sessions.start_at IS '세션 시작 예정 시간';
+COMMENT ON COLUMN sessions.participant_count IS '참여자 수 (실시간 업데이트)';
+```
+
+### 4. 프로시저 주석 규칙
+
+**프로시저 생성 시 상세한 주석을 작성합니다.**
+
+```sql
+/**
+ * 프로시저명: sp_partner_dashboard_q
+ * 설명: 파트너 대시보드 통계 및 최근 활동 데이터 조회
+ * 
+ * 파라미터:
+ *   - p_user_id (UUID): 파트너 사용자 ID
+ * 
+ * 반환값: JSON
+ *   - stats: 통계 정보 (총 세션 수, 참여자 수, 질문 수 등)
+ *   - recentSessions: 최근 세션 목록 (최대 5개)
+ *   - dailyActivity: 일별 활동 데이터 (최근 14일)
+ *   - sessionPerformance: 세션별 성과 데이터
+ * 
+ * 작성일: 2024-01-15
+ * 작성자: System
+ * 수정이력:
+ *   - 2024-01-20: 주간 변화율 추가
+ */
+CREATE OR REPLACE FUNCTION sp_partner_dashboard_q(p_user_id UUID)
+RETURNS JSON AS $$
+DECLARE
+  v_result JSON;
+  v_partner_id UUID;
+BEGIN
+  -- 파트너 ID 조회
+  SELECT id INTO v_partner_id
+  FROM partners
+  WHERE user_id = p_user_id;
+  
+  -- 데이터 조회 및 JSON 생성
+  -- ...
+  
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 프로시저 주석
+COMMENT ON FUNCTION sp_partner_dashboard_q(UUID) IS '파트너 대시보드 데이터 조회 - 통계, 최근 세션, 일별 활동 등';
+```
+
+### 5. 동적 쿼리 사용 금지
+
+**프로시저 내에서 동적 쿼리(EXECUTE, format 등)는 원칙적으로 사용하지 않습니다.**
+
+#### ❌ 금지 사례
+```sql
+-- 나쁜 예: SQL Injection 위험
+CREATE FUNCTION bad_example(p_table_name TEXT, p_user_id UUID)
+RETURNS TABLE(...) AS $$
+BEGIN
+  RETURN QUERY EXECUTE 'SELECT * FROM ' || p_table_name || ' WHERE user_id = ''' || p_user_id || '''';
+END;
+$$ LANGUAGE plpgsql;
+```
+
+#### ✅ 허용 조건
+동적 쿼리가 **반드시 필요한 경우**:
+1. 사용자에게 충분한 설명과 위험성 고지
+2. 사용자의 명시적 승인 획득
+3. **파라미터 바인딩 필수 사용** (직접 문자열 결합 금지)
+
+```sql
+-- 허용되는 예: 파라미터 바인딩 사용
+CREATE FUNCTION allowed_dynamic_example(p_column_name TEXT, p_user_id UUID)
+RETURNS TABLE(...) AS $$
+BEGIN
+  -- 컬럼명은 화이트리스트로 검증
+  IF p_column_name NOT IN ('created_at', 'updated_at', 'status') THEN
+    RAISE EXCEPTION 'Invalid column name';
+  END IF;
+  
+  -- EXECUTE with USING (파라미터 바인딩)
+  RETURN QUERY EXECUTE 
+    format('SELECT * FROM sessions WHERE user_id = $1 ORDER BY %I', p_column_name)
+    USING p_user_id;  -- 파라미터로 전달
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 6. 프로시저 보안 설정
+
+```sql
+-- SECURITY DEFINER: 프로시저 소유자 권한으로 실행
+-- SECURITY INVOKER: 호출자 권한으로 실행 (기본값)
+
+-- 일반적으로 SECURITY DEFINER 사용 (RLS 우회 가능)
+CREATE OR REPLACE FUNCTION sp_partner_dashboard_q(p_user_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER  -- 권한 상승
+SET search_path = public, pg_temp;  -- 보안 강화
+```
+
+### 7. 에러 처리
+
+```sql
+CREATE OR REPLACE FUNCTION sp_partner_session_s(
+  p_user_id UUID,
+  p_title TEXT,
+  p_start_at TIMESTAMPTZ
+)
+RETURNS JSON AS $$
+DECLARE
+  v_result JSON;
+  v_partner_id UUID;
+BEGIN
+  -- 파트너 확인
+  SELECT id INTO v_partner_id
+  FROM partners
+  WHERE user_id = p_user_id;
+  
+  IF v_partner_id IS NULL THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'PARTNER_NOT_FOUND',
+      'message', '파트너 정보를 찾을 수 없습니다.'
+    );
+  END IF;
+  
+  -- 세션 생성
+  -- ...
+  
+  RETURN json_build_object(
+    'success', true,
+    'data', v_result
+  );
+  
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', SQLSTATE,
+      'message', SQLERRM
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+### 8. 성능 최적화
+
+```sql
+-- 인덱스 활용
+CREATE INDEX idx_sessions_partner_status ON sessions(partner_id, status);
+CREATE INDEX idx_sessions_start_at ON sessions(start_at DESC);
+
+-- 프로시저에서 효율적인 쿼리 작성
+CREATE OR REPLACE FUNCTION sp_partner_sessions_q(
+  p_user_id UUID,
+  p_limit INT DEFAULT 20,
+  p_offset INT DEFAULT 0
+)
+RETURNS JSON AS $$
+BEGIN
+  RETURN (
+    SELECT json_build_object(
+      'sessions', COALESCE(json_agg(session_data), '[]'::json),
+      'total', COUNT(*) OVER()
+    )
+    FROM (
+      SELECT 
+        s.id,
+        s.title,
+        s.status,
+        s.start_at,
+        s.participant_count
+      FROM sessions s
+      INNER JOIN partners p ON p.id = s.partner_id
+      WHERE p.user_id = p_user_id
+      ORDER BY s.start_at DESC
+      LIMIT p_limit
+      OFFSET p_offset
+    ) session_data
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+### 9. 프로시저 수정/삭제 시 주의사항 ⚠️
+
+**기존 프로시저를 수정하거나 삭제하기 전에 반드시 다음을 확인합니다.**
+
+#### 수정 전 필수 확인 단계
+
+1. **사용처 검색**: 프로시저가 사용되는 모든 곳 확인
+   ```bash
+   # 프로젝트 내 프로시저 사용처 검색
+   grep -r "프로시저명" --include="*.jsx" --include="*.tsx" --include="*.js" --include="*.ts"
+   ```
+
+2. **프론트엔드 기대 구조 확인**: 호출하는 코드에서 어떤 데이터 구조를 기대하는지 분석
+   - 반환 키 이름 (예: `authenticated` vs `members`)
+   - 중첩 객체 구조 (예: `profile.display_name` vs `name`)
+   - 데이터 타입 (JSON vs JSONB vs TABLE)
+
+3. **호환성 검토**: 반환 타입/구조 변경 시 모든 호출 코드에 영향 분석
+
+#### ❌ 금지 사례
+
+```sql
+-- 나쁜 예: 사용처 확인 없이 반환 구조 변경
+-- 기존: { "authenticated": [...], "anonymous": [...] }
+-- 변경: { "members": [...], "guests": [...] }  -- 키 이름 변경으로 프론트엔드 오류 발생!
+
+DROP FUNCTION IF EXISTS sp_partner_participants_q(UUID);
+CREATE FUNCTION sp_partner_participants_q(p_session_id UUID)
+RETURNS JSONB AS $$
+  -- 확인 없이 구조 변경...
+$$ LANGUAGE plpgsql;
+```
+
+#### ✅ 올바른 접근
+
+```sql
+-- 좋은 예: 기존 구조 유지하며 수정
+-- 1. 먼저 grep_search로 사용처 확인
+-- 2. 프론트엔드 코드 분석 (기대 구조 파악)
+-- 3. 호환성 유지하며 수정
+
+CREATE OR REPLACE FUNCTION sp_partner_participants_q(p_session_id UUID)
+RETURNS JSONB AS $$
+BEGIN
+  -- 프론트엔드 기대 구조 유지: { "authenticated": [...], "anonymous": [...] }
+  RETURN jsonb_build_object(
+    'authenticated', v_auth_data,  -- 키 이름 유지
+    'anonymous', v_anon_data       -- 키 이름 유지
+  );
+END;
+$$ LANGUAGE plpgsql;
+```
+
+#### 반환 구조 변경이 필요한 경우
+
+1. **새 프로시저 생성**: 기존 프로시저는 유지하고 새 이름으로 생성
+   ```sql
+   -- 기존: sp_partner_participants_q (유지)
+   -- 신규: sp_partner_participants_v2_q (새 구조)
+   ```
+
+2. **점진적 마이그레이션**: 프론트엔드 코드를 먼저 업데이트 후 기존 프로시저 삭제
+
+3. **버전 관리**: 주석에 변경 이력 기록
+   ```sql
+   /**
+    * 수정이력:
+    *   - 2024-12-11: v2 - 반환 구조 변경 (이전 버전 sp_*_v1_q 유지)
+    */
+   ```
+
+## 체크리스트
+
+프로시저 작성 시 확인 사항:
+
+- [ ] 네이밍 규칙 준수 (`sp_[중간자]_[메인구분]_[q|s|c]`)
+- [ ] 프로시저 상단 주석 작성 (설명, 파라미터, 반환값, 작성일)
+- [ ] `COMMENT ON FUNCTION` 추가
+- [ ] 관련 테이블/컬럼 주석 확인
+- [ ] 동적 쿼리 미사용 (또는 승인 후 안전하게 사용)
+- [ ] 에러 처리 구현
+- [ ] `SECURITY DEFINER` 설정 검토
+- [ ] 성능 최적화 (인덱스, 쿼리 효율)
+- [ ] 마이그레이션 파일 작성
+- [ ] MCP를 통한 배포
+
+### 수정/삭제 시 추가 확인 사항:
+
+- [ ] **사용처 검색 완료** (`grep_search` 또는 `grep -r "프로시저명"`)
+- [ ] **프론트엔드 기대 구조 분석 완료**
+- [ ] **반환 타입/구조 호환성 확인**
+- [ ] 변경이 필요한 경우 새 버전 프로시저 생성 검토
+- [ ] 프론트엔드 코드 업데이트 필요 여부 확인
