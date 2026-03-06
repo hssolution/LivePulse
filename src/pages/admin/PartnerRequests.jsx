@@ -55,44 +55,18 @@ export default function PartnerRequests() {
   }, [filter])
 
   /**
-   * 파트너 신청 목록 조회
+   * 파트너 신청 목록 조회 (프로시저 사용)
    */
   const fetchRequests = async () => {
     setLoading(true)
     try {
-      let query = supabase
-        .from('partner_requests')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (filter !== 'all') {
-        query = query.eq('status', filter)
-      }
-
-      const { data, error } = await query
+      const { data, error } = await supabase.rpc('sp_admin_partner_requests_q', {
+        p_status: filter
+      })
 
       if (error) throw error
 
-      // 각 신청의 user_id로 프로필 이메일 조회
-      if (data && data.length > 0) {
-        const userIds = [...new Set(data.map(r => r.user_id))]
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, email')
-          .in('id', userIds)
-
-        const profileMap = {}
-        profiles?.forEach(p => {
-          profileMap[p.id] = p.email
-        })
-
-        // 각 request에 email 추가
-        data.forEach(r => {
-          r.email = profileMap[r.user_id] || ''
-        })
-      }
-
-      setRequests(data || [])
+      setRequests(data?.requests || [])
     } catch (error) {
       console.error('Error fetching requests:', error)
       toast.error(t('error.generic'))
@@ -102,90 +76,25 @@ export default function PartnerRequests() {
   }
 
   /**
-   * 파트너 신청 승인
+   * 파트너 신청 승인 (프로시저 사용)
    */
   const handleApprove = async (request) => {
     setProcessing(true)
     try {
-      // 1. 신청 상태 업데이트
-      const { error: requestError } = await supabase
-        .from('partner_requests')
-        .update({
-          status: 'approved',
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString()
-        })
-        .eq('id', request.id)
+      const { data, error } = await supabase.rpc('sp_admin_partner_approve_s', {
+        p_request_id: request.id,
+        p_reviewer_id: user.id
+      })
 
-      if (requestError) throw requestError
-
-      // 2. 프로필 user_type을 partner로 변경 (강연자는 display_name도 저장)
-      const profileUpdate = { user_type: 'partner' }
-      if (request.partner_type === 'instructor' && request.display_name) {
-        profileUpdate.display_name = request.display_name
-      }
+      if (error) throw error
       
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update(profileUpdate)
-        .eq('id', request.user_id)
-
-      if (profileError) throw profileError
-
-      // 3. partners 테이블에 공통 정보 추가
-      const { data: partnerData, error: partnerError } = await supabase
-        .from('partners')
-        .insert({
-          profile_id: request.user_id,
-          partner_type: request.partner_type,
-          representative_name: request.representative_name,
-          phone: request.phone,
-          purpose: request.purpose
-        })
-        .select()
-        .single()
-
-      if (partnerError) throw partnerError
-
-      // 4. 타입별 테이블에 추가 정보 저장
-      if (request.partner_type === 'organizer') {
-        const { error: orgError } = await supabase
-          .from('partner_organizers')
-          .insert({
-            partner_id: partnerData.id,
-            company_name: request.company_name,
-            business_number: request.business_number,
-            industry: request.industry,
-            expected_scale: request.expected_scale
-          })
-        if (orgError) throw orgError
-      } else if (request.partner_type === 'agency') {
-        const { error: agencyError } = await supabase
-          .from('partner_agencies')
-          .insert({
-            partner_id: partnerData.id,
-            company_name: request.company_name,
-            business_number: request.business_number,
-            industry: request.industry,
-            client_type: request.client_type,
-            expected_scale: request.expected_scale
-          })
-        if (agencyError) throw agencyError
-      } else if (request.partner_type === 'instructor') {
-        const { error: instructorError } = await supabase
-          .from('partner_instructors')
-          .insert({
-            partner_id: partnerData.id,
-            display_name: request.display_name,
-            specialty: request.specialty,
-            bio: request.bio
-          })
-        if (instructorError) throw instructorError
+      if (data?.success) {
+        toast.success(t('partner.applySuccess'))
+        setDetailOpen(false)
+        fetchRequests()
+      } else {
+        throw new Error(data?.error || 'Unknown error')
       }
-
-      toast.success(t('partner.applySuccess'))
-      setDetailOpen(false)
-      fetchRequests()
     } catch (error) {
       console.error('Error approving request:', error)
       toast.error(t('error.generic'))
@@ -195,7 +104,7 @@ export default function PartnerRequests() {
   }
 
   /**
-   * 파트너 신청 거부
+   * 파트너 신청 거부 (프로시저 사용)
    */
   const handleReject = async () => {
     if (!rejectReason.trim()) {
@@ -205,23 +114,23 @@ export default function PartnerRequests() {
 
     setProcessing(true)
     try {
-      const { error } = await supabase
-        .from('partner_requests')
-        .update({
-          status: 'rejected',
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          reject_reason: rejectReason
-        })
-        .eq('id', selectedRequest.id)
+      const { data, error } = await supabase.rpc('sp_admin_partner_reject_s', {
+        p_request_id: selectedRequest.id,
+        p_reviewer_id: user.id,
+        p_reason: rejectReason
+      })
 
       if (error) throw error
 
-      toast.success(t('admin.reject'))
-      setRejectOpen(false)
-      setDetailOpen(false)
-      setRejectReason('')
-      fetchRequests()
+      if (data?.success) {
+        toast.success(t('admin.reject'))
+        setRejectOpen(false)
+        setDetailOpen(false)
+        setRejectReason('')
+        fetchRequests()
+      } else {
+        throw new Error(data?.error || 'Unknown error')
+      }
     } catch (error) {
       console.error('Error rejecting request:', error)
       toast.error(t('error.generic'))

@@ -76,61 +76,28 @@ export default function Partners() {
   }, [filter, statusFilter])
 
   /**
-   * 파트너 목록 조회
+   * 파트너 목록 조회 (프로시저 사용)
    */
   const fetchPartners = async () => {
     setLoading(true)
     try {
-      let query = supabase
-        .from('partners')
-        .select(`
-          *,
-          profiles:profile_id (email, display_name),
-          partner_organizers (*),
-          partner_agencies (*),
-          partner_instructors (specialty, bio)
-        `)
-        .order('created_at', { ascending: false })
-
-      if (filter !== 'all') {
-        query = query.eq('partner_type', filter)
-      }
-
-      if (statusFilter === 'active') {
-        query = query.eq('is_active', true)
-      } else if (statusFilter === 'inactive') {
-        query = query.eq('is_active', false)
-      }
-
-      const { data, error } = await query
+      const { data, error } = await supabase.rpc('sp_admin_partners_q', {
+        p_type: filter,
+        p_status: statusFilter
+      })
 
       if (error) throw error
       
-      // 마지막 로그인 시간 조회
-      if (data && data.length > 0) {
-        const userIds = data.map(p => p.profile_id).filter(Boolean)
-        const { data: loginLogsData } = await supabase
-          .from('login_logs')
-          .select('user_id, created_at')
-          .in('user_id', userIds)
-          .eq('event_type', 'login_success')
-          .order('created_at', { ascending: false })
-        
-        // 사용자별 마지막 로그인 시간 매핑
-        const lastLoginMap = {}
-        loginLogsData?.forEach(log => {
-          if (!lastLoginMap[log.user_id]) {
-            lastLoginMap[log.user_id] = log.created_at
-          }
-        })
-        
-        // 파트너에 마지막 로그인 시간 매핑
-        data.forEach(p => {
-          p.lastLoginAt = lastLoginMap[p.profile_id] || null
-        })
+      if (data?.partners) {
+        // 프로시저 결과 매핑
+        const mappedPartners = data.partners.map(p => ({
+          ...p,
+          lastLoginAt: p.last_login_at
+        }))
+        setPartners(mappedPartners)
+      } else {
+        setPartners([])
       }
-      
-      setPartners(data || [])
     } catch (error) {
       console.error('Error fetching partners:', error)
       toast.error(t('error.generic'))
@@ -140,7 +107,7 @@ export default function Partners() {
   }
 
   /**
-   * 파트너 활성화/비활성화 토글
+   * 파트너 활성화/비활성화 토글 (프로시저 사용)
    */
   const handleToggleActive = async () => {
     if (!selectedPartner) return
@@ -149,36 +116,21 @@ export default function Partners() {
     try {
       const newStatus = !selectedPartner.is_active
 
-      // 1. partners 테이블 업데이트
-      const { error: partnerError } = await supabase
-        .from('partners')
-        .update({ is_active: newStatus })
-        .eq('id', selectedPartner.id)
+      const { data, error } = await supabase.rpc('sp_admin_partner_toggle_s', {
+        p_partner_id: selectedPartner.id,
+        p_activate: newStatus
+      })
 
-      if (partnerError) throw partnerError
-
-      // 2. 비활성화 시 profiles의 user_type도 변경
-      if (!newStatus) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ user_type: 'user' })
-          .eq('id', selectedPartner.profile_id)
-
-        if (profileError) throw profileError
+      if (error) throw error
+      
+      if (data?.success) {
+        toast.success(newStatus ? t('partner.activated') : t('partner.deactivated'))
+        setToggleOpen(false)
+        setDetailOpen(false)
+        fetchPartners()
       } else {
-        // 활성화 시 다시 partner로 변경
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ user_type: 'partner' })
-          .eq('id', selectedPartner.profile_id)
-
-        if (profileError) throw profileError
+        throw new Error(data?.error || 'Unknown error')
       }
-
-      toast.success(newStatus ? t('partner.activated') : t('partner.deactivated'))
-      setToggleOpen(false)
-      setDetailOpen(false)
-      fetchPartners()
     } catch (error) {
       console.error('Error toggling partner status:', error)
       toast.error(t('error.generic'))

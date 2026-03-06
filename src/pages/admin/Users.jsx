@@ -246,115 +246,28 @@ export default function Users() {
     fetchUsers()
   }, [])
 
+  /**
+   * 회원 목록 조회 (프로시저 사용)
+   */
   const fetchUsers = async () => {
     try {
-      const { data: usersData, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const { data: result, error } = await supabase.rpc('sp_admin_users_q')
 
       if (error) throw error
       
-      if (usersData && usersData.length > 0) {
-        const userIds = usersData.map(u => u.id).filter(Boolean)
+      if (result?.users) {
+        // 프로시저에서 가져온 데이터 매핑
+        const usersData = result.users.map(u => ({
+          ...u,
+          lastLoginAt: u.last_login_at,
+          ownedPartner: u.owned_partner,
+          memberOfPartners: u.member_of_partners || []
+        }))
         
-        // 1. 마지막 로그인 시간 조회
-        const { data: loginLogsData } = await supabase
-          .from('login_logs')
-          .select('user_id, created_at')
-          .in('user_id', userIds)
-          .eq('event_type', 'login_success')
-          .order('created_at', { ascending: false })
-        
-        // 사용자별 마지막 로그인 시간 매핑
-        const lastLoginMap = {}
-        loginLogsData?.forEach(log => {
-          if (!lastLoginMap[log.user_id]) {
-            lastLoginMap[log.user_id] = log.created_at
-          }
-        })
-        
-        // 2. 소유한 파트너 정보 조회
-        const { data: partnersData } = await supabase
-          .from('partners')
-          .select(`
-            id,
-            profile_id,
-            partner_type,
-            representative_name,
-            is_active,
-            partner_organizers(company_name),
-            partner_agencies(company_name),
-            partner_instructors(specialty)
-          `)
-          .in('profile_id', userIds)
-        
-        // 소유 파트너 매핑
-        const ownedPartnerMap = {}
-        partnersData?.forEach(p => {
-          const partnerName = p.partner_organizers?.[0]?.company_name || 
-                              p.partner_agencies?.[0]?.company_name || 
-                              p.representative_name
-          ownedPartnerMap[p.profile_id] = {
-            id: p.id,
-            name: partnerName,
-            type: p.partner_type,
-            is_active: p.is_active
-          }
-        })
-        
-        // 3. 소속된 파트너 정보 조회 (멤버로)
-        const { data: membershipData } = await supabase
-          .from('partner_members')
-          .select(`
-            user_id,
-            role,
-            status,
-            partner:partners(
-              id,
-              profile_id,
-              partner_type,
-              representative_name,
-              is_active,
-              partner_organizers(company_name),
-              partner_agencies(company_name)
-            )
-          `)
-          .in('user_id', userIds)
-          .eq('status', 'accepted')
-        
-        // 소속 파트너 매핑 (여러 개일 수 있음, 단 소유 파트너는 제외)
-        const memberOfMap = {}
-        membershipData?.forEach(m => {
-          // 본인이 소유한 파트너는 memberOfPartners에서 제외 (ownedPartner에서 이미 표시)
-          if (m.partner?.profile_id === m.user_id) {
-            return
-          }
-          
-          if (!memberOfMap[m.user_id]) {
-            memberOfMap[m.user_id] = []
-          }
-          const partnerName = m.partner?.partner_organizers?.[0]?.company_name || 
-                              m.partner?.partner_agencies?.[0]?.company_name || 
-                              m.partner?.representative_name
-          memberOfMap[m.user_id].push({
-            id: m.partner?.id,
-            name: partnerName,
-            type: m.partner?.partner_type,
-            role: m.role,
-            is_active: m.partner?.is_active
-          })
-        })
-        
-        // 회원에 정보 매핑
-        usersData.forEach(u => {
-          u.lastLoginAt = lastLoginMap[u.id] || null
-          u.ownedPartner = ownedPartnerMap[u.id] || null
-          u.memberOfPartners = memberOfMap[u.id] || []
-        })
+        setData(usersData)
+      } else {
+        setData([])
       }
-      
-      setData(usersData || [])
     } catch (error) {
       console.error('Error fetching users:', error)
     } finally {

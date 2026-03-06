@@ -74,68 +74,24 @@ export default function AdminSessions() {
   const [partnerDialogOpen, setPartnerDialogOpen] = useState(false)
 
   /**
-   * 데이터 로드
+   * 데이터 로드 (프로시저 사용)
    */
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      // 파트너 목록 조회 (필터 드롭다운용)
-      const { data: partnersData } = await supabase
-        .from('partners')
-        .select(`
-          id,
-          representative_name,
-          partner_type,
-          partner_organizers(company_name),
-          partner_agencies(company_name)
-        `)
-        .eq('is_active', true)
-        .order('representative_name')
+      const { data, error } = await supabase.rpc('sp_admin_sessions_q', {
+        p_status: statusFilter,
+        p_partner_id: partnerFilter === 'all' ? null : partnerFilter,
+        p_search: searchQuery || null
+      })
       
-      // 파트너 이름 가공
-      const processedPartners = (partnersData || []).map(p => ({
-        id: p.id,
-        name: p.partner_organizers?.[0]?.company_name || 
-              p.partner_agencies?.[0]?.company_name || 
-              p.representative_name,
-        type: p.partner_type
-      }))
-      setPartners(processedPartners)
+      if (error) throw error
       
-      // 세션 목록 조회
-      let query = supabase
-        .from('sessions')
-        .select(`
-          *,
-          partner:partners(
-            id,
-            representative_name,
-            partner_type,
-            is_active,
-            profile:profiles(email, display_name),
-            partner_organizers(company_name),
-            partner_agencies(company_name)
-          )
-        `)
-        .order('created_at', { ascending: false })
+      // 파트너 목록 설정 (필터용)
+      setPartners(data?.partners || [])
       
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter)
-      }
-      
-      if (partnerFilter !== 'all') {
-        query = query.eq('partner_id', partnerFilter)
-      }
-      
-      if (searchQuery) {
-        query = query.or(`title.ilike.%${searchQuery}%,code.ilike.%${searchQuery}%,venue_name.ilike.%${searchQuery}%`)
-      }
-      
-      const { data: sessionsData, error: sessionsError } = await query
-      
-      if (sessionsError) throw sessionsError
-      
-      setSessions(sessionsData || [])
+      // 세션 목록 설정
+      setSessions(data?.sessions || [])
       
     } catch (error) {
       console.error('Error loading sessions:', error)

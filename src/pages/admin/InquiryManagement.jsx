@@ -60,29 +60,14 @@ export default function InquiryManagement() {
   const [loadingReplies, setLoadingReplies] = useState(false)
 
   /**
-   * 문의 목록 로드
+   * 문의 목록 로드 (프로시저 사용)
    */
   const loadInquiries = useCallback(async () => {
     setLoading(true)
     try {
-      let query = supabase
-        .from('inquiries')
-        .select(`
-          *,
-          partner:partners(
-            id, 
-            partner_type, 
-            representative_name,
-            profile:profiles(email)
-          )
-        `)
-        .order('created_at', { ascending: false })
-      
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter)
-      }
-      
-      const { data, error } = await query
+      const { data, error } = await supabase.rpc('sp_admin_inquiries_q', {
+        p_status: statusFilter === 'all' ? null : statusFilter
+      })
       
       if (error) throw error
       setInquiries(data || [])
@@ -99,19 +84,14 @@ export default function InquiryManagement() {
   }, [loadInquiries])
 
   /**
-   * 답변 로드
+   * 답변 로드 (프로시저 사용)
    */
   const loadReplies = async (inquiryId) => {
     setLoadingReplies(true)
     try {
-      const { data, error } = await supabase
-        .from('inquiry_replies')
-        .select(`
-          *,
-          user:profiles(email, display_name)
-        `)
-        .eq('inquiry_id', inquiryId)
-        .order('created_at', { ascending: true })
+      const { data, error } = await supabase.rpc('sp_admin_inquiry_replies_q', {
+        p_inquiry_id: inquiryId
+      })
       
       if (error) throw error
       setReplies(data || [])
@@ -133,39 +113,32 @@ export default function InquiryManagement() {
   }
 
   /**
-   * 답변 전송
+   * 답변 전송 (프로시저 사용)
    */
   const handleSendReply = async () => {
     if (!newReply.trim()) return
     
     setSending(true)
     try {
-      // 답변 등록
-      const { error: replyError } = await supabase
-        .from('inquiry_replies')
-        .insert({
-          inquiry_id: selectedInquiry.id,
-          user_id: user.id,
-          content: newReply.trim(),
-          is_admin: true
-        })
+      const { data, error } = await supabase.rpc('sp_admin_inquiry_reply_s', {
+        p_inquiry_id: selectedInquiry.id,
+        p_user_id: user.id,
+        p_content: newReply.trim()
+      })
       
-      if (replyError) throw replyError
+      if (error) throw error
       
-      // 상태 업데이트 (처리중으로)
-      if (selectedInquiry.status === 'pending') {
-        await supabase
-          .from('inquiries')
-          .update({ status: 'in_progress' })
-          .eq('id', selectedInquiry.id)
+      if (data?.success) {
+        // 상태가 변경되었으면 UI 업데이트
+        if (data.new_status && data.new_status !== selectedInquiry.status) {
+          setSelectedInquiry({ ...selectedInquiry, status: data.new_status })
+        }
         
-        setSelectedInquiry({ ...selectedInquiry, status: 'in_progress' })
+        setNewReply('')
+        loadReplies(selectedInquiry.id)
+        loadInquiries()
+        toast.success(t('inquiry.replySent'))
       }
-      
-      setNewReply('')
-      loadReplies(selectedInquiry.id)
-      loadInquiries()
-      toast.success(t('inquiry.replySent'))
     } catch (error) {
       console.error('Error sending reply:', error)
       toast.error(t('error.saveFailed'))
@@ -175,20 +148,22 @@ export default function InquiryManagement() {
   }
 
   /**
-   * 상태 변경
+   * 상태 변경 (프로시저 사용)
    */
   const handleStatusChange = async (status) => {
     try {
-      const { error } = await supabase
-        .from('inquiries')
-        .update({ status })
-        .eq('id', selectedInquiry.id)
+      const { data, error } = await supabase.rpc('sp_admin_inquiry_status_s', {
+        p_inquiry_id: selectedInquiry.id,
+        p_status: status
+      })
       
       if (error) throw error
       
-      setSelectedInquiry({ ...selectedInquiry, status })
-      loadInquiries()
-      toast.success(t('inquiry.statusUpdated'))
+      if (data?.success) {
+        setSelectedInquiry({ ...selectedInquiry, status })
+        loadInquiries()
+        toast.success(t('inquiry.statusUpdated'))
+      }
     } catch (error) {
       console.error('Error updating status:', error)
       toast.error(t('error.updateFailed'))

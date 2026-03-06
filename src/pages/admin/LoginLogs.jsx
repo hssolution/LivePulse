@@ -77,40 +77,23 @@ export default function LoginLogs() {
   const [selectedLog, setSelectedLog] = useState(null)
 
   /**
-   * 로그인 로그 로드
+   * 로그인 로그 로드 (프로시저 사용)
    */
   const loadLogs = useCallback(async () => {
     setLoading(true)
     try {
-      let query = supabase
-        .from('login_logs')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range((page - 1) * pageSize, page * pageSize - 1)
-      
-      // 날짜 범위 필터
-      if (filterDateRange !== 'all') {
-        const daysAgo = new Date()
-        daysAgo.setDate(daysAgo.getDate() - parseInt(filterDateRange))
-        query = query.gte('created_at', daysAgo.toISOString())
-      }
-      
-      // 이벤트 타입 필터
-      if (filterEventType !== 'all') {
-        query = query.eq('event_type', filterEventType)
-      }
-      
-      // 이메일 검색
-      if (searchEmail) {
-        query = query.ilike('email', `%${searchEmail}%`)
-      }
-      
-      const { data, error, count } = await query
+      const { data, error } = await supabase.rpc('sp_admin_login_logs_q', {
+        p_page: page,
+        p_page_size: pageSize,
+        p_event_type: filterEventType,
+        p_days: filterDateRange === 'all' ? 0 : parseInt(filterDateRange),
+        p_search_email: searchEmail || null
+      })
       
       if (error) throw error
       
-      setLogs(data || [])
-      setTotalCount(count || 0)
+      setLogs(data?.logs || [])
+      setTotalCount(data?.total || 0)
     } catch (error) {
       console.error('Error loading login logs:', error)
     } finally {
@@ -135,18 +118,12 @@ export default function LoginLogs() {
   }, [filterDateRange])
 
   /**
-   * 활성 세션 로드
+   * 활성 세션 로드 (프로시저 사용)
    */
   const loadActiveSessions = async () => {
     setLoadingActiveSessions(true)
     try {
-      const { data, error } = await supabase
-        .from('active_sessions')
-        .select(`
-          *,
-          user:user_id (email)
-        `)
-        .order('last_activity_at', { ascending: false })
+      const { data, error } = await supabase.rpc('sp_admin_active_sessions_q')
       
       if (error) throw error
       setActiveSessions(data || [])
@@ -222,32 +199,22 @@ export default function LoginLogs() {
   }
 
   /**
-   * 세션 강제 종료
+   * 세션 강제 종료 (프로시저 사용)
    */
   const handleForceEndSession = async (session) => {
     if (!confirm(t('loginLog.confirmForceLogout'))) return
     
     try {
-      const { error } = await supabase
-        .from('active_sessions')
-        .delete()
-        .eq('id', session.id)
+      const { data, error } = await supabase.rpc('sp_admin_force_logout_s', {
+        p_session_id: session.id
+      })
       
       if (error) throw error
       
-      // 로그 기록
-      await supabase.rpc('log_login_event', {
-        p_email: session.user?.email || 'unknown',
-        p_event_type: 'forced_logout',
-        p_failure_reason: 'admin_action',
-        p_ip_address: session.ip_address,
-        p_user_agent: session.user_agent,
-        p_device_info: session.device_info,
-        p_session_id: session.session_token
-      })
-      
-      loadActiveSessions()
-      loadLogs()
+      if (data?.success) {
+        loadActiveSessions()
+        loadLogs()
+      }
     } catch (error) {
       console.error('Error force ending session:', error)
     }

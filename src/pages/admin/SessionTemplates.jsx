@@ -143,16 +143,14 @@ export default function SessionTemplates() {
   const [deleteType, setDeleteType] = useState('template') // 'template' | 'field'
 
   /**
-   * 템플릿 목록 로드 (screen_type 필터링)
+   * 템플릿 목록 로드 (프로시저 사용)
    */
   const loadTemplates = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('session_templates')
-        .select('*, session_template_fields(count)')
-        .eq('screen_type', screenType)
-        .order('sort_order')
+      const { data, error } = await supabase.rpc('sp_admin_templates_q', {
+        p_screen_type: screenType
+      })
       
       if (error) throw error
       setTemplates(data || [])
@@ -169,15 +167,13 @@ export default function SessionTemplates() {
   }, [loadTemplates])
 
   /**
-   * 템플릿 필드 로드
+   * 템플릿 필드 로드 (프로시저 사용)
    */
   const loadFields = async (templateId) => {
     try {
-      const { data, error } = await supabase
-        .from('session_template_fields')
-        .select('*')
-        .eq('template_id', templateId)
-        .order('sort_order')
+      const { data, error } = await supabase.rpc('sp_admin_template_fields_q', {
+        p_template_id: templateId
+      })
       
       if (error) throw error
       setFields(data || [])
@@ -188,7 +184,7 @@ export default function SessionTemplates() {
   }
 
   /**
-   * 템플릿 저장
+   * 템플릿 저장 (프로시저 사용)
    */
   const handleSaveTemplate = async () => {
     if (!templateForm.name.trim() || !templateForm.code.trim()) {
@@ -197,40 +193,25 @@ export default function SessionTemplates() {
     }
     
     try {
-      if (editingTemplate) {
-        // 수정
-        const { error } = await supabase
-          .from('session_templates')
-          .update({
-            name: templateForm.name,
-            code: templateForm.code,
-            description: templateForm.description || null,
-            is_active: templateForm.is_active,
-            sort_order: templateForm.sort_order
-          })
-          .eq('id', editingTemplate.id)
-        
-        if (error) throw error
-        toast.success(t('common.saved'))
-      } else {
-        // 생성 (screen_type 포함)
-        const { error } = await supabase
-          .from('session_templates')
-          .insert({
-            name: templateForm.name,
-            code: templateForm.code,
-            description: templateForm.description || null,
-            is_active: templateForm.is_active,
-            sort_order: templateForm.sort_order,
-            screen_type: screenType
-          })
-        
-        if (error) throw error
-        toast.success(t('template.created'))
-      }
+      const { data, error } = await supabase.rpc('sp_admin_template_s', {
+        p_id: editingTemplate?.id || null,
+        p_name: templateForm.name,
+        p_code: templateForm.code,
+        p_description: templateForm.description || null,
+        p_screen_type: screenType,
+        p_is_active: templateForm.is_active,
+        p_sort_order: templateForm.sort_order
+      })
       
-      setEditDialogOpen(false)
-      loadTemplates()
+      if (error) throw error
+      
+      if (data?.success) {
+        toast.success(editingTemplate ? t('common.saved') : t('template.created'))
+        setEditDialogOpen(false)
+        loadTemplates()
+      } else {
+        throw new Error(data?.error || 'Unknown error')
+      }
     } catch (error) {
       console.error('Error saving template:', error)
       toast.error(t('error.saveFailed'))
@@ -238,7 +219,7 @@ export default function SessionTemplates() {
   }
 
   /**
-   * 필드 저장
+   * 필드 저장 (프로시저 사용)
    */
   const handleSaveField = async () => {
     if (!fieldForm.field_key.trim() || !fieldForm.field_name.trim()) {
@@ -247,45 +228,28 @@ export default function SessionTemplates() {
     }
     
     try {
-      if (editingField) {
-        // 수정
-        const { error } = await supabase
-          .from('session_template_fields')
-          .update({
-            field_key: fieldForm.field_key,
-            field_name: fieldForm.field_name,
-            field_type: fieldForm.field_type,
-            is_required: fieldForm.is_required,
-            max_width: fieldForm.max_width || null,
-            description: fieldForm.description || null,
-            sort_order: fieldForm.sort_order
-          })
-          .eq('id', editingField.id)
-        
-        if (error) throw error
-        toast.success(t('common.saved'))
-      } else {
-        // 생성
-        const { error } = await supabase
-          .from('session_template_fields')
-          .insert({
-            template_id: selectedTemplate.id,
-            field_key: fieldForm.field_key,
-            field_name: fieldForm.field_name,
-            field_type: fieldForm.field_type,
-            is_required: fieldForm.is_required,
-            max_width: fieldForm.max_width || null,
-            description: fieldForm.description || null,
-            sort_order: fieldForm.sort_order
-          })
-        
-        if (error) throw error
-        toast.success(t('template.fieldCreated'))
-      }
+      const { data, error } = await supabase.rpc('sp_admin_template_field_s', {
+        p_id: editingField?.id || null,
+        p_template_id: selectedTemplate.id,
+        p_field_key: fieldForm.field_key,
+        p_field_name: fieldForm.field_name,
+        p_field_type: fieldForm.field_type,
+        p_is_required: fieldForm.is_required,
+        p_max_width: fieldForm.max_width || null,
+        p_description: fieldForm.description || null,
+        p_sort_order: fieldForm.sort_order
+      })
       
-      setEditFieldDialogOpen(false)
-      loadFields(selectedTemplate.id)
-      loadTemplates() // 필드 수 업데이트
+      if (error) throw error
+      
+      if (data?.success) {
+        toast.success(editingField ? t('common.saved') : t('template.fieldCreated'))
+        setEditFieldDialogOpen(false)
+        loadFields(selectedTemplate.id)
+        loadTemplates()
+      } else {
+        throw new Error(data?.error || 'Unknown error')
+      }
     } catch (error) {
       console.error('Error saving field:', error)
       toast.error(t('error.saveFailed'))
@@ -293,29 +257,30 @@ export default function SessionTemplates() {
   }
 
   /**
-   * 삭제 처리
+   * 삭제 처리 (프로시저 사용)
    */
   const handleDelete = async () => {
     try {
+      let data, error;
+      
       if (deleteType === 'template') {
-        const { error } = await supabase
-          .from('session_templates')
-          .delete()
-          .eq('id', deletingItem.id)
-        
-        if (error) throw error
-        toast.success(t('template.deleted'))
+        ({ data, error } = await supabase.rpc('sp_admin_template_d', {
+          p_id: deletingItem.id
+        }))
+      } else {
+        ({ data, error } = await supabase.rpc('sp_admin_template_field_d', {
+          p_id: deletingItem.id
+        }))
+      }
+      
+      if (error) throw error
+      
+      if (data?.success) {
+        toast.success(deleteType === 'template' ? t('template.deleted') : t('template.fieldDeleted'))
+        if (deleteType === 'field') loadFields(selectedTemplate.id)
         loadTemplates()
       } else {
-        const { error } = await supabase
-          .from('session_template_fields')
-          .delete()
-          .eq('id', deletingItem.id)
-        
-        if (error) throw error
-        toast.success(t('template.fieldDeleted'))
-        loadFields(selectedTemplate.id)
-        loadTemplates()
+        throw new Error(data?.error || 'Unknown error')
       }
       
       setDeleteDialogOpen(false)
@@ -326,18 +291,22 @@ export default function SessionTemplates() {
   }
 
   /**
-   * 템플릿 활성화 토글
+   * 템플릿 활성화 토글 (프로시저 사용)
    */
   const handleToggleActive = async (template) => {
     try {
-      const { error } = await supabase
-        .from('session_templates')
-        .update({ is_active: !template.is_active })
-        .eq('id', template.id)
+      const { data, error } = await supabase.rpc('sp_admin_template_toggle_s', {
+        p_id: template.id
+      })
       
       if (error) throw error
-      toast.success(template.is_active ? t('template.deactivated') : t('template.activated'))
-      loadTemplates()
+      
+      if (data?.success) {
+        toast.success(data.is_active ? t('template.activated') : t('template.deactivated'))
+        loadTemplates()
+      } else {
+        throw new Error(data?.error || 'Unknown error')
+      }
     } catch (error) {
       console.error('Error toggling active:', error)
       toast.error(t('error.updateFailed'))

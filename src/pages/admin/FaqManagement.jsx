@@ -196,16 +196,14 @@ export default function FaqManagement() {
   ]
 
   /**
-   * FAQ 목록 로드
+   * FAQ 목록 로드 (프로시저 사용)
    */
   const loadFaqs = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('faqs')
-        .select('*')
-        .eq('category', activeCategory)
-        .order('display_order', { ascending: true })
+      const { data, error } = await supabase.rpc('sp_admin_faqs_q', {
+        p_category: activeCategory
+      })
       
       if (error) throw error
       setFaqs(data || [])
@@ -250,7 +248,7 @@ export default function FaqManagement() {
   }
 
   /**
-   * FAQ 저장
+   * FAQ 저장 (프로시저 사용)
    */
   const handleSave = async () => {
     if (!faqForm.question.trim() || !faqForm.answer.trim()) {
@@ -260,39 +258,25 @@ export default function FaqManagement() {
 
     setSaving(true)
     try {
-      if (editingFaq) {
-        // 수정
-        const { error } = await supabase
-          .from('faqs')
-          .update({
-            category: faqForm.category,
-            question: faqForm.question,
-            answer: faqForm.answer,
-            is_active: faqForm.is_active
-          })
-          .eq('id', editingFaq.id)
-        
-        if (error) throw error
-        toast.success(t('common.saved'))
-      } else {
-        // 새로 생성
-        const { error } = await supabase
-          .from('faqs')
-          .insert({
-            category: faqForm.category,
-            question: faqForm.question,
-            answer: faqForm.answer,
-            is_active: faqForm.is_active,
-            display_order: faqs.length,
-            created_by: user.id
-          })
-        
-        if (error) throw error
-        toast.success(t('faq.created'))
-      }
+      const { data, error } = await supabase.rpc('sp_admin_faq_s', {
+        p_id: editingFaq?.id || null,
+        p_category: faqForm.category,
+        p_question: faqForm.question,
+        p_answer: faqForm.answer,
+        p_is_active: faqForm.is_active,
+        p_display_order: editingFaq ? editingFaq.display_order : faqs.length,
+        p_created_by: editingFaq ? null : user.id
+      })
       
-      setShowEditDialog(false)
-      loadFaqs()
+      if (error) throw error
+      
+      if (data?.success) {
+        toast.success(editingFaq ? t('common.saved') : t('faq.created'))
+        setShowEditDialog(false)
+        loadFaqs()
+      } else {
+        throw new Error(data?.error || 'Unknown error')
+      }
     } catch (error) {
       console.error('Error saving FAQ:', error)
       toast.error(t('error.saveFailed'))
@@ -302,18 +286,20 @@ export default function FaqManagement() {
   }
 
   /**
-   * 활성화 토글
+   * 활성화 토글 (프로시저 사용)
    */
   const handleToggle = async (faq) => {
     try {
-      const { error } = await supabase
-        .from('faqs')
-        .update({ is_active: !faq.is_active })
-        .eq('id', faq.id)
+      const { data, error } = await supabase.rpc('sp_admin_faq_toggle_s', {
+        p_id: faq.id
+      })
       
       if (error) throw error
-      toast.success(faq.is_active ? t('faq.hidden') : t('faq.shown'))
-      loadFaqs()
+      
+      if (data?.success) {
+        toast.success(data.is_active ? t('faq.shown') : t('faq.hidden'))
+        loadFaqs()
+      }
     } catch (error) {
       console.error('Error toggling FAQ:', error)
       toast.error(t('error.updateFailed'))
@@ -321,22 +307,24 @@ export default function FaqManagement() {
   }
 
   /**
-   * FAQ 삭제
+   * FAQ 삭제 (프로시저 사용)
    */
   const handleDelete = async () => {
     if (!deletingFaq) return
     
     try {
-      const { error } = await supabase
-        .from('faqs')
-        .delete()
-        .eq('id', deletingFaq.id)
+      const { data, error } = await supabase.rpc('sp_admin_faq_d', {
+        p_id: deletingFaq.id
+      })
       
       if (error) throw error
-      toast.success(t('common.deleted'))
-      setShowDeleteDialog(false)
-      setDeletingFaq(null)
-      loadFaqs()
+      
+      if (data?.success) {
+        toast.success(t('common.deleted'))
+        setShowDeleteDialog(false)
+        setDeletingFaq(null)
+        loadFaqs()
+      }
     } catch (error) {
       console.error('Error deleting FAQ:', error)
       toast.error(t('error.deleteFailed'))
@@ -344,7 +332,7 @@ export default function FaqManagement() {
   }
 
   /**
-   * 드래그 앤 드랍 완료
+   * 드래그 앤 드롭 완료 (프로시저 사용)
    */
   const handleDragEnd = async (event) => {
     const { active, over } = event
@@ -358,13 +346,13 @@ export default function FaqManagement() {
     setFaqs(newFaqs)
     
     try {
-      for (let i = 0; i < newFaqs.length; i++) {
-        await supabase
-          .from('faqs')
-          .update({ display_order: i })
-          .eq('id', newFaqs[i].id)
-      }
-      toast.success(t('faq.orderUpdated'))
+      const orders = newFaqs.map((f, i) => ({ id: f.id, order: i }))
+      const { data, error } = await supabase.rpc('sp_admin_faq_reorder_s', {
+        p_orders: orders
+      })
+      
+      if (error) throw error
+      if (data?.success) toast.success(t('faq.orderUpdated'))
     } catch (error) {
       console.error('Error updating order:', error)
       loadFaqs()

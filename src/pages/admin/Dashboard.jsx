@@ -46,6 +46,70 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
       try {
         setLoading(true)
+        
+        // 단일 프로시저 호출로 모든 데이터 조회
+        const { data, error } = await supabase.rpc('sp_admin_dashboard_q')
+        
+        if (error) throw error
+        
+        if (data && !data.error) {
+          // 통계 데이터 설정
+          setStats(data.stats || {
+            liveSessions: 0,
+            todaySessions: 0,
+            totalParticipants: 0,
+            activePartners: 0,
+            newUsersThisMonth: 0,
+            avgParticipants: 0,
+            loginFailureRate: 0
+          })
+          
+          // 차트 데이터 설정 (번역 키 적용)
+          setSessionTrend(data.sessionTrend || [])
+          
+          // 사용자 유형 번역 적용
+          const userTypeMap = {
+            'user': t('user.type.user', '일반 사용자'),
+            'partner': t('user.type.partner', '파트너'),
+            'admin': t('user.type.admin', '관리자')
+          }
+          setUserTypeDist((data.userTypeDist || []).map(item => ({
+            ...item,
+            name: userTypeMap[item.name] || item.name
+          })))
+          
+          // 세션 상태 번역 적용
+          const statusMap = {
+            'draft': t('status.draft', '준비중'),
+            'published': t('status.published', '공개됨'),
+            'active': t('status.active', '진행중'),
+            'ended': t('status.ended', '종료됨')
+          }
+          setSessionStatusDist((data.sessionStatusDist || []).map(item => ({
+            ...item,
+            name: statusMap[item.name] || item.name
+          })))
+          
+          // 승인 상태 번역 적용
+          const approvalMap = {
+            'approved': t('status.approved', '승인됨'),
+            'pending': t('status.pending', '대기중'),
+            'rejected': t('status.rejected', '거절됨')
+          }
+          setApprovalStats((data.approvalStats || []).map(item => ({
+            ...item,
+            name: approvalMap[item.name] || item.name
+          })))
+          
+          setTopSessions(data.topSessions || [])
+          setTopPartners(data.topPartners || [])
+          setLanguageDist(data.languageDist || [])
+          setPeakHours(data.peakHours || [])
+        } else if (data && data.error) {
+          console.error('Dashboard data error:', data.error, data.message)
+        }
+
+        /* 기존 코드 (프로시저로 대체됨)
         const today = new Date()
         const todayStart = startOfDay(today).toISOString()
         const todayEnd = endOfDay(today).toISOString()
@@ -74,99 +138,7 @@ export default function Dashboard() {
           supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', monthStart)
         ])
 
-        // Stats Calculation
-        const totalPart = todaySessionsData.data?.reduce((sum, s) => sum + (s.participant_count || 0), 0) || 0
-        const activePartnerIds = new Set(todayLogins.data?.map(l => l.user_id))
-        const failures = loginLogs.data?.filter(l => l.event_type === 'login_failed').length || 0
-        const totalLogs = loginLogs.data?.length || 1
-        const failureRate = Math.round((failures / totalLogs) * 100)
-        const totalSessionCount = allSessions.data?.length || 1
-        const globalTotalPart = allSessions.data?.reduce((sum, s) => sum + (s.participant_count || 0), 0) || 0
-        const avgPart = Math.round(globalTotalPart / totalSessionCount)
-
-        setStats({
-          liveSessions: activeSessions.count || 0,
-          todaySessions: todaySessionsData.data?.length || 0,
-          totalParticipants: totalPart,
-          activePartners: activePartnerIds.size,
-          newUsersThisMonth: monthUsers.count || 0,
-          avgParticipants: avgPart,
-          loginFailureRate: failureRate
-        })
-
-        // Data Processing
-        const uTypeCounts = { user: 0, partner: 0, admin: 0 }
-        const langCounts = {}
-        allProfiles.data?.forEach(p => {
-          if (uTypeCounts[p.user_type] !== undefined) uTypeCounts[p.user_type]++
-          const lang = p.preferred_language || 'ko'
-          langCounts[lang] = (langCounts[lang] || 0) + 1
-        })
-        // 사용자 유형 번역 적용
-        setUserTypeDist([
-          { name: t('user.type.user', '일반 사용자'), value: uTypeCounts.user },
-          { name: t('user.type.partner', '파트너'), value: uTypeCounts.partner },
-          { name: t('user.type.admin', '관리자'), value: uTypeCounts.admin }
-        ])
-        setLanguageDist(Object.entries(langCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5))
-
-        const sStatusCounts = { draft: 0, published: 0, active: 0, ended: 0 }
-        allSessions.data?.forEach(s => {
-          const st = s.status || 'draft'
-          if (sStatusCounts[st] !== undefined) sStatusCounts[st]++
-        })
-        setSessionStatusDist([
-          { name: t('status.draft', '준비중'), value: sStatusCounts.draft },
-          { name: t('status.published', '공개됨'), value: sStatusCounts.published },
-          { name: t('status.active', '진행중'), value: sStatusCounts.active },
-          { name: t('status.ended', '종료됨'), value: sStatusCounts.ended }
-        ])
-
-        setTopSessions([...(allSessions.data || [])].sort((a, b) => (b.participant_count || 0) - (a.participant_count || 0)).slice(0, 5))
-
-        const partnerSessionCounts = {}
-        allSessions.data?.forEach(s => {
-          if (s.partner_id) {
-            const pName = s.partners?.representative_name || 'Unknown'
-            partnerSessionCounts[pName] = (partnerSessionCounts[pName] || 0) + 1
-          }
-        })
-        setTopPartners(Object.entries(partnerSessionCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5))
-
-        const hours = new Array(24).fill(0)
-        loginLogs.data?.forEach(l => {
-          const h = getHours(parseISO(l.created_at))
-          hours[h]++
-        })
-        setPeakHours(hours.map((count, hour) => ({ hour: `${hour}시`, count })))
-
-        const reqCounts = { pending: 0, approved: 0, rejected: 0 }
-        partnerRequests.data?.forEach(r => {
-          if (reqCounts[r.status] !== undefined) reqCounts[r.status]++
-        })
-        // 승인 상태 번역 적용
-        setApprovalStats([
-          { name: t('status.approved', '승인됨'), value: reqCounts.approved, fill: STATUS_COLORS.approved },
-          { name: t('status.pending', '대기중'), value: reqCounts.pending, fill: STATUS_COLORS.pending },
-          { name: t('status.rejected', '거절됨'), value: reqCounts.rejected, fill: STATUS_COLORS.rejected }
-        ].filter(item => item.value > 0))
-
-        const { data: sessionsHistory } = await supabase
-          .from('sessions').select('start_at, participant_count').gte('start_at', twoWeeksAgo).lte('start_at', todayEnd)
-        
-        const sessionMap = new Map()
-        for (let i = 0; i < 14; i++) {
-          const d = subDays(today, 13 - i); const dateStr = format(d, 'MM/dd')
-          sessionMap.set(dateStr, { date: dateStr, sessions: 0, participants: 0 })
-        }
-        sessionsHistory?.forEach(s => {
-          const dateStr = format(parseISO(s.start_at), 'MM/dd')
-          if (sessionMap.has(dateStr)) {
-            const c = sessionMap.get(dateStr)
-            c.sessions++; c.participants += (s.participant_count || 0)
-          }
-        })
-        setSessionTrend(Array.from(sessionMap.values()))
+        */
 
       } catch (error) {
         console.error('Dashboard Data Error:', error)
