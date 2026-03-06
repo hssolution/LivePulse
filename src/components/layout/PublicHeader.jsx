@@ -31,7 +31,6 @@ export function PublicHeader() {
   const { theme, toggleTheme } = usePublicTheme()
   const { t } = useLanguage()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [isPartnerInDB, setIsPartnerInDB] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
 
   // 스크롤 감지
@@ -43,31 +42,8 @@ export function PublicHeader() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // DB에서 직접 user_type 확인
-  useEffect(() => {
-    const checkPartnerStatus = async () => {
-      if (!user) {
-        setIsPartnerInDB(false)
-        return
-      }
-      
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('user_type')
-          .eq('id', user.id)
-          .single()
-        
-        setIsPartnerInDB(data?.user_type === 'partner')
-      } catch (error) {
-        console.error('Error checking partner status:', error)
-      }
-    }
-    
-    checkPartnerStatus()
-  }, [user])
-
-  const isPartner = profile?.userType === 'partner' || isPartnerInDB
+  // JWT profile에서 user_type 확인 (DB 조회 불필요)
+  const isPartner = profile?.userType === 'partner'
 
   const handleLogout = async () => {
     try {

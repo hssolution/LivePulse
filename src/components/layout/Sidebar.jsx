@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { ChevronDown, ChevronRight, Package, Building2 } from 'lucide-react'
@@ -23,6 +23,39 @@ export function Sidebar({ isMobile = false, isOpen = false, onClose = () => {}, 
   const menuItems = getMenuByRole(profile?.role)
   const titleKey = getTitleKeyByRole(profile?.role)
   const basePath = profile?.role === 'admin' ? '/adm' : '/partner'
+
+  // 스크롤 컨테이너 ref
+  const scrollContainerRef = useRef(null)
+  const mobileScrollContainerRef = useRef(null)
+
+  /**
+   * 페이지 로드 시 현재 활성화된 메뉴로 스크롤
+   */
+  useEffect(() => {
+    const scrollToActiveMenu = () => {
+      // Desktop과 Mobile 모두 처리
+      const containers = [scrollContainerRef.current, mobileScrollContainerRef.current]
+      
+      containers.forEach(container => {
+        if (!container) return
+        
+        // 활성화된 메뉴 찾기 (data-active="true" 속성 사용)
+        const activeItem = container.querySelector('[data-active="true"]')
+        
+        if (activeItem) {
+          // 해당 요소가 보이도록 스크롤
+          activeItem.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          })
+        }
+      })
+    }
+    
+    // DOM이 렌더링된 후 실행
+    const timer = setTimeout(scrollToActiveMenu, 100)
+    return () => clearTimeout(timer)
+  }, [location.pathname])
 
   const isActive = (path, exact = false) => {
     if (exact) return location.pathname === path
@@ -127,6 +160,7 @@ export function Sidebar({ isMobile = false, isOpen = false, onClose = () => {}, 
                   key={subItem.to}
                   to={subItem.to}
                   onClick={isMobile ? onClose : undefined}
+                  data-active={subActive}
                   className={cn(
                     "flex items-center gap-3 rounded-lg pl-12 pr-4 py-2.5 text-sm transition-all relative",
                     subActive 
@@ -175,6 +209,7 @@ export function Sidebar({ isMobile = false, isOpen = false, onClose = () => {}, 
         key={item.to}
         to={item.to}
         onClick={isMobile ? onClose : undefined}
+        data-active={active}
         className={cn(
           "flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 group relative overflow-hidden",
           active 
@@ -228,7 +263,7 @@ export function Sidebar({ isMobile = false, isOpen = false, onClose = () => {}, 
       </div>
 
       {/* 메뉴 영역 */}
-      <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden py-2 custom-scrollbar px-4 space-y-1">
+      <div ref={scrollContainerRef} className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden py-2 custom-scrollbar px-4 space-y-1">
         <nav className="grid items-start gap-1 text-sm font-medium">
           {menuItems.map(renderMenuItem)}
         </nav>
@@ -255,7 +290,7 @@ export function Sidebar({ isMobile = false, isOpen = false, onClose = () => {}, 
                 <span className="text-xl font-bold text-foreground">{t(titleKey)}</span>
               </Link>
             </div>
-            <div className="relative z-10 flex-1 overflow-auto py-4 px-4">
+            <div ref={mobileScrollContainerRef} className="relative z-10 flex-1 overflow-auto py-4 px-4">
               <nav className="grid items-start gap-1 text-sm font-medium">
                 {menuItems.map(renderMenuItem)}
               </nav>

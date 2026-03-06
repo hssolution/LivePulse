@@ -27,8 +27,6 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }) {
    * 로그아웃 처리 함수
    */
   const handleLogout = async () => {
-    console.log('🔴 [LOGOUT] 로그아웃 시도:', { user: user?.email, profile })
-    
     // 1. 로그아웃 UI 표시 (전체 화면 덮음)
     setIsLoggingOut(true)
     
