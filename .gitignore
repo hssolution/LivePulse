@@ -51,7 +51,9 @@ coverage/
 .turbo/
 .vercel/
 
-# Supabase
+# Supabase (원격 전용, 로컬 CLI 산출물 무시)
 .supabase/
 supabase/.temp/
+supabase/.branches/
+supabase/config.toml
 

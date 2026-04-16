@@ -116,34 +116,30 @@ export default function LiveSession() {
   }, [loadSession])
 
   /**
-   * 세션 상태 실시간 구독
+   * 세션 상태 주기 폴링 (청중은 realtime 대신 주기 갱신)
    */
   useEffect(() => {
     if (!session?.id) return
-    
-    const channel = supabase
-      .channel(`session-status:${session.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'sessions',
-          filter: `id=eq.${session.id}`
-        },
-        (payload) => {
-          setSession(prev => ({ ...prev, ...payload.new }))
-          
-          // 세션이 종료되면 알림
-          if (payload.new.status === 'ended') {
-            toast.info(t('live.sessionEnded'))
-          }
+
+    const intervalId = setInterval(async () => {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('id', session.id)
+        .single()
+
+      if (error || !data) return
+
+      setSession(prev => {
+        if (prev?.status !== 'ended' && data.status === 'ended') {
+          toast.info(t('live.sessionEnded'))
         }
-      )
-      .subscribe()
-    
+        return { ...prev, ...data }
+      })
+    }, 30000)
+
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(intervalId)
     }
   }, [session?.id, t])
 

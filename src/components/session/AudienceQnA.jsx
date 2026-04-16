@@ -9,18 +9,21 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
-import { 
-  Loader2, 
-  Send, 
+import {
+  Loader2,
+  Send,
   ThumbsUp,
   MessageCircle,
   CheckCircle,
   Clock,
   Pin,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
+
+const POLL_INTERVAL_MS = 10000
 
 /**
  * 청중용 Q&A 컴포넌트
@@ -33,6 +36,7 @@ export default function AudienceQnA({ sessionId, sessionStatus, isPreview = fals
   const { t, language } = useLanguage()
   
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [questions, setQuestions] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [likedQuestions, setLikedQuestions] = useState(new Set())
@@ -125,39 +129,32 @@ export default function AudienceQnA({ sessionId, sessionStatus, isPreview = fals
   }, [loadQuestions])
 
   /**
-   * 실시간 구독
+   * 주기 폴링 (청중은 realtime 대신 주기 갱신)
    */
   useEffect(() => {
     if (!sessionId) return
-    
-    const channel = supabase
-      .channel(`questions:${sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'questions',
-          filter: `session_id=eq.${sessionId}`
-        },
-        (payload) => {
-          // 데이터 변경 시 목록 조용히 새로고침
-          loadQuestions(false)
 
-          if (payload.eventType === 'INSERT') {
-            // 새 질문 알림 (approved 상태만)
-            if (payload.new.status === 'approved') {
-              toast.info(t('qna.newQuestion'))
-            }
-          }
-        }
-      )
-      .subscribe()
-    
+    const intervalId = setInterval(() => {
+      loadQuestions(false)
+    }, POLL_INTERVAL_MS)
+
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(intervalId)
     }
-  }, [sessionId, t, loadQuestions])
+  }, [sessionId, loadQuestions])
+
+  /**
+   * 수동 새로고침
+   */
+  const handleRefresh = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await loadQuestions(false)
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   /**
    * 질문 등록
@@ -347,6 +344,15 @@ export default function AudienceQnA({ sessionId, sessionStatus, isPreview = fals
             onClick={() => setSortBy('newest')}
           >
             {t('qna.sortNewest')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            aria-label={language === 'ko' ? '새로고침' : 'Refresh'}
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>

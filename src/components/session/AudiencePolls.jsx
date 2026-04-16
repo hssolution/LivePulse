@@ -10,11 +10,14 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { HtmlContent } from '@/components/ui/html-content'
 import { toast } from 'sonner'
-import { 
-  Loader2, 
-  BarChart3, 
-  CheckCircle
+import {
+  Loader2,
+  BarChart3,
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react'
+
+const POLL_INTERVAL_MS = 5000
 
 /**
  * 청중용 설문 응답 컴포넌트
@@ -27,9 +30,10 @@ import {
  * @param {boolean} isPreview - 미리보기 모드 여부
  */
 export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
-  const { t } = useLanguage()
-  
+  const { t, language } = useLanguage()
+
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [polls, setPolls] = useState([])
   const [responses, setResponses] = useState({}) // { pollId: { optionIds: [], text: '' } }
   const [allSubmitted, setAllSubmitted] = useState(false)
@@ -49,10 +53,10 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
   /**
    * 활성 설문 로드
    */
-  const loadPolls = useCallback(async () => {
+  const loadPolls = useCallback(async (showLoading = true) => {
     if (!sessionId) return
-    
-    setLoading(true)
+
+    if (showLoading) setLoading(true)
     try {
       const { data, error } = await supabase
         .from('polls')
@@ -60,17 +64,17 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
         .eq('session_id', sessionId)
         .eq('status', 'active')
         .order('display_order')
-      
+
       if (error) throw error
-      
+
       // 옵션도 정렬
       const sortedPolls = (data || []).map(poll => ({
         ...poll,
         poll_options: poll.poll_options?.sort((a, b) => a.display_order - b.display_order)
       }))
-      
+
       setPolls(sortedPolls)
-      
+
       // 이미 모든 설문에 응답했는지 체크
       if (sortedPolls.length > 0) {
         await checkIfAllResponded(sortedPolls)
@@ -78,7 +82,7 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
     } catch (error) {
       console.error('Error loading polls:', error)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }, [sessionId])
 
@@ -142,31 +146,32 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
   }, [loadPolls])
 
   /**
-   * 실시간 구독
+   * 주기 폴링 (청중은 realtime 대신 주기 갱신)
    */
   useEffect(() => {
     if (!sessionId) return
-    
-    const channel = supabase
-      .channel(`audience-polls:${sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'polls',
-          filter: `session_id=eq.${sessionId}`
-        },
-        () => {
-          loadPolls()
-        }
-      )
-      .subscribe()
-    
+
+    const intervalId = setInterval(() => {
+      loadPolls(false)
+    }, POLL_INTERVAL_MS)
+
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(intervalId)
     }
   }, [sessionId, loadPolls])
+
+  /**
+   * 수동 새로고침
+   */
+  const handleRefresh = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await loadPolls(false)
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   /**
    * 모든 응답 제출
@@ -353,6 +358,16 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
       <div className="text-center py-12">
         <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
         <p className="text-muted-foreground">{t('live.noPoll')}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="mt-4"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          {language === 'ko' ? '새로고침' : 'Refresh'}
+        </Button>
       </div>
     )
   }
