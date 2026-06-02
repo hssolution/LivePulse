@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import {
@@ -13,6 +13,7 @@ import {
   Trash2,
   GripVertical,
   Loader2,
+  Clock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -72,6 +73,24 @@ function stripHtml(s) {
   return div.textContent || div.innerText || ''
 }
 
+/** Date → "09:05" (24시간) */
+function fmtClock(date) {
+  if (!date || isNaN(date.getTime())) return '--:--'
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
+/** 분 → "15분" / "1시간 5분" */
+function fmtDuration(min) {
+  if (!min || min <= 0) return null
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  if (h && m) return `${h}시간 ${m}분`
+  if (h) return `${h}시간`
+  return `${m}분`
+}
+
 const CUE_META = {
   pdf: { label: '강연자료', icon: FileText, color: 'text-indigo-500', chip: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40' },
   survey: { label: '설문', icon: BarChart3, color: 'text-emerald-500', chip: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
@@ -87,9 +106,10 @@ function cueSummary(cue) {
   return ''
 }
 
-function SortableCueCard({ cue, index, showPresenterHeader, live, editable, selected, broadcasting, onSelect, onBroadcast, onEdit, onDelete }) {
+function SortableCueCard({ cue, index, time, showPresenterHeader, live, editable, selected, broadcasting, onSelect, onBroadcast, onEdit, onDelete }) {
   const meta = CUE_META[cue.cue_type] || CUE_META.notice
   const Icon = meta.icon
+  const durationLabel = fmtDuration(cue.duration_min)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cue.id, disabled: !editable })
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
 
@@ -125,6 +145,16 @@ function SortableCueCard({ cue, index, showPresenterHeader, live, editable, sele
         <span className="w-5 h-5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold flex items-center justify-center shrink-0">
           {index + 1}
         </span>
+        {(time?.start || durationLabel) && (
+          <span className="shrink-0 w-12 text-right leading-tight">
+            {time?.start && (
+              <span className="block text-xs font-bold tabular-nums text-slate-700 dark:text-slate-200">{fmtClock(time.start)}</span>
+            )}
+            {durationLabel && (
+              <span className="block text-[10px] text-slate-400 dark:text-slate-500">{durationLabel}</span>
+            )}
+          </span>
+        )}
         <span className={`shrink-0 ${meta.color}`}><Icon className="w-4 h-4" /></span>
         <span className="flex-1 min-w-0">
           <span className="flex items-center gap-1.5">
@@ -176,10 +206,12 @@ const EMPTY_FORM = {
   poll_id: 'none',
   qna_category_id: 'none',
   notice_text: '',
+  duration_min: '',
 }
 
 export default function RunOfShowPanel({ sessionId, live = false, editable = true, selectedCueId = null, currentCueId = null, onSelect, onBroadcast }) {
   const [cues, setCues] = useState([])
+  const [baseStartAt, setBaseStartAt] = useState(null)
   const [presenters, setPresenters] = useState([])
   const [lectures, setLectures] = useState([])
   const [polls, setPolls] = useState([])
@@ -203,7 +235,9 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
 
   const loadRefs = useCallback(async () => {
     if (!sessionId) return
-    const [pr, lec, pl, cat] = await Promise.all([
+    const [sess, pr, lec, pl, cat] = await Promise.all([
+      // 기준 시작시각 = 세션 예정 시작(start_at). 큐별 시작시각은 여기에 소요시간 누적으로 계산.
+      supabase.from('sessions').select('start_at').eq('id', sessionId).maybeSingle(),
       // 강사 = 세션에 등록된 발표자(session_presenters). cue.presenter_id FK가 이걸 가리킴.
       supabase
         .from('session_presenters')
@@ -214,6 +248,7 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
       supabase.rpc('sp_partner_polls_q', { p_session_id: sessionId }),
       supabase.rpc('sp_partner_qna_categories_q', { p_session_id: sessionId }),
     ])
+    setBaseStartAt(sess.data?.start_at ? new Date(sess.data.start_at) : null)
     setPresenters(Array.isArray(pr.data) ? pr.data : [])
     setLectures(Array.isArray(lec.data) ? lec.data : [])
     setPolls(Array.isArray(pl.data) ? pl.data : (pl.data?.polls || []))
@@ -224,6 +259,26 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
     loadCues()
     loadRefs()
   }, [loadCues, loadRefs])
+
+  /* ---------- 큐별 시작/종료 시각 누적 계산 (파생값) ----------
+   * 시작시각 = baseStartAt + 앞 큐들의 duration_min 합. 종료시각 = 시작 + 자기 duration_min.
+   * duration 미설정(NULL) 큐는 0분으로 취급 → 다음 큐가 같은 시각에 시작.       */
+  const timeline = useMemo(() => {
+    let offset = 0 // 분
+    return cues.map((cue) => {
+      const dur = Number(cue.duration_min) || 0
+      const start = baseStartAt ? new Date(baseStartAt.getTime() + offset * 60000) : null
+      offset += dur
+      const end = baseStartAt && dur > 0 ? new Date(baseStartAt.getTime() + offset * 60000) : null
+      return { start, end }
+    })
+  }, [cues, baseStartAt])
+
+  const totalMin = useMemo(
+    () => cues.reduce((sum, c) => sum + (Number(c.duration_min) || 0), 0),
+    [cues]
+  )
+  const planEnd = baseStartAt && totalMin > 0 ? new Date(baseStartAt.getTime() + totalMin * 60000) : null
 
   const presenterName = (id) => {
     const p = presenters.find((x) => x.id === id)
@@ -258,6 +313,7 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
       poll_id: cue.poll_id || 'none',
       qna_category_id: cue.qna_category_id || 'none',
       notice_text: cue.notice_text || '',
+      duration_min: cue.duration_min ?? '',
     })
     setShowDialog(true)
   }
@@ -277,6 +333,7 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
         p_poll_id: form.cue_type === 'survey' && form.poll_id !== 'none' ? form.poll_id : null,
         p_qna_category_id: form.cue_type === 'qna' && form.qna_category_id !== 'none' ? form.qna_category_id : null,
         p_notice_text: form.cue_type === 'notice' ? (form.notice_text?.trim() || null) : null,
+        p_duration_min: form.duration_min === '' || form.duration_min == null ? null : Math.max(0, Number(form.duration_min) || 0),
       }
       const { data, error } = await supabase.rpc('sp_partner_cue_s', params)
       if (error || !data?.success) throw new Error(data?.message || 'save failed')
@@ -322,7 +379,14 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
           <h2 className="font-bold text-sm flex items-center gap-2">
             <Play className="w-4 h-4 text-indigo-600 fill-current" /> 진행 플랜
           </h2>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{editable ? '강사별 순서를 짜세요' : '큐를 선택해 송출하세요'}</p>
+          {baseStartAt && totalMin > 0 ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1 tabular-nums">
+              <Clock className="w-3 h-3" /> {fmtClock(baseStartAt)} 시작 · 총 {fmtDuration(totalMin)}
+              {planEnd && <> · {fmtClock(planEnd)} 종료</>}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{editable ? '강사별 순서를 짜세요' : '큐를 선택해 송출하세요'}</p>
+          )}
         </div>
         {editable && (
           <Button type="button" size="sm" variant="outline" onClick={openCreate} className="h-8">
@@ -347,6 +411,7 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
                     key={cue.id}
                     cue={cue}
                     index={i}
+                    time={timeline[i]}
                     showPresenterHeader={i === 0 || cues[i - 1].presenter_id !== cue.presenter_id}
                     live={live}
                     editable={editable}
@@ -401,10 +466,22 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
               </Select>
             </div>
 
-            {/* 제목 */}
-            <div className="space-y-1.5">
-              <Label>제목 (선택)</Label>
-              <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="예: 오프닝, Q&A 1" />
+            {/* 제목 + 소요시간 */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-1.5">
+                <Label>제목 (선택)</Label>
+                <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="예: 오프닝, Q&A 1" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> 소요(분)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.duration_min}
+                  onChange={(e) => setForm((f) => ({ ...f, duration_min: e.target.value }))}
+                  placeholder="예: 15"
+                />
+              </div>
             </div>
 
             {/* 종류별 입력 */}
