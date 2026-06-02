@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useLanguage } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
@@ -21,35 +21,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, MessageCircle, Settings } from 'lucide-react'
+import { Loader2, MessageCircle, Settings, FileText, BarChart3, Megaphone } from 'lucide-react'
 import { toast } from 'sonner'
+import PdfPage from '@/components/PdfPage'
 
 /**
- * Q&A 송출 화면 (프로젝터/대형 스크린용)
- * - 전체 화면에 현재 송출 중인 질문 표시
- * - 세션별 스타일 설정 적용
- * - 실시간 업데이트
- * - 오른쪽 슬라이드 설정 패널
+ * 송출 화면 (프로젝터/대형 스크린용)
+ * - 좌장이 전환하는 3모드: 강연자료(PDF) / Q&A 질문 / 설문 결과
+ * - 세션별 스타일 설정 적용 (Q&A 모드)
+ * - 실시간 업데이트 (sessions/questions 구독)
  * - 권한 없어도 접속 가능 (설정 버튼만 권한자에게 표시)
  */
 export default function BroadcastQnA() {
   const { code } = useParams()
+  const [searchParams] = useSearchParams()
+  const isEmbed = searchParams.get('embed') === 'true'
   const { t } = useLanguage()
   const { user } = useAuth()
-  
+
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState(null)
   const [broadcastingQuestion, setBroadcastingQuestion] = useState(null)
   const [hasPermission, setHasPermission] = useState(false)
-  
+
+  // 모드별 데이터
+  const [pdfFile, setPdfFile] = useState(null)
+  const [activePoll, setActivePoll] = useState(null)
+  const [pollResults, setPollResults] = useState(null)
+
   // 설정 패널
   const [showSettings, setShowSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
-  
-  // 실시간 미리보기용 설정 (수정 중인 값)
   const [previewSettings, setPreviewSettings] = useState(null)
 
-  // 기본 송출 설정
   const defaultSettings = {
     width: 0,
     fontSize: 150,
@@ -58,26 +62,23 @@ export default function BroadcastQnA() {
     borderColor: '',
     innerBackgroundColor: '',
     textAlign: 'center',
-    verticalAlign: 'center'
+    verticalAlign: 'center',
   }
 
-  /**
-   * 권한 확인 (설정 버튼 표시용)
-   */
+  const mode = session?.broadcast_mode || 'idle'
+
+  /** 권한 확인 (설정 버튼 표시용) */
   const checkPermission = useCallback(async () => {
     if (!user || !session) return false
-    
     try {
-      // 세션 소유자 체크
       const { data: partner } = await supabase
         .from('partners')
         .select('id')
         .eq('profile_id', user.id)
         .single()
-      
+
       if (partner) {
         if (session.partner_id === partner.id) return true
-        
         const { data: collab } = await supabase
           .from('session_partners')
           .select('id')
@@ -85,28 +86,22 @@ export default function BroadcastQnA() {
           .eq('partner_id', partner.id)
           .eq('status', 'accepted')
           .single()
-        
         if (collab) return true
       }
-      
-      // 관리자 체크
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('user_role')
         .eq('id', user.id)
         .single()
-      
       if (profile?.user_role === 'admin') return true
-      
       return false
     } catch {
       return false
     }
   }, [user, session])
 
-  /**
-   * 세션 로드
-   */
+  /** 세션 로드 */
   const loadSession = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -114,12 +109,9 @@ export default function BroadcastQnA() {
         .select('*')
         .eq('code', code)
         .single()
-      
       if (error) throw error
       setSession(data)
-      
-      const settings = { ...defaultSettings, ...data.broadcast_settings }
-      setPreviewSettings(settings)
+      setPreviewSettings({ ...defaultSettings, ...data.broadcast_settings })
     } catch (error) {
       console.error('Error loading session:', error)
     } finally {
@@ -127,20 +119,16 @@ export default function BroadcastQnA() {
     }
   }, [code])
 
-  /**
-   * 송출 중인 질문 로드
-   */
+  /** 송출 중인 질문 로드 */
   const loadBroadcastingQuestion = useCallback(async () => {
     if (!session) return
-    
     try {
       const { data, error } = await supabase
         .from('questions')
-        .select('*, presenter:session_presenters(display_name, manual_name)')
+        .select('*, presenter:session_presenters(display_name, manual_name), category:qna_categories(name, color)')
         .eq('session_id', session.id)
         .eq('is_broadcasting', true)
         .single()
-      
       if (error && error.code !== 'PGRST116') throw error
       setBroadcastingQuestion(data || null)
     } catch (error) {
@@ -149,22 +137,58 @@ export default function BroadcastQnA() {
     }
   }, [session])
 
-  /**
-   * 설정 저장
-   */
+  /** 강연자료 로드 */
+  useEffect(() => {
+    if (session?.broadcast_mode === 'pdf' && session?.broadcast_pdf_id) {
+      supabase
+        .from('lecture_files')
+        .select('*')
+        .eq('id', session.broadcast_pdf_id)
+        .single()
+        .then(({ data }) => setPdfFile(data || null))
+    } else {
+      setPdfFile(null)
+    }
+  }, [session?.broadcast_mode, session?.broadcast_pdf_id])
+
+  /** 설문 + 결과 로드 (survey 모드에서 폴링) */
+  const loadSurvey = useCallback(async () => {
+    if (!session) return
+    const { data: poll } = await supabase
+      .from('polls')
+      .select('*')
+      .eq('session_id', session.id)
+      .eq('status', 'active')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    setActivePoll(poll || null)
+    if (poll) {
+      const { data: res } = await supabase.rpc('get_poll_results', { p_poll_id: poll.id })
+      setPollResults(res || null)
+    } else {
+      setPollResults(null)
+    }
+  }, [session])
+
+  useEffect(() => {
+    if (session?.broadcast_mode !== 'survey') return
+    loadSurvey()
+    const i = setInterval(loadSurvey, 3000)
+    return () => clearInterval(i)
+  }, [session?.broadcast_mode, loadSurvey])
+
+  /** 설정 저장 */
   const handleSaveSettings = async () => {
     if (!session || !previewSettings) return
-    
     setSavingSettings(true)
     try {
       const { error } = await supabase
         .from('sessions')
         .update({ broadcast_settings: previewSettings })
         .eq('id', session.id)
-      
       if (error) throw error
-      
-      setSession(prev => ({ ...prev, broadcast_settings: previewSettings }))
+      setSession((prev) => ({ ...prev, broadcast_settings: previewSettings }))
       toast.success(t('common.saved'))
     } catch (error) {
       console.error('Error saving settings:', error)
@@ -174,19 +198,11 @@ export default function BroadcastQnA() {
     }
   }
 
-  /**
-   * 설정 패널 열기
-   */
   const openSettings = () => {
     setPreviewSettings({ ...defaultSettings, ...session?.broadcast_settings })
     setShowSettings(true)
   }
-
-  /**
-   * 설정 패널 닫기 (저장 안함)
-   */
   const closeSettings = () => {
-    // 저장된 설정으로 복원
     setPreviewSettings({ ...defaultSettings, ...session?.broadcast_settings })
     setShowSettings(false)
   }
@@ -198,28 +214,18 @@ export default function BroadcastQnA() {
   useEffect(() => {
     if (session) {
       loadBroadcastingQuestion()
-      if (user) {
-        checkPermission().then(setHasPermission)
-      }
+      if (user) checkPermission().then(setHasPermission)
     }
   }, [session, user, loadBroadcastingQuestion, checkPermission])
 
-  /**
-   * 실시간 구독 - 질문 송출 상태
-   */
+  /** 실시간 구독 - 질문 송출 상태 */
   useEffect(() => {
-    if (!session) return
-    
+    if (!session?.id) return
     const channel = supabase
       .channel(`broadcast-questions:${session.id}`)
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'questions',
-          filter: `session_id=eq.${session.id}`
-        },
+        { event: 'UPDATE', schema: 'public', table: 'questions', filter: `session_id=eq.${session.id}` },
         async (payload) => {
           if (payload.new.is_broadcasting) {
             loadBroadcastingQuestion()
@@ -229,43 +235,36 @@ export default function BroadcastQnA() {
         }
       )
       .subscribe()
-    
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [session, loadBroadcastingQuestion])
+  }, [session?.id, loadBroadcastingQuestion])
 
-  /**
-   * 실시간 구독 - 송출 설정 동기화
-   */
+  /** 실시간 구독 - 세션(송출 모드/페이지/설정) 동기화 */
   useEffect(() => {
-    if (!session) return
-    
+    if (!session?.id) return
     const channel = supabase
-      .channel(`broadcast-settings:${session.id}`)
+      .channel(`broadcast-session:${session.id}`)
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'sessions',
-          filter: `id=eq.${session.id}`
-        },
+        { event: 'UPDATE', schema: 'public', table: 'sessions', filter: `id=eq.${session.id}` },
         (payload) => {
-          // 설정 패널이 열려있지 않을 때만 동기화 (수정 중인 화면은 유지)
+          setSession((prev) => {
+            const next = { ...prev, ...payload.new }
+            // 설정 패널 편집 중이면 사용자의 settings 유지
+            if (showSettings && prev) next.broadcast_settings = prev.broadcast_settings
+            return next
+          })
           if (!showSettings && payload.new.broadcast_settings) {
-            const newSettings = { ...defaultSettings, ...payload.new.broadcast_settings }
-            setSession(prev => ({ ...prev, broadcast_settings: payload.new.broadcast_settings }))
-            setPreviewSettings(newSettings)
+            setPreviewSettings({ ...defaultSettings, ...payload.new.broadcast_settings })
           }
         }
       )
       .subscribe()
-    
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [session, showSettings])
+  }, [session?.id, showSettings])
 
   if (loading) {
     return (
@@ -286,21 +285,117 @@ export default function BroadcastQnA() {
     )
   }
 
-  // 현재 적용할 설정 (미리보기용 설정 우선)
+  /* ===== 강연자료(PDF) 모드 ===== */
+  if (mode === 'pdf') {
+    return (
+      <div className="h-screen bg-[#0d0d14] text-white flex flex-col overflow-hidden">
+        {pdfFile ? (
+          <>
+            <div className="px-8 pt-5 pb-3 flex items-center justify-between shrink-0">
+              <span className="font-semibold text-slate-200 flex items-center gap-2 text-lg">
+                <FileText className="w-5 h-5" /> {pdfFile.title}
+              </span>
+              <span className="font-semibold text-slate-300 text-lg">
+                {session.broadcast_pdf_page || 1} <span className="text-slate-600">/</span> {pdfFile.page_count || '?'}
+              </span>
+            </div>
+            <div className="flex-1 min-h-0 px-8 pb-8">
+              <PdfPage
+                fileUrl={pdfFile.file_url}
+                pageNumber={session.broadcast_pdf_page || 1}
+                fit="contain"
+                pageClassName="rounded-xl overflow-hidden shadow-2xl"
+              />
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-slate-500" />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  /* ===== 설문 결과 모드 ===== */
+  if (mode === 'survey') {
+    return (
+      <div className="min-h-screen bg-[#0d0d14] text-white flex items-center justify-center px-16">
+        {activePoll ? (
+          <div className="w-full max-w-4xl">
+            <div className="inline-flex items-center gap-2 text-indigo-300 font-bold text-xl mb-6">
+              <BarChart3 className="w-6 h-6" /> 실시간 설문
+            </div>
+            <h2
+              className="text-[40px] leading-tight font-bold mb-10"
+              dangerouslySetInnerHTML={{ __html: activePoll.question }}
+            />
+            {activePoll.poll_type === 'open' ? (
+              <div className="text-center text-slate-300 text-2xl">
+                {pollResults?.total_responses || 0}명 응답
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {(pollResults?.results || []).map((r) => (
+                  <div key={r.option_id || r.option_text}>
+                    <div className="flex justify-between text-2xl font-bold mb-2">
+                      <span>{r.option_text}</span>
+                      <span className="text-indigo-300">{r.percentage}%</span>
+                    </div>
+                    <div className="h-9 bg-white/10 rounded-xl overflow-hidden">
+                      <div className="h-full bg-indigo-500 rounded-xl transition-all" style={{ width: `${r.percentage}%` }} />
+                    </div>
+                  </div>
+                ))}
+                <div className="text-center text-slate-400 text-xl mt-8">
+                  {pollResults?.total_responses || 0}명 응답
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center text-slate-500">
+            <BarChart3 className="h-24 w-24 mx-auto mb-6 opacity-30" />
+            <p className="text-3xl">설문 준비 중</p>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  /* ===== 안내(인트로/휴식) 모드 ===== */
+  if (mode === 'notice') {
+    return (
+      <div className="min-h-screen bg-[#0d0d14] text-white flex items-center justify-center px-16 text-center">
+        <div className="max-w-4xl">
+          <div className="inline-flex items-center gap-2 text-amber-300 font-bold text-xl mb-8">
+            <Megaphone className="w-6 h-6" /> 안내
+          </div>
+          <div className="text-[44px] leading-snug font-bold whitespace-pre-wrap">
+            {session.broadcast_notice || '잠시 후 계속됩니다'}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  /* ===== Q&A / 대기 모드 (기존) ===== */
   const settings = previewSettings || { ...defaultSettings, ...session.broadcast_settings }
 
-  // 스타일 계산
   const containerStyle = {
     backgroundColor: settings.backgroundColor || '#ffffff',
     minHeight: '100vh',
     display: 'flex',
-    alignItems: settings.verticalAlign === 'top' ? 'flex-start' 
-              : settings.verticalAlign === 'bottom' ? 'flex-end' 
-              : 'center',
+    alignItems:
+      settings.verticalAlign === 'top'
+        ? 'flex-start'
+        : settings.verticalAlign === 'bottom'
+        ? 'flex-end'
+        : 'center',
     justifyContent: 'center',
     padding: '2rem',
     position: 'relative',
-    transition: 'background-color 0.3s ease'
+    transition: 'background-color 0.3s ease',
   }
 
   const textStyle = {
@@ -316,16 +411,27 @@ export default function BroadcastQnA() {
     backgroundColor: settings.innerBackgroundColor || 'transparent',
     border: settings.borderColor ? `4px solid ${settings.borderColor}` : 'none',
     borderRadius: settings.borderColor ? '8px' : 0,
-    transition: 'all 0.3s ease'
+    transition: 'all 0.3s ease',
   }
 
   return (
     <>
       <div style={containerStyle}>
-        {/* 송출 중인 질문 또는 대기 메시지 */}
         {broadcastingQuestion ? (
           <div style={textStyle}>
-            {broadcastingQuestion.content}
+            {broadcastingQuestion.category?.name && (
+              <div
+                className="inline-block text-base not-italic font-bold rounded-full px-4 py-1 mb-6"
+                style={{
+                  color: '#fff',
+                  backgroundColor: broadcastingQuestion.category.color || '#4f46e5',
+                  fontSize: `${Math.max(18, Math.round((settings.fontSize || 150) * 0.22))}px`,
+                }}
+              >
+                {broadcastingQuestion.category.name}
+              </div>
+            )}
+            <div>{broadcastingQuestion.content}</div>
           </div>
         ) : (
           <div className="text-center" style={{ color: settings.fontColor ? `${settings.fontColor}50` : '#d1d5db' }}>
@@ -333,9 +439,8 @@ export default function BroadcastQnA() {
             <p className="text-3xl">{t('broadcast.waitingForQuestion')}</p>
           </div>
         )}
-        
-        {/* 설정 버튼 (권한 있는 경우만) */}
-        {hasPermission && (
+
+        {hasPermission && !isEmbed && (
           <button
             onClick={openSettings}
             className="fixed bottom-6 right-6 w-12 h-12 bg-gray-800/80 hover:bg-gray-700 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110"
@@ -345,41 +450,36 @@ export default function BroadcastQnA() {
           </button>
         )}
       </div>
-      
-      {/* 설정 슬라이드 패널 (오른쪽) */}
+
+      {/* 설정 슬라이드 패널 */}
       <Sheet open={showSettings} onOpenChange={(open) => !open && closeSettings()}>
         <SheetContent className="w-[400px] sm:w-[450px] overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{t('broadcast.settingsTitle')}</SheetTitle>
-            <SheetDescription>
-              {t('broadcast.settingsDesc')}
-            </SheetDescription>
+            <SheetDescription>{t('broadcast.settingsDesc')}</SheetDescription>
           </SheetHeader>
-          
+
           {previewSettings && (
             <div className="space-y-5 py-6">
-              {/* 너비 */}
               <div className="space-y-2">
                 <Label>{t('broadcast.width')}</Label>
                 <Input
                   type="number"
                   value={previewSettings.width}
-                  onChange={(e) => setPreviewSettings(prev => ({ ...prev, width: parseInt(e.target.value) || 0 }))}
+                  onChange={(e) => setPreviewSettings((prev) => ({ ...prev, width: parseInt(e.target.value) || 0 }))}
                   placeholder="0 (자동)"
                 />
               </div>
-              
-              {/* 폰트 크기 */}
+
               <div className="space-y-2">
                 <Label>{t('broadcast.fontSize')}</Label>
                 <Input
                   type="number"
                   value={previewSettings.fontSize}
-                  onChange={(e) => setPreviewSettings(prev => ({ ...prev, fontSize: parseInt(e.target.value) || 100 }))}
+                  onChange={(e) => setPreviewSettings((prev) => ({ ...prev, fontSize: parseInt(e.target.value) || 100 }))}
                 />
               </div>
-              
-              {/* 폰트 색상 */}
+
               <div className="space-y-2">
                 <Label>{t('broadcast.fontColor')}</Label>
                 <div className="flex gap-2">
@@ -387,17 +487,16 @@ export default function BroadcastQnA() {
                     type="color"
                     className="w-12 h-10 rounded border cursor-pointer"
                     value={previewSettings.fontColor || '#c0392b'}
-                    onChange={(e) => setPreviewSettings(prev => ({ ...prev, fontColor: e.target.value }))}
+                    onChange={(e) => setPreviewSettings((prev) => ({ ...prev, fontColor: e.target.value }))}
                   />
                   <Input
                     value={previewSettings.fontColor}
-                    onChange={(e) => setPreviewSettings(prev => ({ ...prev, fontColor: e.target.value }))}
+                    onChange={(e) => setPreviewSettings((prev) => ({ ...prev, fontColor: e.target.value }))}
                     placeholder="#c0392b"
                   />
                 </div>
               </div>
-              
-              {/* 배경 색상 */}
+
               <div className="space-y-2">
                 <Label>{t('broadcast.backgroundColor')}</Label>
                 <div className="flex gap-2">
@@ -405,17 +504,16 @@ export default function BroadcastQnA() {
                     type="color"
                     className="w-12 h-10 rounded border cursor-pointer"
                     value={previewSettings.backgroundColor || '#ffffff'}
-                    onChange={(e) => setPreviewSettings(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                    onChange={(e) => setPreviewSettings((prev) => ({ ...prev, backgroundColor: e.target.value }))}
                   />
                   <Input
                     value={previewSettings.backgroundColor}
-                    onChange={(e) => setPreviewSettings(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                    onChange={(e) => setPreviewSettings((prev) => ({ ...prev, backgroundColor: e.target.value }))}
                     placeholder="#ffffff"
                   />
                 </div>
               </div>
-              
-              {/* 테두리 색상 */}
+
               <div className="space-y-2">
                 <Label>{t('broadcast.borderColor')}</Label>
                 <div className="flex gap-2">
@@ -423,17 +521,16 @@ export default function BroadcastQnA() {
                     type="color"
                     className="w-12 h-10 rounded border cursor-pointer"
                     value={previewSettings.borderColor || '#cccccc'}
-                    onChange={(e) => setPreviewSettings(prev => ({ ...prev, borderColor: e.target.value }))}
+                    onChange={(e) => setPreviewSettings((prev) => ({ ...prev, borderColor: e.target.value }))}
                   />
                   <Input
                     value={previewSettings.borderColor}
-                    onChange={(e) => setPreviewSettings(prev => ({ ...prev, borderColor: e.target.value }))}
+                    onChange={(e) => setPreviewSettings((prev) => ({ ...prev, borderColor: e.target.value }))}
                     placeholder="비워두면 테두리 없음"
                   />
                 </div>
               </div>
-              
-              {/* 테두리 안 배경 색상 */}
+
               <div className="space-y-2">
                 <Label>{t('broadcast.innerBgColor')}</Label>
                 <div className="flex gap-2">
@@ -441,22 +538,21 @@ export default function BroadcastQnA() {
                     type="color"
                     className="w-12 h-10 rounded border cursor-pointer"
                     value={previewSettings.innerBackgroundColor || '#ffffff'}
-                    onChange={(e) => setPreviewSettings(prev => ({ ...prev, innerBackgroundColor: e.target.value }))}
+                    onChange={(e) => setPreviewSettings((prev) => ({ ...prev, innerBackgroundColor: e.target.value }))}
                   />
                   <Input
                     value={previewSettings.innerBackgroundColor}
-                    onChange={(e) => setPreviewSettings(prev => ({ ...prev, innerBackgroundColor: e.target.value }))}
+                    onChange={(e) => setPreviewSettings((prev) => ({ ...prev, innerBackgroundColor: e.target.value }))}
                     placeholder="비워두면 투명"
                   />
                 </div>
               </div>
-              
-              {/* 폰트 정렬 */}
+
               <div className="space-y-2">
                 <Label>{t('broadcast.textAlign')}</Label>
                 <Select
                   value={previewSettings.textAlign}
-                  onValueChange={(value) => setPreviewSettings(prev => ({ ...prev, textAlign: value }))}
+                  onValueChange={(value) => setPreviewSettings((prev) => ({ ...prev, textAlign: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -468,13 +564,12 @@ export default function BroadcastQnA() {
                   </SelectContent>
                 </Select>
               </div>
-              
-              {/* 세로 정렬 */}
+
               <div className="space-y-2">
                 <Label>{t('broadcast.verticalAlign')}</Label>
                 <Select
                   value={previewSettings.verticalAlign}
-                  onValueChange={(value) => setPreviewSettings(prev => ({ ...prev, verticalAlign: value }))}
+                  onValueChange={(value) => setPreviewSettings((prev) => ({ ...prev, verticalAlign: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -488,16 +583,12 @@ export default function BroadcastQnA() {
               </div>
             </div>
           )}
-          
+
           <SheetFooter className="flex gap-2 pt-4 border-t">
             <Button variant="outline" onClick={closeSettings} className="flex-1">
               {t('common.cancel')}
             </Button>
-            <Button 
-              onClick={handleSaveSettings}
-              disabled={savingSettings}
-              className="flex-1"
-            >
+            <Button onClick={handleSaveSettings} disabled={savingSettings} className="flex-1">
               {savingSettings && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               {t('common.save')}
             </Button>

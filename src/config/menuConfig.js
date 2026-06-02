@@ -111,8 +111,7 @@ const adminOnlyMenuItems = [
       { to: '/adm/system/database', labelKey: 'menu.database' },
       { to: '/adm/system/logs', labelKey: 'menu.logs' },
       { to: '/adm/system/login-logs', labelKey: 'menu.loginLogs' },
-      { to: '/adm/system/backup', labelKey: 'menu.backup' },
-      { to: '/adm/system/language-pack', labelKey: 'menu.languagePack' }
+      { to: '/adm/system/backup', labelKey: 'menu.backup' }
     ]
   },
   {

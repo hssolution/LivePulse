@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LivePulse 세션 운영 모델 재설계 기획안</title>
+<style>
+  :root{
+    --bg:#0b0b14; --panel:#11111b; --panel2:#161625; --line:#262640;
+    --ink:#e7e7f2; --muted:#9a9ab4; --dim:#6f6f8c;
+    --indigo:#6366f1; --indigo-soft:#312e81; --indigo-ink:#c7d2fe;
+    --rose:#f43f5e; --rose-soft:#4c1d2b; --rose-ink:#fecdd3;
+    --emerald:#10b981; --emerald-soft:#064e3b; --emerald-ink:#a7f3d0;
+    --amber:#f59e0b; --amber-soft:#4a3209; --amber-ink:#fde68a;
+    --sky:#38bdf8; --sky-soft:#0c4a6e; --sky-ink:#bae6fd;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:linear-gradient(180deg,#0b0b14,#0d0d18);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+    line-height:1.6;font-size:15px}
+  a{color:var(--indigo-ink);text-decoration:none}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.86em;
+    background:#1d1d30;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#d6d6f5}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px 120px}
+
+  /* ===== 헤더 ===== */
+  header.cover{padding:64px 24px 40px;text-align:center;
+    background:radial-gradient(900px 320px at 50% -40px,rgba(99,102,241,.22),transparent)}
+  header.cover .kicker{color:var(--indigo-ink);font-weight:700;letter-spacing:.18em;font-size:12px;text-transform:uppercase}
+  header.cover h1{font-size:38px;margin:14px 0 8px;letter-spacing:-.02em}
+  header.cover .sub{color:var(--muted);font-size:17px}
+  header.cover .meta{margin-top:18px;color:var(--dim);font-size:13px}
+
+  /* ===== 목차 ===== */
+  nav.toc{position:sticky;top:0;z-index:40;background:rgba(11,11,20,.85);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:12px 0}
+  nav.toc .wrap{padding-bottom:0;display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+  nav.toc a{font-size:13px;color:var(--muted);padding:6px 12px;border-radius:999px;border:1px solid transparent}
+  nav.toc a:hover{color:var(--ink);background:var(--panel2);border-color:var(--line)}
+
+  section{margin-top:64px;scroll-margin-top:70px}
+  h2{font-size:25px;margin:0 0 6px;letter-spacing:-.01em;display:flex;align-items:center;gap:12px}
+  h2 .num{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+    border-radius:10px;background:var(--indigo-soft);color:var(--indigo-ink);font-size:16px;font-weight:800;flex:0 0 auto}
+  h3{font-size:18px;margin:30px 0 10px}
+  .lead{color:var(--muted);margin:0 0 22px;font-size:15.5px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:880px){.g3,.g2{grid-template-columns:1fr}}
+
+  /* 뱃지 */
+  .badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.04em;
+    padding:3px 9px;border-radius:999px;vertical-align:middle}
+  .b-now{background:var(--emerald-soft);color:var(--emerald-ink);border:1px solid #0d7a5a}
+  .b-new{background:var(--amber-soft);color:var(--amber-ink);border:1px solid #9a6a0c}
+  .b-merge{background:var(--rose-soft);color:var(--rose-ink);border:1px solid #b03050}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:8px 0 26px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+
+  /* 문제/처방 카드 */
+  .prob{border-left:3px solid var(--rose)}
+  .prob h4{margin:0 0 6px;color:var(--rose-ink);font-size:15px}
+  .fix{border-left:3px solid var(--emerald)}
+  .fix h4{margin:0 0 6px;color:var(--emerald-ink);font-size:15px}
+  .card p.small{color:var(--muted);font-size:13.5px;margin:0}
+
+  /* 테이블 */
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+  th,td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;background:var(--panel2)}
+  tr:hover td{background:rgba(99,102,241,.04)}
+  td .muted{color:var(--muted);font-size:13px}
+
+  /* 화면 박스 다이어그램 */
+  .screens{display:flex;gap:14px;flex-wrap:wrap;align-items:stretch}
+  .screen{flex:1 1 200px;min-width:200px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:14px;padding:14px 15px;position:relative}
+  .screen .url{font-family:ui-monospace,monospace;font-size:12px;color:var(--sky-ink)}
+  .screen .who{font-weight:800;margin:6px 0 4px;font-size:15px}
+  .screen ul{margin:8px 0 0;padding-left:16px;color:var(--muted);font-size:13px}
+  .screen.op{border-color:#3b3b6e;background:linear-gradient(180deg,#181830,#13131f)}
+  .screen.cockpit{border-color:var(--indigo);box-shadow:0 0 0 1px rgba(99,102,241,.35) inset}
+  .dup{margin:16px 0;padding:12px 16px;border:1px dashed var(--rose);border-radius:12px;
+    color:var(--rose-ink);font-size:13.5px;background:var(--rose-soft)}
+
+  /* 가로 상태 타임라인 */
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+  .step{flex:1 1 0;min-width:120px;position:relative;padding:0 6px}
+  .step .box{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;height:100%;text-align:center}
+  .step .box .ko{font-weight:800;font-size:15px}
+  .step .box .en{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--dim);margin-top:2px}
+  .step .box .desc{color:var(--muted);font-size:12px;margin-top:7px;line-height:1.45}
+  .step .arrow{position:absolute;right:-9px;top:50%;transform:translateY(-50%);z-index:2;
+    color:var(--dim);font-size:20px;line-height:1}
+  .step:last-child .arrow{display:none}
+  .step.draft .box{border-color:#9a6a0c}
+  .step.pub .box{border-color:var(--sky)}
+  .step.live .box{border-color:var(--emerald);box-shadow:0 0 0 1px rgba(16,185,129,.3) inset}
+  .step.end .box{border-color:#3a3a52}
+  .branch{margin-top:14px;display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+  .branch .chip{border:1px solid #b03050;color:var(--rose-ink);background:var(--rose-soft);
+    border-radius:999px;padding:4px 12px;font-weight:700;font-size:12.5px}
+
+  /* 미시 상태 (순환) */
+  .micro{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:center}
+  .mnode{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:11px 16px;text-align:center;min-width:120px}
+  .mnode .t{font-weight:800;font-size:14px}
+  .mnode .s{font-family:ui-monospace,monospace;font-size:11px;color:var(--dim);margin-top:2px}
+  .mnode.new{border-color:#9a6a0c;background:linear-gradient(180deg,#241b08,#15131c)}
+  .swap{color:var(--dim);font-size:20px}
+
+  /* 콕핏 목업 */
+  .mock{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#0e0e18}
+  .mock .topbar{background:#0a0a12;border-bottom:1px solid var(--line);padding:12px 16px;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .mock .pill{display:inline-flex;align-items:center;gap:7px;background:var(--emerald-soft);
+    color:var(--emerald-ink);border:1px solid #0d7a5a;border-radius:999px;padding:5px 12px;font-weight:800;font-size:13px}
+  .mock .dot{width:8px;height:8px;border-radius:999px;background:var(--emerald);box-shadow:0 0 10px var(--emerald)}
+  .mock .nextdo{background:var(--amber-soft);color:var(--amber-ink);border:1px solid #9a6a0c;
+    border-radius:8px;padding:5px 12px;font-size:13px;font-weight:700}
+  .mock .spacer{flex:1}
+  .mock .ghost{border:1px solid var(--line);border-radius:8px;padding:5px 11px;color:var(--muted);font-size:12.5px}
+  .mock .body{display:grid;grid-template-columns:1fr 1.5fr 1.1fr;min-height:300px}
+  @media(max-width:880px){.mock .body{grid-template-columns:1fr}}
+  .mock .col{padding:14px;border-right:1px solid var(--line)}
+  .mock .col:last-child{border-right:0}
+  .mock .col h5{margin:0 0 4px;font-size:13px;color:var(--indigo-ink);display:flex;align-items:center;gap:7px}
+  .mock .col .tag{font-size:10.5px;font-weight:800;border-radius:5px;padding:1px 7px}
+  .tag-reuse{background:var(--emerald-soft);color:var(--emerald-ink)}
+  .tag-new{background:var(--amber-soft);color:var(--amber-ink)}
+  .tag-merge{background:var(--rose-soft);color:var(--rose-ink)}
+  .mock .col .hint{color:var(--dim);font-size:12px;margin:6px 0 12px}
+  .fakebtn{background:#1a1a2c;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--muted);margin-bottom:7px}
+  .fakebtn.on{border-color:var(--indigo);color:var(--indigo-ink);background:#1c1c38}
+  .fakerow{display:flex;align-items:center;gap:8px;background:#15151f;border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--muted);margin-bottom:6px}
+  .fakerow .num{width:18px;height:18px;border-radius:5px;background:var(--indigo-soft);color:var(--indigo-ink);
+    display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex:0 0 auto}
+
+  /* before/after */
+  .ba{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:center}
+  @media(max-width:880px){.ba{grid-template-columns:1fr}}
+  .ba .arrowbig{font-size:30px;color:var(--indigo);text-align:center}
+  .ba .col h4{margin:0 0 10px;font-size:14px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .ba .item{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:7px;font-size:13.5px}
+
+  /* 로드맵 */
+  .road{position:relative;padding-left:26px}
+  .road::before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .phase{position:relative;margin-bottom:22px}
+  .phase::before{content:"";position:absolute;left:-22px;top:5px;width:12px;height:12px;border-radius:999px;
+    background:var(--indigo);box-shadow:0 0 0 4px rgba(99,102,241,.18)}
+  .phase h4{margin:0 0 4px;font-size:16px}
+  .phase .files{margin-top:8px;font-size:12.5px;color:var(--dim)}
+  .phase .files code{font-size:11.5px}
+
+  .note{background:linear-gradient(180deg,#1a1730,#14121f);border:1px solid #3a356e;border-radius:14px;
+    padding:16px 20px;color:var(--indigo-ink);font-size:14px}
+  .keymsg{background:linear-gradient(90deg,rgba(99,102,241,.16),transparent);
+    border:1px solid var(--indigo);border-radius:14px;padding:18px 22px;font-size:16px;font-weight:600}
+  .keymsg b{color:#fff}
+
+  footer{margin-top:80px;padding-top:24px;border-top:1px solid var(--line);color:var(--dim);font-size:13px;text-align:center}
+  .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .pillrow .p{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="kicker">LivePulse · Product Design</div>
+  <h1>세션 운영 모델 재설계 기획안</h1>
+  <div class="sub">좌장 콕핏 통합 · 진행 프로세스 가시화</div>
+  <div class="meta">작성일 2026-06-01 · 코드베이스 분석 기반 · 코드/DB 변경 없는 기획 문서</div>
+</header>
+
+<nav class="toc">
+  <div class="wrap">
+    <a href="#summary">요약</a>
+    <a href="#asis">① 현황 진단</a>
+    <a href="#roles">② 역할 모델</a>
+    <a href="#screens">③ 화면 지도</a>
+    <a href="#states">④ 프로세스 상태</a>
+    <a href="#cockpit">⑤ 좌장 콕핏</a>
+    <a href="#roadmap">⑥ 로드맵</a>
+    <a href="#appendix">부록</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <!-- ============ 요약 ============ -->
+  <section id="summary">
+    <h2><span class="num">◎</span> 한 줄 요약</h2>
+    <p class="lead">"라이브 시작" 버튼으로 들어간 화면이 <b>좌장 화면인지 헷갈리고, 세션이 어떤 순서로 진행되는지 상상이 안 된다"</b>는 문제의 근본 원인은 세 가지입니다. 각 문제에 대응하는 처방을 함께 제시합니다.</p>
+
+    <div class="grid g3">
+      <div class="card prob">
+        <h4>문제 1 · "좌장" 역할이 코드에 없다</h4>
+        <p class="small">DB에는 <code>session_presenters</code>(강연자)·<code>session_partners</code>(협업)만 존재. <code>/console</code>은 사실 <b>파트너 콘솔</b>인데 좌장 업무를 다 하므로 정체가 모호.</p>
+      </div>
+      <div class="card prob">
+        <h4>문제 2 · 운영 화면이 4개로 쪼개짐</h4>
+        <p class="small"><code>/console</code> · <code>/presenter</code> · <code>/speaker</code> · <code>/broadcast</code>. 이 중 <code>/console</code>↔<code>/presenter</code>는 기능이 거의 <b>중복</b>인데 "좌장 선택" 버튼이 중복 화면을 새 탭으로 엶.</p>
+      </div>
+      <div class="card prob">
+        <h4>문제 3 · 진행 단계가 화면에 안 보임</h4>
+        <p class="small">상태는 <code>draft→published→active→ended</code> 5개뿐. 라이브 중 세부 단계(대기/강연/Q&A/설문)는 <code>broadcast_mode</code> 속에 숨어 "지금 어디/다음 뭐"가 안 보임.</p>
+      </div>
+    </div>
+
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card fix">
+        <h4>처방 1 · 콘솔 = 좌장 콕핏으로 재정의</h4>
+        <p class="small">"좌장 = <b>콕핏을 여는 사람</b>"으로 정의. 새 DB 역할 신설 없이 운영 권한(owner/협업/confirmed presenter)으로 처리.</p>
+      </div>
+      <div class="card fix">
+        <h4>처방 2 · 중복 흡수 → 1콕핏 + 2보조</h4>
+        <p class="small"><code>/presenter</code> 고유 기능을 콕핏 우측 패널로 흡수. 운영 화면을 <b>좌장 콕핏 · 강연자 · 송출</b> 3개로 축소.</p>
+      </div>
+      <div class="card fix">
+        <h4>처방 3 · 단계 가시화 + 세부 단계 제안</h4>
+        <p class="small">콕핏 상단에 <b>"지금 단계 · 다음 할 일"</b> 상태 바 추가. 리허설·휴식 등 운영 단계를 제안 수준으로 확장.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ① 현황 진단 ============ -->
+  <section id="asis">
+    <h2><span class="num">1</span> 현황 진단 (As-Is)</h2>
+    <p class="lead">지금 코드가 실제로 어떻게 생겼는지부터 정리합니다.</p>
+
+    <h3>1-1. 역할 혼란 — "말"과 "코드 실체"의 불일치</h3>
+    <table>
+      <thead><tr><th>UI/문서에 등장하는 말</th><th>코드/DB의 실체</th><th>결과</th></tr></thead>
+      <tbody>
+        <tr><td><b>좌장</b> (콘솔 "좌장 선택" 버튼, StageControl 주석 "좌장/콘솔 공용")</td><td>독립 역할/테이블 <b>없음</b>. <code>session_members.role</code>에 <code>moderator</code> enum은 있으나 실사용 제한적</td><td>좌장이 누구인지·어느 화면인지 불명확</td></tr>
+        <tr><td>행사주최자 / 파트너</td><td><code>partners</code> + <code>sessions.partner_id</code></td><td>콘솔의 실제 소유자. 그러나 화면명이 "콘솔"이라 좌장과 구분 안 됨</td></tr>
+        <tr><td>강연자 / 발표자</td><td><code>session_presenters</code> (member/partner/manual, status pending→confirmed)</td><td>비교적 명확. <code>/speaker</code> 사용</td></tr>
+        <tr><td>협업 파트너</td><td><code>session_partners</code> (status accepted)</td><td>준비·운영 공동 권한</td></tr>
+        <tr><td>관리자 보기 모드</td><td><code>ViewAsBanner</code> + <code>PartnerContext</code></td><td>캡쳐 상단 노란 배너가 이것</td></tr>
+      </tbody>
+    </table>
+    <div class="note" style="margin-top:14px">핵심: 캡쳐 화면(<code>/partner/sessions/:id/console</code>)은 <b>"행사주최자(또는 위임받은 운영자)가 라이브를 진행하는 콘솔"</b>입니다. 기능상 좌장이 할 일을 모두 하지만, 이름·정보구조가 그 사실을 드러내지 않아 헷갈립니다.</div>
+
+    <h3>1-2. 운영 화면 분산 지도 (현재)</h3>
+    <div class="card">
+      <div class="screens">
+        <div class="screen op cockpit">
+          <div class="url">/partner/.../console</div>
+          <div class="who">파트너 콘솔</div>
+          <div class="muted" style="font-size:12.5px">StageControl + ManagerQnA. 라이브 시작/종료. <b>(캡쳐 화면)</b></div>
+        </div>
+        <div class="screen op">
+          <div class="url">/presenter/:code</div>
+          <div class="who">"좌장 선택" 화면</div>
+          <div class="muted" style="font-size:12.5px">StageControl + 질문 선택. 콘솔과 거의 동일</div>
+        </div>
+        <div class="screen op">
+          <div class="url">/speaker/:code</div>
+          <div class="who">강연자 화면</div>
+          <div class="muted" style="font-size:12.5px">PDF 대형 표시 + 페이지 넘김(동기화)</div>
+        </div>
+        <div class="screen op">
+          <div class="url">/broadcast/:code</div>
+          <div class="who">송출 화면</div>
+          <div class="muted" style="font-size:12.5px">프로젝터용. PDF/Q&A/설문결과 3모드</div>
+        </div>
+      </div>
+      <div class="dup">⚠ <b>중복:</b> <code>/console</code> 과 <code>/presenter</code> 는 둘 다 <code>StageControl</code>(무대 제어) + 질문 송출을 가집니다. 콘솔의 "좌장 선택" 버튼이 사실상 자기 기능과 겹치는 화면을 새 탭으로 여는 구조라, 사용자가 "어디서 뭘 해야 하나"를 잃습니다.</div>
+    </div>
+
+    <h3>1-3. 상태 불투명 — 5개 상태 + 숨은 송출 모드</h3>
+    <div class="card">
+      <p class="small" style="margin-bottom:12px">세션 상태는 5개뿐이고, 라이브 중 "진짜 진행 단계"는 <code>sessions.broadcast_mode</code> 안에 숨어 화면에 드러나지 않습니다.</p>
+      <div class="flow">
+        <div class="step draft"><div class="box"><div class="ko">초안</div><div class="en">draft</div></div><div class="arrow">→</div></div>
+        <div class="step pub"><div class="box"><div class="ko">게시됨</div><div class="en">published</div></div><div class="arrow">→</div></div>
+        <div class="step live"><div class="box"><div class="ko">라이브</div><div class="en">active</div><div class="desc" style="color:var(--amber-ink)">← 실제 진행 단계는<br>여기 안에 숨어 있음<br>(broadcast_mode)</div></div><div class="arrow">→</div></div>
+        <div class="step end"><div class="box"><div class="ko">종료</div><div class="en">ended</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ② 역할 모델 ============ -->
+  <section id="roles">
+    <h2><span class="num">2</span> To-Be 역할 모델 (4 액터)</h2>
+    <p class="lead">사람 중심 4역할로 재정의하되, <b>기존 DB 테이블에 그대로 매핑</b>합니다(새 테이블 강요 X).</p>
+
+    <table>
+      <thead><tr><th>액터</th><th>하는 일</th><th>사용 화면</th><th>코드 매핑</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>준비자</b><br><span class="muted">행사주최자 / 협업</span></td>
+          <td>세션 생성 · 화면 디자인 · 발표자/콘텐츠 등록 · 게시</td>
+          <td>SessionDetail 준비 마법사</td>
+          <td><code>partners</code> · <code>session_partners</code></td>
+        </tr>
+        <tr style="background:rgba(99,102,241,.06)">
+          <td><b>좌장 (운영자)</b> <span class="badge b-now">핵심</span></td>
+          <td>라이브 당일 <b>모든</b> 송출·질문·설문·단계 제어</td>
+          <td><b>좌장 콕핏</b> (= 통합 console)</td>
+          <td>owner / confirmed presenter / admin <span class="muted">(운영 권한)</span></td>
+        </tr>
+        <tr>
+          <td><b>강연자 (발표자)</b></td>
+          <td>자기 자료 발표 · 페이지 넘김</td>
+          <td><code>/speaker</code></td>
+          <td><code>session_presenters</code> (confirmed)</td>
+        </tr>
+        <tr>
+          <td><b>청중</b></td>
+          <td>입장 · 질문 작성 · 투표</td>
+          <td><code>/join</code> → <code>/live</code></td>
+          <td>무계정 (anon)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="keymsg" style="margin-top:20px">
+      🎯 <b>좌장 = "콕핏을 여는 사람"</b>입니다. 별도 DB 역할을 새로 만들지 않고, "콕핏 운영 권한"으로 정의합니다.
+      권한자: <b>세션 owner</b> · <b>협업 파트너(accepted)</b> · <b>confirmed presenter</b>.
+      이 권한 판별 로직은 이미 <code>PresenterQnA.jsx</code>(44–107행)에 존재하므로 콕핏으로 이관만 하면 됩니다.
+    </div>
+  </section>
+
+  <!-- ============ ③ 화면 지도 ============ -->
+  <section id="screens">
+    <h2><span class="num">3</span> To-Be 화면 지도</h2>
+    <p class="lead">운영 화면을 <b>3개로 축소</b>합니다: 좌장 콕핏 1개 + 보조 화면 2개(강연자·송출). 준비/청중 화면은 그대로.</p>
+
+    <div class="card">
+      <div class="screens">
+        <div class="screen cockpit">
+          <div class="url">/console <span class="badge b-merge">+ /presenter 흡수</span></div>
+          <div class="who">🎛 좌장 콕핏</div>
+          <ul>
+            <li><b>누가:</b> 좌장(운영 권한자)</li>
+            <li><b>무엇:</b> 자료·Q&A·설문·페이지·단계 전체</li>
+            <li><b>컨트롤:</b> 통합 — 한 화면에서 끝</li>
+          </ul>
+        </div>
+        <div class="screen op">
+          <div class="url">/speaker/:code</div>
+          <div class="who">🖥 강연자 화면 <span class="badge b-now">유지</span></div>
+          <ul>
+            <li><b>누가:</b> 강연자 본인</li>
+            <li><b>무엇:</b> 내 PDF 크게 보기</li>
+            <li><b>컨트롤:</b> 페이지 넘김(좌장과 동기화)</li>
+          </ul>
+        </div>
+        <div class="screen op">
+          <div class="url">/broadcast/:code</div>
+          <div class="who">📺 송출 화면 <span class="badge b-now">유지</span></div>
+          <ul>
+            <li><b>누가:</b> 프로젝터/대형 스크린</li>
+            <li><b>무엇:</b> 청중이 보는 결과 화면</li>
+            <li><b>컨트롤:</b> 없음(좌장이 콕핏에서 제어)</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:14px;flex-wrap:wrap">
+        <div class="screen" style="border-color:#0d7a5a">
+          <div class="url">/live/:code</div>
+          <div class="who">📱 청중 라이브 <span class="badge b-now">유지</span></div>
+          <ul><li>탭: 현재 / Q&A / 정보 · 상태별 로비·라이브·종료</li></ul>
+        </div>
+        <div class="screen" style="border-color:#9a6a0c">
+          <div class="url">/partner/sessions/:id</div>
+          <div class="who">🧰 준비 마법사 <span class="badge b-now">유지</span></div>
+          <ul><li>기본정보·디자인·발표자·콘텐츠·참가자·게시</li></ul>
+        </div>
+      </div>
+      <div class="dup" style="border-style:solid;border-color:#0d7a5a;background:var(--emerald-soft);color:var(--emerald-ink)">
+        ✓ <b>결과:</b> 운영자는 이제 <b>콕핏 한 곳</b>만 보면 됩니다. 강연자·송출 화면은 "여는" 보조 화면일 뿐, 운영 제어는 모두 콕핏에 모입니다.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ④ 프로세스 상태 ============ -->
+  <section id="states">
+    <h2><span class="num">4</span> 프로세스 상태 머신 (핵심)</h2>
+    <p class="lead">"세션이 어떻게 진행되는가"를 두 층위로 그립니다. <b>거시</b>(세션 일생) + <b>미시</b>(라이브 중 송출 단계). 그리고 각 단계에서 4개 화면이 <b>동시에</b> 무엇을 보여주는지 표로 정리합니다.</p>
+
+    <div class="legend">
+      <span><span class="badge b-now">현재 존재</span> 지금 코드에 구현됨</span>
+      <span><span class="badge b-new">신규 제안</span> 아직 없음 · 도입 검토 대상</span>
+    </div>
+
+    <h3>4-1. 거시 상태 — 세션의 일생</h3>
+    <div class="card">
+      <div class="flow">
+        <div class="step draft"><div class="box"><div class="ko">초안</div><div class="en">draft</div><div class="desc">준비 마법사에서 작성 중<span class="badge b-now" style="margin-top:6px;display:inline-block">현재</span></div></div><div class="arrow">→</div></div>
+        <div class="step pub"><div class="box"><div class="ko">게시·모집중</div><div class="en">published</div><div class="desc">QR·코드 공개, 청중 입장 가능<span class="badge b-now" style="margin-top:6px;display:inline-block">현재</span></div></div><div class="arrow">→</div></div>
+        <div class="step"><div class="box" style="border-color:#9a6a0c"><div class="ko">리허설·대기실</div><div class="en">ready</div><div class="desc">장비 점검, 입장 로비<span class="badge b-new" style="margin-top:6px;display:inline-block">신규 제안</span></div></div><div class="arrow">→</div></div>
+        <div class="step live"><div class="box"><div class="ko">라이브</div><div class="en">active</div><div class="desc">실제 진행 (아래 미시 단계)<span class="badge b-now" style="margin-top:6px;display:inline-block">현재</span></div></div><div class="arrow">→</div></div>
+        <div class="step end"><div class="box"><div class="ko">종료</div><div class="en">ended</div><div class="desc">리포트 생성<span class="badge b-now" style="margin-top:6px;display:inline-block">현재</span></div></div></div>
+      </div>
+      <div class="branch">분기 · 언제든 → <span class="chip">취소 cancelled</span> <span class="muted">(현재 존재)</span></div>
+    </div>
+
+    <h3>4-2. 미시 상태 — 라이브(active) 중 좌장이 전환하는 송출 단계</h3>
+    <div class="card">
+      <p class="small" style="margin-bottom:14px"><code>active</code> 한 칸을 펼치면 좌장이 자유롭게 오가는 단계들입니다. 아래 4개는 이미 <code>StageControl</code>의 <code>broadcast_mode</code>로 전환 가능하고, 휴식만 신규 제안입니다.</p>
+      <div class="micro">
+        <div class="mnode"><div class="t">대기 화면</div><div class="s">idle</div></div>
+        <div class="swap">⇄</div>
+        <div class="mnode"><div class="t">강연 중</div><div class="s">pdf</div></div>
+        <div class="swap">⇄</div>
+        <div class="mnode"><div class="t">Q&amp;A</div><div class="s">qna</div></div>
+        <div class="swap">⇄</div>
+        <div class="mnode"><div class="t">설문</div><div class="s">survey</div></div>
+        <div class="swap">⇄</div>
+        <div class="mnode new"><div class="t">휴식·막간</div><div class="s">intermission</div></div>
+      </div>
+      <div style="text-align:center;margin-top:12px">
+        <span class="badge b-now">idle · pdf · qna · survey = 현재 존재</span>
+        &nbsp;
+        <span class="badge b-new">intermission = 신규 제안</span>
+      </div>
+    </div>
+
+    <h3>4-3. 단계별 4화면 동시 뷰 <span class="muted" style="font-size:14px;font-weight:400">— "진행이 상상 안 된다"를 직접 해결</span></h3>
+    <table>
+      <thead><tr><th>단계</th><th>🎛 좌장 콕핏</th><th>🖥 강연자 화면</th><th>📺 송출 화면</th><th>📱 청중 /live</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>게시·모집</b><br><span class="muted">published</span></td>
+          <td>"라이브 시작" 버튼 강조, 준비 상태 점검</td>
+          <td>대기("곧 시작합니다")</td>
+          <td>대기 화면</td>
+          <td>로비 — "곧 시작합니다" + 입장 완료</td>
+        </tr>
+        <tr>
+          <td><b>대기 화면</b><br><span class="muted">active · idle</span></td>
+          <td>현재 송출 "대기 중", 다음 자료 준비</td>
+          <td>"좌장이 자료를 띄우면 표시"</td>
+          <td>인트로/로고 대기 화면</td>
+          <td>"현재" 탭 — 대기 스테이지</td>
+        </tr>
+        <tr style="background:rgba(99,102,241,.05)">
+          <td><b>강연 중</b><br><span class="muted">active · pdf</span></td>
+          <td>자료 선택 + 페이지 ◀▶, Q&A 적재</td>
+          <td><b>PDF 크게</b> + 페이지 넘김(동기화)</td>
+          <td>PDF 현재 페이지</td>
+          <td>"현재" 탭 — 강연 진행 안내</td>
+        </tr>
+        <tr>
+          <td><b>Q&amp;A</b><br><span class="muted">active · qna</span></td>
+          <td>질문 승인 → "송출" 선택, 카테고리 필터</td>
+          <td>다음 송출 질문 미리보기</td>
+          <td>선택된 질문 대형 표시</td>
+          <td>Q&A 탭 — 질문 작성·좋아요</td>
+        </tr>
+        <tr>
+          <td><b>설문</b><br><span class="muted">active · survey</span></td>
+          <td>설문 "청중에 띄우기/내리기"</td>
+          <td>설문 진행 중 미리보기</td>
+          <td>설문 + 실시간 결과 막대</td>
+          <td>"현재" 탭 자동 전환 — 투표</td>
+        </tr>
+        <tr>
+          <td><b>휴식·막간</b> <span class="badge b-new">신규</span><br><span class="muted">active · intermission</span></td>
+          <td>"휴식" 토글, 재개 카운트다운 설정</td>
+          <td>"잠시 휴식" 안내</td>
+          <td>휴식 안내 + 재개 타이머</td>
+          <td>"잠시 후 계속됩니다" 안내</td>
+        </tr>
+        <tr>
+          <td><b>종료</b><br><span class="muted">ended</span></td>
+          <td>리포트로 이동</td>
+          <td>"세션 종료"</td>
+          <td>종료 화면</td>
+          <td>"세션이 종료되었습니다"</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>4-4. 단계별 좌장 할 일 (버튼 시퀀스)</h3>
+    <div class="card">
+      <div class="flow" style="gap:0">
+        <div class="step"><div class="box" style="border-color:var(--sky)"><div class="ko">게시</div><div class="desc">준비 마법사에서</div></div><div class="arrow">→</div></div>
+        <div class="step"><div class="box" style="border-color:var(--emerald)"><div class="ko">라이브 시작</div><div class="desc">콕핏 진입</div></div><div class="arrow">→</div></div>
+        <div class="step"><div class="box"><div class="ko">자료 송출</div><div class="desc">강연자료 선택·넘김</div></div><div class="arrow">→</div></div>
+        <div class="step"><div class="box"><div class="ko">질문 받기</div><div class="desc">승인 후 송출</div></div><div class="arrow">→</div></div>
+        <div class="step"><div class="box"><div class="ko">설문 띄우기</div><div class="desc">투표 진행</div></div><div class="arrow">→</div></div>
+        <div class="step"><div class="box" style="border-color:#9a6a0c"><div class="ko">휴식</div><div class="desc">막간(신규)</div></div><div class="arrow">→</div></div>
+        <div class="step"><div class="box" style="border-color:#3a3a52"><div class="ko">종료</div><div class="desc">리포트</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ⑤ 좌장 콕핏 ============ -->
+  <section id="cockpit">
+    <h2><span class="num">5</span> 좌장 콕핏 재설계 (목업)</h2>
+    <p class="lead">기존 <code>console</code> 레이아웃(좌 StageControl + 중앙 ManagerQnA)을 살리고, <b>상단 상태 바</b>와 <b>우측 송출/강연자 패널</b>(/presenter 흡수)을 더합니다.</p>
+
+    <div class="mock">
+      <div class="topbar">
+        <span class="pill"><span class="dot"></span> 라이브 · 강연 중</span>
+        <span class="badge b-new">신규</span>
+        <span class="nextdo">다음 할 일 ▸ 질문 2개 검토 후 송출</span>
+        <span class="spacer"></span>
+        <span class="ghost">⏱ 00:42:17</span>
+        <span class="ghost">👥 5명</span>
+        <span class="ghost">강연자 화면 ↗</span>
+        <span class="ghost">송출 화면 ↗</span>
+        <span class="ghost" style="border-color:#9a6a0c;color:var(--amber-ink)">휴식</span>
+        <span class="ghost" style="border-color:#b03050;color:var(--rose-ink)">세션 종료</span>
+      </div>
+      <div class="body">
+        <div class="col">
+          <h5>무대 제어 <span class="tag tag-reuse">기존 StageControl 재사용</span></h5>
+          <div class="hint">강연자료 · Q&A · 설문 전환 + 페이지 제어</div>
+          <div class="fakebtn on">📄 강연자료</div>
+          <div class="fakebtn">💬 Q&amp;A</div>
+          <div class="fakebtn">📊 설문</div>
+          <div class="fakerow" style="margin-top:10px">◀ &nbsp; 11 / 36 &nbsp; ▶</div>
+          <div class="hint" style="margin-top:10px">+ <b>현재 강연자 선택</b> <span class="tag tag-new">신규</span><br>여러 발표자 세션에서 "지금 누구 차례"</div>
+        </div>
+        <div class="col">
+          <h5>Q&amp;A 모더레이션 <span class="tag tag-reuse">기존 ManagerQnA</span></h5>
+          <div class="hint">질문 승인 · 카테고리 · 답변 관리</div>
+          <div class="fakerow"><span class="num">1</span> 질문1`1` · 승인됨 · 화면표시</div>
+          <div class="fakerow"><span class="num">2</span> 질문2 · 승인됨 · 화면표시</div>
+          <div class="fakerow" style="opacity:.6"><span class="num">+</span> 질문 등록 / 대기 중 검토</div>
+        </div>
+        <div class="col" style="background:rgba(244,63,94,.04)">
+          <h5>송출 미리보기 · 강연자 <span class="tag tag-merge">/presenter 흡수</span></h5>
+          <div class="hint">지금 송출 화면을 작게 미리보기 + 질문 즉시 선택</div>
+          <div class="fakerow" style="border-color:var(--indigo)">📺 지금 송출: <b style="color:var(--indigo-ink)">&nbsp;강연자료 11p</b></div>
+          <div class="fakebtn">▸ 질문1 송출하기</div>
+          <div class="fakebtn">▸ 질문2 송출하기</div>
+          <div class="hint" style="margin-top:10px"><b>제거:</b> 헤더의 "좌장 선택" 버튼 <span class="tag tag-merge">중복 → 삭제</span><br>이 패널이 그 역할을 대체</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:30px">Before / After</h3>
+    <div class="card">
+      <div class="ba">
+        <div class="col">
+          <h4>Before — 4화면 분산</h4>
+          <div class="item">🎛 <b>/console</b> — 무대제어+Q&A</div>
+          <div class="item" style="border-color:var(--rose)">🔁 <b>/presenter</b> — 무대제어+질문선택 <span class="muted">(중복)</span></div>
+          <div class="item">🖥 /speaker — 강연자</div>
+          <div class="item">📺 /broadcast — 송출</div>
+          <div class="muted" style="font-size:12.5px;margin-top:6px">→ "좌장 선택" 버튼으로 탭 오가며 혼란</div>
+        </div>
+        <div class="arrowbig">⟶</div>
+        <div class="col">
+          <h4>After — 1콕핏 + 2보조</h4>
+          <div class="item" style="border-color:var(--indigo)">🎛 <b>좌장 콕핏</b> — 무대제어 + Q&A + 송출/강연자 (통합)</div>
+          <div class="item">🖥 /speaker — 강연자 본인 전용</div>
+          <div class="item">📺 /broadcast — 프로젝터 송출</div>
+          <div class="muted" style="font-size:12.5px;margin-top:6px">→ 좌장은 콕핏 한 곳에서 전부 제어</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ⑥ 로드맵 ============ -->
+  <section id="roadmap">
+    <h2><span class="num">6</span> 권장 조정 &amp; 단계적 로드맵</h2>
+    <p class="lead">충격을 최소화하도록 3단계로 나눕니다. P1~P2는 프론트 중심, P3는 DB 영향이 있어 별도 결정·적용이 필요합니다.</p>
+
+    <div class="road">
+      <div class="phase">
+        <h4>P1 · 용어 & 정보구조 정리 <span class="badge b-now" style="background:var(--emerald-soft);color:var(--emerald-ink)">코드 소폭</span></h4>
+        <p class="small"><code>console</code>을 화면·문구상 <b>"좌장 콕핏"</b>으로 라벨링. 상단에 <b>"지금 단계 · 다음 할 일" 상태 바</b> 추가(현재 status + broadcast_mode를 사람이 읽는 한 줄로 표현). 헤더의 "좌장 선택" 버튼 제거 검토.</p>
+        <div class="files">영향: <code>src/pages/partner/SessionConsole.jsx</code>, <code>src/components/session/StageControl.jsx</code></div>
+      </div>
+      <div class="phase">
+        <h4>P2 · 중복 흡수 <span class="badge b-merge">리팩터</span></h4>
+        <p class="small"><code>/presenter</code>의 고유 기능(질문 즉시 선택·강연자 지정)을 콕핏 <b>우측 패널</b>로 이관. <code>/presenter</code> 라우트는 콕핏으로 리다이렉트하거나 모바일 보조 뷰로 격하. 권한 판별 로직(<code>PresenterQnA.jsx</code> 44–107행)을 콕핏 진입 가드로 재사용.</p>
+        <div class="files">영향: <code>SessionConsole.jsx</code>, <code>ManagerQnA.jsx</code>, <code>PresenterQnA.jsx</code>, <code>src/App.jsx</code>(라우팅)</div>
+      </div>
+      <div class="phase">
+        <h4>P3 · 상태 모델 확장 <span class="badge b-new">DB 영향 · 사용자 결정</span></h4>
+        <p class="small">리허설/대기실 · 휴식 단계 도입. 두 가지 구현 옵션을 검토 후 선택:</p>
+        <table style="margin-top:10px">
+          <thead><tr><th>옵션</th><th>방식</th><th>장점</th><th>단점</th></tr></thead>
+          <tbody>
+            <tr><td><b>A</b></td><td><code>sessions.status</code>에 <code>ready</code> 추가</td><td>일생 단계가 명확, 리포트·통계 분리 쉬움</td><td>상태 enum·프로시저 다수 수정</td></tr>
+            <tr><td><b>B</b></td><td><code>active</code> 유지 + <code>stage_phase</code> 컬럼/플래그</td><td>기존 상태 흐름 유지, 변경 국소적</td><td>"라이브 안의 단계" 개념이 한 겹 더</td></tr>
+          </tbody>
+        </table>
+        <p class="small" style="margin-top:10px">※ 휴식(intermission)은 <b>옵션 B 성격</b>(active 내부 모드)이 자연스럽고, 리허설은 옵션 A/B 모두 가능합니다.</p>
+        <div class="files">영향: <code>supabase/migrations/*</code>, <code>sp_partner_session_status_s</code> 등 프로시저, <code>StageControl.jsx</code>, <code>LiveSession.jsx</code>, <code>BroadcastQnA.jsx</code> · <b>SQL 적용은 사용자가 직접</b>(프로시저 배포 모델 준수)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 부록 ============ -->
+  <section id="appendix">
+    <h2><span class="num">＋</span> 부록</h2>
+
+    <h3>용어 사전 (영문 ↔ 한글)</h3>
+    <div class="grid g2">
+      <div class="card">
+        <b>세션 상태 (sessions.status)</b>
+        <table style="margin-top:6px">
+          <tbody>
+            <tr><td><code>draft</code></td><td>초안 (준비 중)</td></tr>
+            <tr><td><code>published</code></td><td>게시됨 · 모집 중</td></tr>
+            <tr><td><code>active</code></td><td>라이브 (진행 중)</td></tr>
+            <tr><td><code>ended</code></td><td>종료</td></tr>
+            <tr><td><code>cancelled</code></td><td>취소됨</td></tr>
+            <tr><td><code>ready</code> <span class="badge b-new">제안</span></td><td>리허설·대기실</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <b>송출 모드 (broadcast_mode)</b>
+        <table style="margin-top:6px">
+          <tbody>
+            <tr><td><code>idle</code></td><td>대기 화면</td></tr>
+            <tr><td><code>pdf</code></td><td>강연자료</td></tr>
+            <tr><td><code>qna</code></td><td>Q&amp;A</td></tr>
+            <tr><td><code>survey</code></td><td>설문</td></tr>
+            <tr><td><code>intermission</code> <span class="badge b-new">제안</span></td><td>휴식·막간</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3>참고 파일 경로</h3>
+    <div class="card">
+      <div class="pillrow">
+        <span class="p">src/pages/partner/SessionConsole.jsx</span>
+        <span class="p">src/components/session/StageControl.jsx</span>
+        <span class="p">src/components/session/ManagerQnA.jsx</span>
+        <span class="p">src/pages/PresenterQnA.jsx</span>
+        <span class="p">src/pages/SpeakerScreen.jsx</span>
+        <span class="p">src/pages/BroadcastQnA.jsx</span>
+        <span class="p">src/pages/LiveSession.jsx</span>
+        <span class="p">src/pages/JoinSession.jsx</span>
+        <span class="p">src/pages/partner/SessionDetail.jsx</span>
+        <span class="p">src/App.jsx</span>
+        <span class="p">supabase/migrations/012_broadcast_control.sql</span>
+      </div>
+    </div>
+
+    <h3>주요 RPC (현재 존재)</h3>
+    <div class="card">
+      <div class="pillrow">
+        <span class="p">sp_partner_session_status_s</span>
+        <span class="p">sp_partner_broadcast_mode_s</span>
+        <span class="p">sp_partner_broadcast_state_q</span>
+        <span class="p">sp_partner_pdf_page_s</span>
+        <span class="p">sp_partner_qna_category_s</span>
+        <span class="p">sp_partner_poll_toggle_s</span>
+        <span class="p">sp_live_broadcast_q</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    LivePulse 세션 운영 모델 재설계 기획안 · 2026-06-01 · 본 문서는 코드/DB를 변경하지 않는 기획 산출물입니다.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -165,18 +165,18 @@ export default function Home() {
           <div className="text-center max-w-4xl mx-auto mb-12">
             <ScrollReveal delay={0}>
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-8 leading-tight">
-                <span className="block text-foreground">모든 강연의 시작과 끝,</span>
+                <span className="block text-foreground">{t('home.heroLine1')}</span>
                 <span className="bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 bg-clip-text text-transparent">
-                  LivePulse에서 연결하세요
+                  {t('home.heroLine2')}
                 </span>
               </h1>
             </ScrollReveal>
             
             <ScrollReveal delay={100}>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed">
-                검증된 강연가, 전문 대행사, 그리고 수준 높은 강연 콘텐츠까지.
+                {t('home.heroDescLine1')}
                 <br className="hidden sm:block" />
-                성공적인 강연 비즈니스를 위한 최적의 파트너를 찾아드립니다.
+                {t('home.heroDescLine2')}
               </p>
             </ScrollReveal>
 
@@ -185,54 +185,54 @@ export default function Home() {
               <div className="bg-white dark:bg-slate-800/50 backdrop-blur-md rounded-3xl p-4 shadow-2xl border border-slate-200 dark:border-slate-700 max-w-3xl mx-auto">
                 <Tabs defaultValue="all" className="w-full">
                   <TabsList className="grid w-full grid-cols-4 gap-2 mb-6 bg-transparent p-0">
-                    <TabsTrigger 
-                      value="all" 
+                    <TabsTrigger
+                      value="all"
                       className="rounded-xl py-3 text-base font-medium text-slate-400 bg-white/5 hover:bg-white/10 hover:text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-orange-500/20 transition-all duration-300"
                     >
-                      전체
+                      {t('home.tabAll')}
                     </TabsTrigger>
-                    <TabsTrigger 
-                      value="lecture" 
+                    <TabsTrigger
+                      value="lecture"
                       className="rounded-xl py-3 text-base font-medium text-slate-400 bg-white/5 hover:bg-white/10 hover:text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-orange-500/20 transition-all duration-300"
                     >
-                      강연
+                      {t('home.tabLecture')}
                     </TabsTrigger>
-                    <TabsTrigger 
-                      value="instructor" 
+                    <TabsTrigger
+                      value="instructor"
                       className="rounded-xl py-3 text-base font-medium text-slate-400 bg-white/5 hover:bg-white/10 hover:text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-orange-500/20 transition-all duration-300"
                     >
-                      강연가
+                      {t('home.tabInstructor')}
                     </TabsTrigger>
-                    <TabsTrigger 
-                      value="agency" 
+                    <TabsTrigger
+                      value="agency"
                       className="rounded-xl py-3 text-base font-medium text-slate-400 bg-white/5 hover:bg-white/10 hover:text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-orange-500/20 transition-all duration-300"
                     >
-                      대행사
+                      {t('home.tabAgency')}
                     </TabsTrigger>
                   </TabsList>
                   <div className="relative flex items-center">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input 
-                      type="text" 
-                      placeholder="찾으시는 강연 주제, 강연가명, 대행사를 입력해보세요." 
+                    <Input
+                      type="text"
+                      placeholder={t('home.searchPlaceholder')}
                       className="pl-12 pr-32 h-14 text-lg bg-transparent border-slate-200 dark:border-slate-700 focus-visible:ring-orange-500 rounded-xl"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
-                    <Button 
+                    <Button
                       className="absolute right-2 top-2 bottom-2 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white border-0 rounded-xl px-8 shadow-lg shadow-orange-500/20"
                     >
-                      검색
+                      {t('home.searchButton')}
                     </Button>
                   </div>
 
                   {/* Search Tags */}
                   <div className="flex flex-wrap gap-2 mt-4 justify-center text-sm text-muted-foreground">
-                    <span>추천 검색어:</span>
-                    <button className="hover:text-primary underline">#리더십강연</button>
-                    <button className="hover:text-primary underline">#CS강연</button>
-                    <button className="hover:text-primary underline">#기업행사대행</button>
-                    <button className="hover:text-primary underline">#동기부여</button>
+                    <span>{t('home.recommendedSearch')}</span>
+                    <button className="hover:text-primary underline">{t('home.tagLeadership')}</button>
+                    <button className="hover:text-primary underline">{t('home.tagCS')}</button>
+                    <button className="hover:text-primary underline">{t('home.tagCorporateEvent')}</button>
+                    <button className="hover:text-primary underline">{t('home.tagMotivation')}</button>
                   </div>
                 </Tabs>
               </div>
@@ -264,12 +264,12 @@ export default function Home() {
           <div className="text-center mb-20">
             <ScrollReveal>
               <h2 className="text-3xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-                성공적인 강연을 위한 완벽한 생태계
+                {t('home.ecosystemTitle')}
               </h2>
             </ScrollReveal>
             <ScrollReveal delay={100}>
               <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed font-light">
-                LivePulse는 강연 생태계의 모든 참여자가 함께 성장할 수 있는 환경을 제공합니다.
+                {t('home.ecosystemDesc')}
               </p>
             </ScrollReveal>
           </div>
@@ -285,26 +285,26 @@ export default function Home() {
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center mb-8 border border-blue-500/20 shadow-lg shadow-blue-500/10 group-hover:scale-110 transition-transform duration-500">
                     <Building2 className="h-7 w-7" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-4 text-white">강연 주최자</h3>
+                  <h3 className="text-2xl font-bold mb-4 text-white">{t('home.role1Title')}</h3>
                   <p className="text-slate-400 mb-8 text-sm leading-relaxed min-h-[3rem]">
-                    복잡한 강연 준비는 이제 그만. 검증된 전문가들과 함께 최고의 강연을 기획하세요.
+                    {t('home.role1Desc')}
                   </p>
                   <ul className="space-y-4 text-slate-300 mb-8 flex-grow">
                     <li className="flex items-center gap-3 text-sm">
                       <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
-                      <span>검증된 강연가/대행사 DB 열람</span>
+                      <span>{t('home.role1Item1')}</span>
                     </li>
                     <li className="flex items-center gap-3 text-sm">
                       <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
-                      <span>맞춤형 제안 요청 및 비교 견적</span>
+                      <span>{t('home.role1Item2')}</span>
                     </li>
                     <li className="flex items-center gap-3 text-sm">
                       <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
-                      <span>성과 분석 및 운영 도구 지원</span>
+                      <span>{t('home.role1Item3')}</span>
                     </li>
                   </ul>
                   <Link to="/lectures" className="inline-flex items-center text-blue-400 font-bold text-sm hover:text-blue-300 transition-colors group/link mt-auto">
-                    강연 찾아보기 
+                    {t('home.role1Cta')}
                     <ArrowRight className="ml-2 h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
                   </Link>
                 </CardContent>
@@ -321,26 +321,26 @@ export default function Home() {
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500/20 to-pink-500/20 text-orange-400 flex items-center justify-center mb-8 border border-orange-500/20 shadow-lg shadow-orange-500/10 group-hover:scale-110 transition-transform duration-500">
                     <GraduationCap className="h-7 w-7" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-4 text-white">전문 강연가</h3>
+                  <h3 className="text-2xl font-bold mb-4 text-white">{t('home.role2Title')}</h3>
                   <p className="text-slate-400 mb-8 text-sm leading-relaxed min-h-[3rem]">
-                    강연에만 집중하세요. 브랜딩부터 일정 관리까지 시스템이 도와드립니다.
+                    {t('home.role2Desc')}
                   </p>
                   <ul className="space-y-4 text-slate-300 mb-8 flex-grow">
                     <li className="flex items-center gap-3 text-sm">
                       <div className="h-1.5 w-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"></div>
-                      <span>퍼스널 브랜딩 포트폴리오</span>
+                      <span>{t('home.role2Item1')}</span>
                     </li>
                     <li className="flex items-center gap-3 text-sm">
                       <div className="h-1.5 w-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"></div>
-                      <span>강연 의뢰 실시간 알림/관리</span>
+                      <span>{t('home.role2Item2')}</span>
                     </li>
                     <li className="flex items-center gap-3 text-sm">
                       <div className="h-1.5 w-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"></div>
-                      <span>커리큘럼 홍보 및 마케팅</span>
+                      <span>{t('home.role2Item3')}</span>
                     </li>
                   </ul>
                   <Link to="/signup?type=instructor" className="inline-flex items-center text-orange-400 font-bold text-sm hover:text-orange-300 transition-colors group/link mt-auto">
-                    강연가 등록하기 
+                    {t('home.role2Cta')}
                     <ArrowRight className="ml-2 h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
                   </Link>
                 </CardContent>
@@ -357,26 +357,26 @@ export default function Home() {
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-violet-500/20 text-purple-400 flex items-center justify-center mb-8 border border-purple-500/20 shadow-lg shadow-purple-500/10 group-hover:scale-110 transition-transform duration-500">
                     <Briefcase className="h-7 w-7" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-4 text-white">행사 대행사</h3>
+                  <h3 className="text-2xl font-bold mb-4 text-white">{t('home.role3Title')}</h3>
                   <p className="text-slate-400 mb-8 text-sm leading-relaxed min-h-[3rem]">
-                    더 많은 비즈니스 기회를 발견하고, 효율적으로 소속 강연가를 관리하세요.
+                    {t('home.role3Desc')}
                   </p>
                   <ul className="space-y-4 text-slate-300 mb-8 flex-grow">
                     <li className="flex items-center gap-3 text-sm">
                       <div className="h-1.5 w-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]"></div>
-                      <span>신규 기업 고객 발굴 기회</span>
+                      <span>{t('home.role3Item1')}</span>
                     </li>
                     <li className="flex items-center gap-3 text-sm">
                       <div className="h-1.5 w-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]"></div>
-                      <span>소속 강연가 통합 관리 시스템</span>
+                      <span>{t('home.role3Item2')}</span>
                     </li>
                     <li className="flex items-center gap-3 text-sm">
                       <div className="h-1.5 w-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]"></div>
-                      <span>입찰 및 제안 프로세스 간소화</span>
+                      <span>{t('home.role3Item3')}</span>
                     </li>
                   </ul>
                   <Link to="/signup?type=agency" className="inline-flex items-center text-purple-400 font-bold text-sm hover:text-purple-300 transition-colors group/link mt-auto">
-                    대행사 등록하기 
+                    {t('home.role3Cta')}
                     <ArrowRight className="ml-2 h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
                   </Link>
                 </CardContent>
@@ -400,17 +400,17 @@ export default function Home() {
               <ScrollReveal direction="right">
                 <div className="inline-flex items-center px-3 py-1 rounded-full border border-green-500/30 bg-green-500/10 text-green-400 text-sm font-medium mb-6">
                   <Users className="w-4 h-4 mr-2" />
-                  누구나 무료로 시작하는 소통
+                  {t('home.publicBadge')}
                 </div>
                 <h2 className="text-3xl md:text-5xl font-bold mb-6 text-white leading-tight">
-                  강연뿐만 아니라<br />
+                  {t('home.publicTitleLine1')}<br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-teal-400">
-                    모든 모임의 소통을<br />라이브하게
+                    {t('home.publicTitleLine2')}<br />{t('home.publicTitleLine3')}
                   </span>
                 </h2>
                 <p className="text-slate-400 text-lg mb-8 leading-relaxed">
-                  대학교 수업, 학생회 투표, 사내 익명 설문조사까지.<br />
-                  복잡한 설치 없이 QR코드 하나로 실시간 소통을 시작해보세요.
+                  {t('home.publicDescLine1')}<br />
+                  {t('home.publicDescLine2')}
                 </p>
                 
                 <div className="grid sm:grid-cols-2 gap-4 mb-8">
@@ -418,21 +418,21 @@ export default function Home() {
                     <div className="w-10 h-10 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center mb-3">
                       <MessageSquare className="w-5 h-5" />
                     </div>
-                    <h4 className="text-white font-bold mb-1">실시간 Q&A</h4>
-                    <p className="text-sm text-slate-400">익명 질문으로 부담 없이 소통</p>
+                    <h4 className="text-white font-bold mb-1">{t('home.publicFeature1Title')}</h4>
+                    <p className="text-sm text-slate-400">{t('home.publicFeature1Desc')}</p>
                   </div>
                   <div className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
                     <div className="w-10 h-10 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center mb-3">
                       <BarChart3 className="w-5 h-5" />
                     </div>
-                    <h4 className="text-white font-bold mb-1">투표 및 설문</h4>
-                    <p className="text-sm text-slate-400">결과를 실시간 그래프로 확인</p>
+                    <h4 className="text-white font-bold mb-1">{t('home.publicFeature2Title')}</h4>
+                    <p className="text-sm text-slate-400">{t('home.publicFeature2Desc')}</p>
                   </div>
                 </div>
 
                 <Link to="/signup">
                   <Button size="lg" className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-8 h-14 text-lg shadow-lg shadow-green-900/20">
-                    지금 무료로 만들기
+                    {t('home.publicCta')}
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>
@@ -447,8 +447,8 @@ export default function Home() {
                     <div className="flex items-center gap-4 mb-4">
                       <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-2xl">🎓</div>
                       <div>
-                        <div className="text-white font-bold">총학생회 임원 선거</div>
-                        <div className="text-xs text-slate-500">실시간 투표율 82%</div>
+                        <div className="text-white font-bold">{t('home.demoCard1Title')}</div>
+                        <div className="text-xs text-slate-500">{t('home.demoCard1Subtitle')}</div>
                       </div>
                       <div className="ml-auto px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded animate-pulse">LIVE</div>
                     </div>
@@ -462,13 +462,13 @@ export default function Home() {
                     <div className="flex items-center gap-4 mb-4">
                       <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-2xl">🏢</div>
                       <div>
-                        <div className="text-white font-bold">사내 복지 개선 설문</div>
-                        <div className="text-xs text-slate-500">익명 의견 142건 수집됨</div>
+                        <div className="text-white font-bold">{t('home.demoCard2Title')}</div>
+                        <div className="text-xs text-slate-500">{t('home.demoCard2Subtitle')}</div>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <span className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-400">#점심식대</span>
-                      <span className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-400">#유연근무</span>
+                      <span className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-400">{t('home.demoTagLunch')}</span>
+                      <span className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-400">{t('home.demoTagFlex')}</span>
                     </div>
                   </Card>
                 </ScrollReveal>
@@ -499,13 +499,13 @@ export default function Home() {
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <ScrollReveal>
-            <div className="inline-block mb-4 px-3 py-1 rounded-full border border-white/20 bg-white/5 backdrop-blur-sm text-xs text-slate-300 font-medium tracking-wider uppercase">Premium Space</div>
+            <div className="inline-block mb-4 px-3 py-1 rounded-full border border-white/20 bg-white/5 backdrop-blur-sm text-xs text-slate-300 font-medium tracking-wider uppercase">{t('home.premiumSpace')}</div>
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-8 tracking-tight leading-tight">
-              당신의 이야기가<br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-200 to-amber-100">세상을 울리는 순간</span>
+              {t('home.hallTitleLine1')}<br/>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-200 to-amber-100">{t('home.hallTitleLine2')}</span>
             </h2>
             <p className="text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto font-light leading-relaxed">
-              청중의 마음을 움직이는 강연, LivePulse가 가장 빛나는 무대를 준비해 드립니다.
+              {t('home.hallDesc')}
             </p>
           </ScrollReveal>
         </div>
@@ -525,28 +525,35 @@ export default function Home() {
           <ScrollReveal>
             <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
               <div>
-                <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">인기 강연 주제</h2>
+                <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">{t('home.popularTopicsTitle')}</h2>
                 <p className="text-muted-foreground text-lg">
-                  지금 기업들이 가장 많이 찾는 강연 주제입니다.
+                  {t('home.popularTopicsDesc')}
                 </p>
               </div>
               <Button variant="outline" className="group border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">
-                전체 보기 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                {t('home.viewAll')} <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
           </ScrollReveal>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {['리더십/코칭', '디지털 전환', '직무 역량', '조직 문화', '인문/교양', '법정 의무'].map((category, i) => (
-              <ScrollReveal key={i} delay={i * 100} direction="up">
-                <Link 
-                  to={`/lectures?category=${category}`}
+            {[
+              { key: 'home.category1', slug: '리더십/코칭' },
+              { key: 'home.category2', slug: '디지털 전환' },
+              { key: 'home.category3', slug: '직무 역량' },
+              { key: 'home.category4', slug: '조직 문화' },
+              { key: 'home.category5', slug: '인문/교양' },
+              { key: 'home.category6', slug: '법정 의무' },
+            ].map((category, i) => (
+              <ScrollReveal key={category.key} delay={i * 100} direction="up">
+                <Link
+                  to={`/lectures?category=${category.slug}`}
                   className="group flex flex-col items-center justify-center p-8 rounded-2xl bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full"
                 >
                   <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-700/50 mb-4 group-hover:scale-110 group-hover:bg-orange-50 dark:group-hover:bg-orange-900/20 transition-all duration-300 flex items-center justify-center">
                     <Star className="h-6 w-6 text-slate-400 dark:text-slate-500 group-hover:text-orange-500 transition-colors" />
                   </div>
-                  <span className="font-semibold text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{category}</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{t(category.key)}</span>
                 </Link>
               </ScrollReveal>
             ))}
@@ -564,22 +571,22 @@ export default function Home() {
               
               <CardContent className="p-12 md:p-16 text-center relative z-10">
                 <h2 className="text-3xl md:text-4xl font-bold mb-6">
-                  강연 비즈니스의 성장을 함께하세요
+                  {t('home.finalCtaTitle')}
                 </h2>
                 <p className="text-lg text-gray-300 mb-10 max-w-2xl mx-auto">
-                  강연가님은 강연에만, 대행사는 운영에만 집중하세요.
+                  {t('home.finalCtaDescLine1')}
                   <br />
-                  번거로운 매칭과 정산, 관리는 LivePulse가 해결해드립니다.
+                  {t('home.finalCtaDescLine2')}
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                   <Link to="/signup">
                     <Button size="lg" className="bg-white text-gray-900 hover:bg-gray-100 border-0 text-lg px-8 h-14 font-bold">
-                      지금 무료로 시작하기
+                      {t('home.finalCtaPrimary')}
                     </Button>
                   </Link>
                   <Link to="/contact">
                     <Button size="lg" variant="outline" className="text-white border-white/20 hover:bg-white/10 text-lg px-8 h-14">
-                      도입 문의하기
+                      {t('home.finalCtaSecondary')}
                     </Button>
                   </Link>
                 </div>
@@ -601,9 +608,9 @@ export default function Home() {
                 <span className="text-xl font-bold">LivePulse</span>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                강연, 강연가, 대행사를 연결하는
+                {t('footer.taglineLine1')}
                 <br />
-                올인원 강연 매칭 플랫폼
+                {t('footer.taglineLine2')}
               </p>
               <div className="flex gap-4">
                 {/* Social Icons Placeholder */}
@@ -611,40 +618,40 @@ export default function Home() {
             </div>
             
             <div>
-              <h4 className="font-bold mb-4">서비스</h4>
+              <h4 className="font-bold mb-4">{t('footer.service')}</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/lectures" className="hover:text-primary">강연 찾기</Link></li>
-                <li><Link to="/instructors" className="hover:text-primary">강연가 찾기</Link></li>
-                <li><Link to="/agencies" className="hover:text-primary">대행사 찾기</Link></li>
+                <li><Link to="/lectures" className="hover:text-primary">{t('footer.findLecture')}</Link></li>
+                <li><Link to="/instructors" className="hover:text-primary">{t('footer.findInstructor')}</Link></li>
+                <li><Link to="/agencies" className="hover:text-primary">{t('footer.findAgency')}</Link></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-bold mb-4">고객센터</h4>
+              <h4 className="font-bold mb-4">{t('footer.customerSupport')}</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/notice" className="hover:text-primary">공지사항</Link></li>
-                <li><Link to="/faq" className="hover:text-primary">자주 묻는 질문</Link></li>
-                <li><Link to="/inquiry" className="hover:text-primary">1:1 문의</Link></li>
+                <li><Link to="/notice" className="hover:text-primary">{t('footer.notice')}</Link></li>
+                <li><Link to="/faq" className="hover:text-primary">{t('footer.faqLink')}</Link></li>
+                <li><Link to="/inquiry" className="hover:text-primary">{t('footer.inquiry')}</Link></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-bold mb-4">회사 소개</h4>
+              <h4 className="font-bold mb-4">{t('footer.companyInfo')}</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/about" className="hover:text-primary">LivePulse 소개</Link></li>
-                <li><Link to="/terms" className="hover:text-primary">이용약관</Link></li>
-                <li><Link to="/privacy" className="hover:text-primary">개인정보처리방침</Link></li>
+                <li><Link to="/about" className="hover:text-primary">{t('footer.aboutLivepulse')}</Link></li>
+                <li><Link to="/terms" className="hover:text-primary">{t('footer.terms')}</Link></li>
+                <li><Link to="/privacy" className="hover:text-primary">{t('footer.privacy')}</Link></li>
               </ul>
             </div>
           </div>
           
           <div className="border-t border-slate-200 dark:border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-xs text-muted-foreground">
-              © 2024 LivePulse. All rights reserved.
+              {t('footer.copyright')}
             </p>
             <div className="flex gap-2 items-center text-xs text-muted-foreground">
                <ShieldCheck className="h-4 w-4" />
-               <span>안전한 거래를 위해 에스크로 결제 서비스를 이용하고 있습니다.</span>
+               <span>{t('footer.escrowNotice')}</span>
             </div>
           </div>
         </div>

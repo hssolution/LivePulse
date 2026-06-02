@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>강연자 화면 · LivePulse 시안</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<link rel="stylesheet" href="../assets/mockup.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-[#0d0d14] text-white overflow-hidden">
+
+<div class="h-screen flex flex-col">
+
+  <!-- 헤더 -->
+  <header class="px-8 py-4 flex items-center justify-between border-b border-white/10 shrink-0">
+    <div class="flex items-center gap-3">
+      <span class="flex items-center gap-2 text-sm font-bold text-rose-300 bg-rose-500/15 px-3 py-1.5 rounded-full">
+        <span class="live-dot"></span> LIVE
+      </span>
+      <h1 class="text-lg font-bold text-slate-200">강연자 화면 · 김도현</h1>
+    </div>
+    <div class="flex items-center gap-4">
+      <span id="syncBadge" class="flex items-center gap-1.5 text-xs font-semibold text-emerald-300 bg-emerald-500/15 px-3 py-1.5 rounded-full">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 좌장과 동기화됨
+      </span>
+      <div class="flex items-center gap-2 text-slate-400 text-sm"><i data-lucide="clock" class="w-4 h-4"></i> 01:24:07</div>
+    </div>
+  </header>
+
+  <div class="flex-1 flex min-h-0">
+
+    <!-- 좌측: 현재 슬라이드 + 페이지 제어 -->
+    <main class="flex-1 flex flex-col p-6 min-w-0">
+      <div class="flex items-center justify-between mb-3">
+        <div class="inline-flex items-center gap-2 text-indigo-300 font-bold">
+          <i data-lucide="file-text" class="w-5 h-5"></i> 조직문화.pdf
+        </div>
+        <div class="text-slate-400 font-semibold"><span id="pageNow">3</span> <span class="text-slate-600">/</span> 38</div>
+      </div>
+
+      <!-- 슬라이드 -->
+      <div class="flex-1 rounded-2xl bg-white text-slate-800 shadow-2xl overflow-hidden flex flex-col">
+        <div class="flex-1 flex flex-col items-center justify-center text-center px-12">
+          <div id="slideKicker" class="text-indigo-600 font-bold text-xl mb-3">03. 심리적 안전감</div>
+          <h2 id="slideTitle" class="text-[34px] leading-tight font-bold mb-5">실패를 말할 수 있는 팀이<br/>가장 빠르게 성장한다</h2>
+          <p id="slideSub" class="text-slate-500 text-lg">— 구글 아리스토텔레스 프로젝트, 2015</p>
+        </div>
+        <div class="h-2 bg-indigo-100"><div id="slideBar" class="h-full bg-indigo-500" style="width:8%"></div></div>
+      </div>
+
+      <!-- 페이지 제어 (강연자 직접) -->
+      <div class="mt-5 flex items-center justify-center gap-4">
+        <button onclick="prevPage()" class="px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 font-bold flex items-center gap-2 text-lg">
+          <i data-lucide="chevron-left" class="w-6 h-6"></i> 이전
+        </button>
+        <div class="text-center px-4">
+          <div class="text-2xl font-bold leading-none"><span id="pageBig">3</span> / 38</div>
+          <div class="text-[11px] text-slate-500 mt-1">강연자가 직접 넘길 수 있어요</div>
+        </div>
+        <button onclick="nextPage()" class="px-6 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold flex items-center gap-2 text-lg">
+          다음 <i data-lucide="chevron-right" class="w-6 h-6"></i>
+        </button>
+      </div>
+    </main>
+
+    <!-- 우측: 노트 + 다음 송출 예정 -->
+    <aside class="w-[360px] border-l border-white/10 flex flex-col p-5 gap-4 shrink-0 overflow-y-auto no-scrollbar">
+
+      <!-- 발표자 노트 -->
+      <div class="rounded-2xl bg-white/5 border border-white/10 p-4">
+        <h3 class="font-bold text-sm flex items-center gap-1.5 mb-2 text-slate-200"><i data-lucide="sticky-note" class="w-4 h-4 text-indigo-300"></i> 발표자 노트</h3>
+        <p id="speakerNote" class="text-sm text-slate-300 leading-relaxed">
+          이 슬라이드에서 구글 사례를 1분 정도 설명. "실패를 보고해도 안전하다"는 분위기가 핵심.
+          이어서 우리 조직 사례로 자연스럽게 연결.
+        </p>
+      </div>
+
+      <!-- 다음 송출 예정 -->
+      <div class="rounded-2xl bg-white/5 border border-white/10 p-4">
+        <h3 class="font-bold text-sm flex items-center gap-1.5 mb-3 text-slate-200"><i data-lucide="list-video" class="w-4 h-4 text-indigo-300"></i> 다음 송출 예정 <span class="text-[11px] font-normal text-slate-500">좌장 큐</span></h3>
+        <div class="space-y-2.5">
+          <div class="rounded-xl bg-indigo-500/10 border border-indigo-400/30 p-3">
+            <div class="flex items-center gap-1.5 text-[11px] font-bold text-indigo-300 mb-1"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> 다음: 청중 질문 · 리더십</div>
+            <p class="text-sm text-slate-200 leading-snug">리더가 재택근무 팀의 몰입도를 끌어올리려면 무엇부터 시작해야 할까요?</p>
+          </div>
+          <div class="rounded-xl bg-white/5 border border-white/10 p-3">
+            <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 mb-1"><i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i> 그 다음: 설문</div>
+            <p class="text-sm text-slate-300 leading-snug">우리 조직에서 가장 중요한 가치는?</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 동기화 안내 -->
+      <div class="rounded-2xl bg-emerald-500/10 border border-emerald-400/20 p-4 text-xs text-emerald-200 leading-relaxed mt-auto">
+        <b class="flex items-center gap-1 mb-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 페이지 넘김</b>
+        좌장과 강연자 모두 페이지를 넘길 수 있고, 변경은 송출 화면·반대편 화면에 즉시 반영됩니다.
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- 데모 토글 -->
+<div class="demo-panel">
+  <h4>동기화 시뮬레이션</h4>
+  <button class="demo-btn active" onclick="setSync('self', this)">강연자가 직접 넘김</button>
+  <button class="demo-btn" onclick="setSync('chair', this)">좌장이 페이지를 넘김</button>
+  <p style="color:#7b7996;font-size:10px;margin-top:6px;line-height:1.4;">양쪽 모두 페이지를 제어할 수 있습니다</p>
+</div>
+
+<script src="../assets/mockup.js"></script>
+<script>
+  var slides = {
+    1: { kicker: '01. 들어가며', title: '리더십은 직책이 아니라<br/>행동이다', sub: '— 2026 HR 리더십 컨퍼런스' },
+    2: { kicker: '02. 신뢰의 토대', title: '신뢰가 쌓이면<br/>속도가 빨라진다', sub: '— 신뢰 = 일관성 × 투명성' },
+    3: { kicker: '03. 심리적 안전감', title: '실패를 말할 수 있는 팀이<br/>가장 빠르게 성장한다', sub: '— 구글 아리스토텔레스 프로젝트, 2015' },
+    4: { kicker: '04. 피드백 루틴', title: '짧고 자주,<br/>구체적으로', sub: '— 분기 1회보다 주 1회' },
+    5: { kicker: '05. 마무리', title: '오늘부터 바꿀<br/>한 가지', sub: '— 작게 시작하기' }
+  };
+  var total = 38;
+  var page = 3;
+
+  function renderSlide() {
+    var s = slides[page] || { kicker: page + '장', title: '슬라이드 ' + page, sub: '조직문화.pdf' };
+    document.getElementById('slideKicker').innerHTML = s.kicker;
+    document.getElementById('slideTitle').innerHTML = s.title;
+    document.getElementById('slideSub').innerHTML = s.sub;
+    document.getElementById('pageNow').textContent = page;
+    document.getElementById('pageBig').textContent = page;
+    document.getElementById('slideBar').style.width = Math.round((page / total) * 100) + '%';
+  }
+  function prevPage() { if (page > 1) { page--; setSync('self'); renderSlide(); } }
+  function nextPage() { if (page < total) { page++; setSync('self'); renderSlide(); } }
+
+  function setSync(by, btn) {
+    var badge = document.getElementById('syncBadge');
+    if (by === 'chair') {
+      badge.className = 'flex items-center gap-1.5 text-xs font-semibold text-indigo-200 bg-indigo-500/20 px-3 py-1.5 rounded-full';
+      badge.innerHTML = '<i data-lucide="radio" class="w-3.5 h-3.5"></i> 좌장이 페이지를 넘겼습니다';
+      page = Math.min(total, page + 1);
+      renderSlide();
+    } else {
+      badge.className = 'flex items-center gap-1.5 text-xs font-semibold text-emerald-300 bg-emerald-500/15 px-3 py-1.5 rounded-full';
+      badge.innerHTML = '<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 좌장과 동기화됨';
+    }
+    if (btn) {
+      document.querySelectorAll('.demo-panel .demo-btn').forEach(function (b) { b.classList.toggle('active', b === btn); });
+    }
+    if (window.refreshIcons) window.refreshIcons();
+  }
+
+  renderSlide();
+</script>
+</body>
+</html>

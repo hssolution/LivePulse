@@ -211,6 +211,29 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* 다크 모드에서 브라우저 기본 입력 컨트롤(달력·시간 픽커·드롭다운·스크롤바)을
+     다크 톤으로 렌더링하도록 색 스키마 힌트 제공 */
+  html.light {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+
+  /* WebKit 계열(Chrome/Edge/Safari)에서 다크 모드 시 달력·시간 픽커 아이콘 보강
+     color-scheme만으로 부족한 경우의 폴백 */
+  html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+  html.dark input[type="time"]::-webkit-calendar-picker-indicator,
+  html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  html.dark input[type="month"]::-webkit-calendar-picker-indicator,
+  html.dark input[type="week"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.9) brightness(0.95);
+    cursor: pointer;
   }
   
   /* 

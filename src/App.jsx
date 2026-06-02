@@ -15,6 +15,7 @@ import InitialLoading from './components/ui/InitialLoading'
 import PublicRoute from './components/auth/PublicRoute'
 import { AdminRoute } from './components/auth/AdminRoute'
 import { PartnerRoute } from './components/auth/PartnerRoute'
+import ViewAsBanner from './components/admin/ViewAsBanner'
 
 // Lazy loaded pages
 const Home = lazy(() => import('./pages/Home'))
@@ -46,7 +47,6 @@ const Database = lazy(() => import('./pages/system/Database'))
 const Logs = lazy(() => import('./pages/system/Logs'))
 const LoginLogs = lazy(() => import('./pages/admin/LoginLogs'))
 const Backup = lazy(() => import('./pages/system/Backup'))
-const LanguagePack = lazy(() => import('./pages/admin/LanguagePack'))
 const SessionTemplates = lazy(() => import('./pages/admin/SessionTemplates'))
 const TemplatePreview = lazy(() => import('./pages/admin/TemplatePreview'))
 const FaqManagement = lazy(() => import('./pages/admin/FaqManagement'))
@@ -64,9 +64,16 @@ const TeamMembers = lazy(() => import('./pages/partner/TeamMembers'))
 const Sessions = lazy(() => import('./pages/partner/Sessions'))
 const SessionCreate = lazy(() => import('./pages/partner/SessionCreate'))
 const SessionDetail = lazy(() => import('./pages/partner/SessionDetail'))
+const SessionConsole = lazy(() => import('./pages/partner/SessionConsole'))
+const SessionReport = lazy(() => import('./pages/partner/SessionReport'))
 const Invitations = lazy(() => import('./pages/partner/Invitations'))
 const PartnerFaq = lazy(() => import('./pages/partner/Faq'))
 const PartnerInquiry = lazy(() => import('./pages/partner/Inquiry'))
+
+// Legal Pages (Public)
+const TermsOfService = lazy(() => import('./pages/legal/TermsOfService'))
+const PrivacyPolicy = lazy(() => import('./pages/legal/PrivacyPolicy'))
+const RefundPolicy = lazy(() => import('./pages/legal/RefundPolicy'))
 
 // Invite Page
 const InviteAccept = lazy(() => import('./pages/InviteAccept'))
@@ -76,6 +83,7 @@ const JoinSession = lazy(() => import('./pages/JoinSession'))
 const LiveSession = lazy(() => import('./pages/LiveSession'))
 const PresenterQnA = lazy(() => import('./pages/PresenterQnA'))
 const BroadcastQnA = lazy(() => import('./pages/BroadcastQnA'))
+const SpeakerScreen = lazy(() => import('./pages/SpeakerScreen'))
 const TemplatePreviewPublic = lazy(() => import('./pages/TemplatePreviewPublic'))
 
 /**
@@ -139,6 +147,7 @@ function AppContent() {
           <PartnerProvider>
           <Toaster position="top-right" richColors closeButton />
           <Router>
+          <ViewAsBanner />
           <Routes>
             {/* Public Routes (Accessible by everyone) - with PublicThemeProvider */}
             <Route path="/" element={
@@ -186,6 +195,29 @@ function AppContent() {
               </PublicThemeProvider>
             } />
             
+            {/* 법적 고지 페이지 (공개) */}
+            <Route path="/legal/terms" element={
+              <PublicThemeProvider>
+                <SuspenseWrapper>
+                  <TermsOfService />
+                </SuspenseWrapper>
+              </PublicThemeProvider>
+            } />
+            <Route path="/legal/privacy" element={
+              <PublicThemeProvider>
+                <SuspenseWrapper>
+                  <PrivacyPolicy />
+                </SuspenseWrapper>
+              </PublicThemeProvider>
+            } />
+            <Route path="/legal/refund" element={
+              <PublicThemeProvider>
+                <SuspenseWrapper>
+                  <RefundPolicy />
+                </SuspenseWrapper>
+              </PublicThemeProvider>
+            } />
+
             {/* 초대 수락 페이지 */}
             <Route path="/invite/:token" element={
               <PublicThemeProvider>
@@ -216,10 +248,17 @@ function AppContent() {
               </SuspenseWrapper>
             } />
             
-            {/* Q&A 송출 화면 (프로젝터용) */}
+            {/* 송출 화면 (프로젝터용) - 강연자료/Q&A/설문 */}
             <Route path="/broadcast/:code" element={
               <SuspenseWrapper>
                 <BroadcastQnA />
+              </SuspenseWrapper>
+            } />
+
+            {/* 강연자 화면 - PDF 직접 넘김 + 동기화 */}
+            <Route path="/speaker/:code" element={
+              <SuspenseWrapper>
+                <SpeakerScreen />
               </SuspenseWrapper>
             } />
             
@@ -228,6 +267,39 @@ function AppContent() {
               <SuspenseWrapper>
                 <TemplatePreviewPublic />
               </SuspenseWrapper>
+            } />
+
+            {/* 세션 설정 에디터 (파트너 전용, 풀스크린) */}
+            <Route path="/partner/sessions/:id" element={
+              <AdminThemeProvider initialTheme={initData.adminTheme}>
+                <PartnerRoute>
+                  <PartnerSuspenseWrapper>
+                    <SessionDetail />
+                  </PartnerSuspenseWrapper>
+                </PartnerRoute>
+              </AdminThemeProvider>
+            } />
+
+            {/* 라이브 진행 콘솔 (파트너 전용, 풀스크린) */}
+            <Route path="/partner/sessions/:id/console" element={
+              <AdminThemeProvider initialTheme={initData.adminTheme}>
+                <PartnerRoute>
+                  <PartnerSuspenseWrapper>
+                    <SessionConsole />
+                  </PartnerSuspenseWrapper>
+                </PartnerRoute>
+              </AdminThemeProvider>
+            } />
+
+            {/* 세션 리포트 (파트너 전용, 풀스크린) */}
+            <Route path="/partner/sessions/:id/report" element={
+              <AdminThemeProvider initialTheme={initData.adminTheme}>
+                <PartnerRoute>
+                  <PartnerSuspenseWrapper>
+                    <SessionReport />
+                  </PartnerSuspenseWrapper>
+                </PartnerRoute>
+              </AdminThemeProvider>
             } />
 
             {/* Auth Routes (Redirect based on role) - with PublicThemeProvider */}
@@ -284,8 +356,7 @@ function AppContent() {
               <Route path="system/logs" element={<SuspenseWrapper><Logs /></SuspenseWrapper>} />
               <Route path="system/login-logs" element={<SuspenseWrapper><LoginLogs /></SuspenseWrapper>} />
               <Route path="system/backup" element={<SuspenseWrapper><Backup /></SuspenseWrapper>} />
-              <Route path="system/language-pack" element={<SuspenseWrapper><LanguagePack /></SuspenseWrapper>} />
-              
+
               {/* Common Routes */}
               <Route path="support" element={<SuspenseWrapper><Support /></SuspenseWrapper>} />
               <Route path="settings" element={<SuspenseWrapper><Settings /></SuspenseWrapper>} />
@@ -311,10 +382,9 @@ function AppContent() {
               <Route path="support/faq" element={<SuspenseWrapper><PartnerFaq /></SuspenseWrapper>} />
               <Route path="support/inquiry" element={<SuspenseWrapper><PartnerInquiry /></SuspenseWrapper>} />
               
-              {/* Session Routes */}
+              {/* Session Routes (목록·만들기만 사이드바 포함; 상세는 풀스크린) */}
               <Route path="sessions" element={<SuspenseWrapper><Sessions /></SuspenseWrapper>} />
               <Route path="sessions/new" element={<SuspenseWrapper><SessionCreate /></SuspenseWrapper>} />
-              <Route path="sessions/:id" element={<SuspenseWrapper><SessionDetail /></SuspenseWrapper>} />
               
               {/* Content Management Routes */}
               <Route path="content/posts" element={<SuspenseWrapper><Posts /></SuspenseWrapper>} />

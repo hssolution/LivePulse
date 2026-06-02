@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useLanguage } from '@/context/LanguageContext'
+import { usePartner } from '@/context/PartnerContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,17 +27,18 @@ import {
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { 
-  Users, 
-  Search, 
-  Eye, 
-  Building2, 
-  Mic, 
-  Power, 
-  PowerOff, 
-  CheckCircle, 
-  XCircle, 
-  Settings
+import {
+  Users,
+  Search,
+  Eye,
+  Building2,
+  Mic,
+  Power,
+  PowerOff,
+  CheckCircle,
+  XCircle,
+  Settings,
+  LogIn
 } from 'lucide-react'
 import PartnerInfoDialog from '@/components/common/PartnerInfoDialog'
 
@@ -44,6 +47,8 @@ import PartnerInfoDialog from '@/components/common/PartnerInfoDialog'
  */
 export default function Partners() {
   const { t } = useLanguage()
+  const navigate = useNavigate()
+  const { setViewAs } = usePartner()
   const [partners, setPartners] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all') // 'all', 'organizer', 'agency', 'instructor'
@@ -69,6 +74,29 @@ export default function Partners() {
     e?.stopPropagation()
     setSelectedPartnerId(partnerId)
     setInfoDialogOpen(true)
+  }
+
+  /**
+   * 보기 모드 진입 — 해당 파트너 계정으로 화면 둘러보기
+   *
+   * 새 탭으로 열어 관리자 탭은 그대로 유지한다.
+   * viewAs 정보는 URL 쿼리로 새 탭에 전달되며, 새 탭의 PartnerContext가
+   * 초기화 시점에 localStorage에 옮겨 적고 URL을 정리한다.
+   */
+  const handleViewAsPartner = (partner, e) => {
+    e?.stopPropagation()
+    if (!partner.is_active) return
+
+    const viewAsInfo = {
+      partnerId: partner.id,
+      // profile_id 를 함께 전달해 새 탭에서 partners 테이블 재조회 (RLS 실패 위험) 를 피한다
+      profileId: partner.profile_id || partner.profiles?.id || null,
+      name: partner.representative_name || partner.profiles?.email || '파트너',
+      partnerType: partner.partner_type,
+    }
+
+    const encoded = encodeURIComponent(JSON.stringify(viewAsInfo))
+    window.open(`/partner?viewAs=${encoded}`, '_blank', 'noopener,noreferrer')
   }
 
   useEffect(() => {
@@ -417,6 +445,17 @@ export default function Partners() {
                         >
                           <Eye className="h-4 w-4 mr-1" />
                           {t('common.view')}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => handleViewAsPartner(partner, e)}
+                          disabled={!partner.is_active}
+                          className="flex-1 sm:flex-none border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-400 disabled:opacity-50"
+                          title={partner.is_active ? '이 계정으로 보기' : '비활성 파트너는 보기 모드를 사용할 수 없습니다'}
+                        >
+                          <LogIn className="h-4 w-4 mr-1" />
+                          이 계정으로 보기
                         </Button>
                         <Button
                           variant="outline"

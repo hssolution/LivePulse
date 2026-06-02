@@ -1,37 +1,34 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { toast } from 'sonner'
-import { ArrowLeft, Calendar, MapPin, Phone, Mail, Users, Save, Loader2, Eye, ExternalLink } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Loader2,
+  CheckCircle2,
+  Eye,
+} from 'lucide-react'
+import { formatKoreanPhone } from '@/utils/phone'
 
 /**
- * 파트너: 세션 생성 페이지
+ * 파트너: 세션 만들기 — 2-스텝 위저드
+ * Step 1: 기본 정보
+ * Step 2: 참가 화면 템플릿 선택 (썸네일)
  */
 export default function SessionCreate() {
   const { user } = useAuth()
   const { partner, loading: partnerLoading } = usePartner()
   const { t } = useLanguage()
   const navigate = useNavigate()
-  
-  const [loading, setLoading] = useState(false)
+
+  const [step, setStep] = useState(1)
+  const [submitting, setSubmitting] = useState(false)
   const [templates, setTemplates] = useState([])
-  
-  // 폼 데이터
+
   const [formData, setFormData] = useState({
     title: '',
     venue_name: '',
@@ -44,121 +41,79 @@ export default function SessionCreate() {
     description: '',
     template_id: '',
   })
-  
   const [errors, setErrors] = useState({})
 
+  // 템플릿 로드
   useEffect(() => {
     let isMounted = true
-    
     const fetchData = async () => {
       if (!user || !partner || !isMounted) return
-      
       try {
         const { data, error } = await supabase.rpc('sp_partner_session_create_q')
-        
         if (error) throw error
-        
-        if (isMounted) {
-          const mainTemplates = data?.main_templates || []
-          setTemplates(mainTemplates)
-          
-          if (mainTemplates.length > 0) {
-            setFormData(prev => ({ ...prev, template_id: mainTemplates[0].id }))
-          }
+        if (!isMounted) return
+        const mainTemplates = data?.main_templates || []
+        setTemplates(mainTemplates)
+        if (mainTemplates.length > 0 && !formData.template_id) {
+          setFormData((prev) => ({ ...prev, template_id: mainTemplates[0].id }))
         }
       } catch (error) {
         console.error('Error loading data:', error)
-        if (isMounted) {
-          toast.error(t('error.loadFailed'))
-        }
+        toast.error(t('error.loadFailed') || '불러오기 실패')
       }
     }
-    
     fetchData()
-    
     return () => {
       isMounted = false
     }
-  }, [user, partner, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, partner])
 
-  /**
-   * 초기 데이터 로드 (프로시저 사용으로 최적화)
-   */
-  const loadInitialData = async () => {
-    if (!user || !partner) return
-    
-    try {
-      // 세션 생성에 필요한 모든 데이터를 한 번에 조회
-      const { data, error } = await supabase.rpc('sp_partner_session_create_q')
-      
-      if (error) throw error
-      
-      const mainTemplates = data?.main_templates || []
-      setTemplates(mainTemplates)
-      
-      // 기본 템플릿 설정
-      if (mainTemplates.length > 0) {
-        setFormData(prev => ({ ...prev, template_id: mainTemplates[0].id }))
-      }
-      
-    } catch (error) {
-      console.error('Error loading data:', error)
-      toast.error(t('error.loadFailed'))
-    }
+  const handleChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }))
   }
 
-  /**
-   * 폼 유효성 검사
-   */
-  const validateForm = () => {
-    const newErrors = {}
-    
-    if (!formData.title.trim()) {
-      newErrors.title = t('session.error.titleRequired')
+  // Step 1 유효성
+  const validateStep1 = () => {
+    const e = {}
+    if (!formData.title.trim()) e.title = t('session.error.titleRequired') || '세션명을 입력하세요'
+    if (!formData.venue_name.trim())
+      e.venue_name = t('session.error.venueRequired') || '장소를 입력하세요'
+    if (!formData.start_at) e.start_at = t('session.error.startRequired') || '시작 일시를 입력하세요'
+    if (!formData.end_at) e.end_at = t('session.error.endRequired') || '종료 일시를 입력하세요'
+    if (
+      formData.start_at &&
+      formData.end_at &&
+      new Date(formData.start_at) >= new Date(formData.end_at)
+    ) {
+      e.end_at = t('session.error.endAfterStart') || '종료가 시작보다 늦어야 합니다'
     }
-    if (!formData.venue_name.trim()) {
-      newErrors.venue_name = t('session.error.venueRequired')
-    }
-    if (!formData.start_at) {
-      newErrors.start_at = t('session.error.startRequired')
-    }
-    if (!formData.end_at) {
-      newErrors.end_at = t('session.error.endRequired')
-    }
-    if (formData.start_at && formData.end_at && new Date(formData.start_at) >= new Date(formData.end_at)) {
-      newErrors.end_at = t('session.error.endAfterStart')
-    }
-    if (!formData.contact_phone.trim()) {
-      newErrors.contact_phone = t('session.error.phoneRequired')
-    }
+    if (!formData.contact_phone.trim())
+      e.contact_phone = t('session.error.phoneRequired') || '연락처를 입력하세요'
     if (!formData.contact_email.trim()) {
-      newErrors.contact_email = t('session.error.emailRequired')
+      e.contact_email = t('session.error.emailRequired') || '이메일을 입력하세요'
     } else if (!/\S+@\S+\.\S+/.test(formData.contact_email)) {
-      newErrors.contact_email = t('session.error.emailInvalid')
+      e.contact_email = t('session.error.emailInvalid') || '이메일 형식이 올바르지 않습니다'
     }
-    if (formData.max_participants < 1) {
-      newErrors.max_participants = t('session.error.maxParticipantsInvalid')
-    }
-    
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    if (formData.max_participants < 1)
+      e.max_participants = t('session.error.maxParticipantsInvalid') || '1명 이상이어야 합니다'
+    setErrors(e)
+    return Object.keys(e).length === 0
   }
 
-  /**
-   * 세션 생성
-   */
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    
-    if (!validateForm()) return
+  const goToStep2 = () => {
+    if (validateStep1()) setStep(2)
+    else toast.error('필수 항목을 확인해주세요')
+  }
+
+  const handleSubmit = async () => {
     if (!partner) {
-      toast.error(t('session.noPartner'))
+      toast.error(t('session.noPartner') || '파트너 정보가 없습니다')
       return
     }
-    
-    setLoading(true)
+    setSubmitting(true)
     try {
-      // 세션 생성
       const { data, error } = await supabase
         .from('sessions')
         .insert({
@@ -177,282 +132,352 @@ export default function SessionCreate() {
         })
         .select('id')
         .single()
-      
-      if (error) {
-        console.error('Insert error:', error)
-        throw error
-      }
-      
-      console.log('Session created:', data)
-      toast.success(t('session.created'))
-      
-      // 생성된 세션 상세 페이지로 이동
-      if (data?.id) {
-        navigate(`/partner/sessions/${data.id}`)
-      } else {
-        // data가 없으면 목록으로
-        navigate('/partner/sessions')
-      }
-      
+
+      if (error) throw error
+
+      toast.success(t('session.created') || '세션이 생성되었습니다')
+      navigate(data?.id ? `/partner/sessions/${data.id}` : '/partner/sessions')
     } catch (error) {
       console.error('Error creating session:', error)
-      toast.error(error.message || t('error.createFailed'))
-      setLoading(false)
+      toast.error(error.message || t('error.createFailed') || '생성 실패')
+      setSubmitting(false)
     }
-    // 성공 시에는 setLoading(false)를 호출하지 않음 (페이지 이동하므로)
   }
 
-  /**
-   * 입력 핸들러
-   */
-  const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }))
-    }
+  if (partnerLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
       {/* 헤더 */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/partner/sessions')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate('/partner/sessions')}
+          className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
         <div>
-          <h1 className="text-3xl font-bold">{t('session.create')}</h1>
-          <p className="text-muted-foreground mt-1">{t('session.createDesc')}</p>
+          <h1 className="text-2xl font-bold">새 세션 만들기</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">기본 정보를 입력하고 화면 디자인을 고르세요</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* 기본 정보 */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>{t('session.basicInfo')}</CardTitle>
-              <CardDescription>{t('session.basicInfoDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* 세션명 */}
-              <div className="space-y-2">
-                <Label htmlFor="title">
-                  {t('session.title')} <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => handleChange('title', e.target.value)}
-                  placeholder={t('session.titlePlaceholder')}
-                  className={errors.title ? 'border-red-500' : ''}
-                />
-                {errors.title && <p className="text-sm text-red-500">{errors.title}</p>}
-              </div>
+      {/* 스텝 인디케이터 */}
+      <div className="flex items-center gap-3">
+        <StepDot n={1} active={step >= 1} label="기본 정보" onClick={() => setStep(1)} />
+        <div className="flex-1 h-0.5 bg-slate-200 dark:bg-slate-700" />
+        <StepDot n={2} active={step >= 2} label="화면 템플릿" onClick={goToStep2} />
+      </div>
 
-              {/* 장소 */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="venue_name">
-                    <MapPin className="inline h-4 w-4 mr-1" />
-                    {t('session.venueName')} <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="venue_name"
-                    value={formData.venue_name}
-                    onChange={(e) => handleChange('venue_name', e.target.value)}
-                    placeholder={t('session.venueNamePlaceholder')}
-                    className={errors.venue_name ? 'border-red-500' : ''}
-                  />
-                  {errors.venue_name && <p className="text-sm text-red-500">{errors.venue_name}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="venue_address">{t('session.venueAddress')}</Label>
-                  <Input
-                    id="venue_address"
-                    value={formData.venue_address}
-                    onChange={(e) => handleChange('venue_address', e.target.value)}
-                    placeholder={t('session.venueAddressPlaceholder')}
-                  />
-                </div>
-              </div>
+      {/* Step 1: 기본 정보 */}
+      {step === 1 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-7">
+          <h2 className="text-lg font-bold mb-1">세션 기본 정보</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+            강연 정보를 입력하세요. 입력한 내용은 청중 참가 화면에 표시됩니다.
+          </p>
 
-              {/* 일시 */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="start_at">
-                    <Calendar className="inline h-4 w-4 mr-1" />
-                    {t('session.startAt')} <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="start_at"
-                    type="datetime-local"
-                    value={formData.start_at}
-                    onChange={(e) => handleChange('start_at', e.target.value)}
-                    className={errors.start_at ? 'border-red-500' : ''}
-                  />
-                  {errors.start_at && <p className="text-sm text-red-500">{errors.start_at}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="end_at">
-                    {t('session.endAt')} <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="end_at"
-                    type="datetime-local"
-                    value={formData.end_at}
-                    onChange={(e) => handleChange('end_at', e.target.value)}
-                    className={errors.end_at ? 'border-red-500' : ''}
-                  />
-                  {errors.end_at && <p className="text-sm text-red-500">{errors.end_at}</p>}
-                </div>
-              </div>
+          <div className="space-y-5">
+            <FormField
+              label="세션명"
+              required
+              error={errors.title}
+              value={formData.title}
+              onChange={(v) => handleChange('title', v)}
+              placeholder="예: 2026 HR 리더십 컨퍼런스"
+            />
 
-              {/* 연락처 */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="contact_phone">
-                    <Phone className="inline h-4 w-4 mr-1" />
-                    {t('session.contactPhone')} <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="contact_phone"
-                    value={formData.contact_phone}
-                    onChange={(e) => handleChange('contact_phone', e.target.value)}
-                    placeholder="02-1234-5678"
-                    className={errors.contact_phone ? 'border-red-500' : ''}
-                  />
-                  {errors.contact_phone && <p className="text-sm text-red-500">{errors.contact_phone}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contact_email">
-                    <Mail className="inline h-4 w-4 mr-1" />
-                    {t('session.contactEmail')} <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="contact_email"
-                    type="email"
-                    value={formData.contact_email}
-                    onChange={(e) => handleChange('contact_email', e.target.value)}
-                    placeholder="contact@example.com"
-                    className={errors.contact_email ? 'border-red-500' : ''}
-                  />
-                  {errors.contact_email && <p className="text-sm text-red-500">{errors.contact_email}</p>}
-                </div>
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                label="시작 일시"
+                required
+                error={errors.start_at}
+                type="datetime-local"
+                value={formData.start_at}
+                onChange={(v) => handleChange('start_at', v)}
+              />
+              <FormField
+                label="종료 일시"
+                required
+                error={errors.end_at}
+                type="datetime-local"
+                value={formData.end_at}
+                onChange={(v) => handleChange('end_at', v)}
+              />
+            </div>
 
-              {/* 최대 참여자 수 */}
-              <div className="space-y-2">
-                <Label htmlFor="max_participants">
-                  <Users className="inline h-4 w-4 mr-1" />
-                  {t('session.maxParticipants')} <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="max_participants"
-                  type="number"
-                  min="1"
-                  value={formData.max_participants}
-                  onChange={(e) => handleChange('max_participants', parseInt(e.target.value) || 0)}
-                  className={errors.max_participants ? 'border-red-500' : ''}
-                />
-                {errors.max_participants && <p className="text-sm text-red-500">{errors.max_participants}</p>}
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                label="장소명"
+                required
+                error={errors.venue_name}
+                value={formData.venue_name}
+                onChange={(v) => handleChange('venue_name', v)}
+                placeholder="예: 코엑스 그랜드볼룸"
+              />
+              <FormField
+                label="최대 참가 인원"
+                required
+                error={errors.max_participants}
+                type="number"
+                min="1"
+                value={formData.max_participants}
+                onChange={(v) => handleChange('max_participants', parseInt(v) || 0)}
+              />
+            </div>
 
-              {/* 설명 */}
-              <div className="space-y-2">
-                <Label htmlFor="description">{t('session.description')}</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => handleChange('description', e.target.value)}
-                  placeholder={t('session.descriptionPlaceholder')}
-                  rows={4}
-                />
-              </div>
-            </CardContent>
-          </Card>
+            <FormField
+              label="장소 주소"
+              hint="(선택)"
+              value={formData.venue_address}
+              onChange={(v) => handleChange('venue_address', v)}
+              placeholder="서울 강남구 영동대로 513"
+            />
 
-          {/* 사이드바 */}
-          <div className="space-y-6">
-            {/* 템플릿 선택 */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('session.template')}</CardTitle>
-                <CardDescription>{t('session.templateDesc')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Select 
-                  value={formData.template_id} 
-                  onValueChange={(value) => handleChange('template_id', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('session.selectTemplate')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                {/* 선택된 템플릿 정보 */}
-                {formData.template_id && (() => {
-                  const selectedTemplate = templates.find(t => t.id === formData.template_id)
-                  if (!selectedTemplate) return null
-                  
-                  return (
-                    <div className="space-y-2">
-                      {/* 설명 */}
-                      {selectedTemplate.description && (
-                        <p className="text-sm text-muted-foreground">
-                          {selectedTemplate.description}
-                        </p>
-                      )}
-                      
-                      {/* 미리보기 버튼 */}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => window.open(`/template-preview/${selectedTemplate.code}`, '_blank')}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        {t('session.previewTemplate')}
-                        <ExternalLink className="h-3 w-3 ml-2" />
-                      </Button>
-                    </div>
-                  )
-                })()}
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                label="담당자 연락처"
+                required
+                error={errors.contact_phone}
+                value={formData.contact_phone}
+                onChange={(v) => handleChange('contact_phone', formatKoreanPhone(v))}
+                placeholder="010-1234-5678"
+                type="tel"
+                maxLength={13}
+              />
+              <FormField
+                label="담당자 이메일"
+                required
+                error={errors.contact_email}
+                type="email"
+                value={formData.contact_email}
+                onChange={(v) => handleChange('contact_email', v)}
+                placeholder="contact@example.com"
+              />
+            </div>
 
-            {/* 저장 버튼 */}
-            <Card>
-              <CardContent className="pt-6">
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      {t('common.processing')}
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      {t('session.createButton')}
-                    </>
-                  )}
-                </Button>
-                <p className="text-xs text-muted-foreground text-center mt-3">
-                  {t('session.createNote')}
-                </p>
-              </CardContent>
-            </Card>
+            <FormField
+              label="설명"
+              hint="(선택)"
+              type="textarea"
+              rows={3}
+              value={formData.description}
+              onChange={(v) => handleChange('description', v)}
+              placeholder="세션 소개를 자유롭게 입력하세요"
+            />
+          </div>
+
+          <div className="flex justify-end mt-7">
+            <button
+              type="button"
+              onClick={goToStep2}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition-colors"
+            >
+              다음: 템플릿 선택 <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
-      </form>
+      )}
+
+      {/* Step 2: 템플릿 선택 */}
+      {step === 2 && (
+        <>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-7">
+            <h2 className="text-lg font-bold mb-1">참가 화면 템플릿</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              청중이 보는 첫 화면(/join, 대기 로비)의 디자인입니다. 만든 뒤 설정 에디터에서
+              로고·배너를 교체할 수 있습니다.
+            </p>
+
+            {templates.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                사용 가능한 템플릿이 없습니다
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {templates.map((tpl) => (
+                  <TemplateCard
+                    key={tpl.id}
+                    template={tpl}
+                    selected={formData.template_id === tpl.id}
+                    onSelect={() => handleChange('template_id', tpl.id)}
+                  />
+                ))}
+              </div>
+            )}
+
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-5 leading-relaxed">
+              Q&amp;A와 투표 화면 템플릿은 세션 생성 후 <b>설정 에디터 → 화면 디자인</b>에서
+              선택할 수 있습니다.
+            </p>
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" /> 이전
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-bold px-6 py-2.5 rounded-lg flex items-center gap-2 transition-colors"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> 생성 중...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" /> 세션 만들고 설정하기
+                </>
+              )}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
 
+/* ----- 스텝 인디케이터 ----- */
+function StepDot({ n, active, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 text-sm font-semibold"
+    >
+      <span
+        className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+          active ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+        }`}
+      >
+        {n}
+      </span>
+      <span className={active ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}>{label}</span>
+    </button>
+  )
+}
+
+/* ----- 폼 필드 ----- */
+function FormField({
+  label,
+  required,
+  hint,
+  error,
+  type = 'text',
+  rows,
+  min,
+  maxLength,
+  value,
+  onChange,
+  placeholder,
+}) {
+  const baseClass = `w-full px-3.5 py-2.5 text-sm rounded-lg border bg-white dark:bg-slate-900 focus:outline-none ${
+    error ? 'border-rose-500' : 'border-slate-200 dark:border-slate-800 focus:border-indigo-400'
+  }`
+  return (
+    <div>
+      <label className="block text-sm font-semibold mb-1.5">
+        {label}
+        {required && <span className="text-rose-500 ml-1">*</span>}
+        {hint && <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">{hint}</span>}
+      </label>
+      {type === 'textarea' ? (
+        <textarea
+          rows={rows || 3}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={baseClass}
+        />
+      ) : (
+        <input
+          type={type}
+          min={min}
+          maxLength={maxLength}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={baseClass}
+        />
+      )}
+      {error && <p className="text-xs text-rose-600 mt-1">{error}</p>}
+    </div>
+  )
+}
+
+/* ----- 템플릿 카드 ----- */
+function TemplateCard({ template, selected, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`text-left rounded-xl overflow-hidden transition-all ${
+        selected
+          ? 'border-2 border-indigo-500 ring-2 ring-indigo-200 shadow-md'
+          : 'border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+      }`}
+    >
+      <TemplateThumbnail code={template.code} />
+      <div className="p-2.5 bg-white dark:bg-slate-900 flex items-center justify-between">
+        <span className="text-sm font-bold">{template.name}</span>
+        {selected && <CheckCircle2 className="w-4 h-4 text-indigo-600" />}
+      </div>
+      {template.description && (
+        <div className="px-2.5 pb-2.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-2 bg-white dark:bg-slate-900">
+          {template.description}
+        </div>
+      )}
+    </button>
+  )
+}
+
+/* ----- 템플릿 썸네일 (template.code 기반 시각화) ----- */
+function TemplateThumbnail({ code }) {
+  if (code === 'symposium') {
+    return (
+      <div className="h-28 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+        <div className="w-20 h-14 bg-white dark:bg-slate-900/90 rounded shadow-lg flex flex-col items-center justify-center gap-1">
+          <div className="w-12 h-1.5 bg-indigo-300 rounded" />
+          <div className="w-8 h-1.5 bg-slate-200 dark:bg-slate-700 rounded" />
+        </div>
+      </div>
+    )
+  }
+  if (code === 'conference') {
+    return (
+      <div className="h-28 bg-slate-900 flex items-center justify-center">
+        <div className="w-24 h-16 bg-white dark:bg-slate-900/10 rounded border border-white/20 flex items-center justify-center">
+          <div className="w-14 h-2 bg-white dark:bg-slate-900/40 rounded" />
+        </div>
+      </div>
+    )
+  }
+  if (code === 'workshop') {
+    return (
+      <div className="h-28 bg-gradient-to-br from-slate-50 to-slate-200 flex items-center justify-center">
+        <div className="w-20 h-16 bg-white dark:bg-slate-900 rounded shadow flex flex-col items-center justify-center gap-1">
+          <div className="w-10 h-1.5 bg-slate-300 dark:bg-slate-600 rounded" />
+        </div>
+      </div>
+    )
+  }
+  // 기본
+  return (
+    <div className="h-28 bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center">
+      <Eye className="w-8 h-8 text-indigo-400" />
+    </div>
+  )
+}

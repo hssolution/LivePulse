@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>청중 · 라이브 참여 · LivePulse 시안</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<link rel="stylesheet" href="../assets/mockup.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+<div class="phone-stage">
+  <div class="phone-caption">
+    <b>STEP 3 · 라이브 참여 (발표자 주도형)</b> &nbsp;—&nbsp; 우측 패널로 발표자 행동을 시뮬레이션해 보세요
+  </div>
+
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="phone-screen">
+      <div class="h-full flex flex-col bg-slate-50">
+
+        <!-- 헤더 -->
+        <header class="bg-white border-b border-slate-200 px-4 pt-11 pb-3 flex items-center justify-between shrink-0">
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
+                <span class="live-dot"></span> LIVE
+              </span>
+              <span class="text-[11px] text-slate-400">184명 참여</span>
+            </div>
+            <h1 class="font-bold text-sm mt-1 leading-tight">2026 HR 리더십 컨퍼런스</h1>
+          </div>
+        </header>
+
+        <!-- 콘텐츠 -->
+        <div id="content" class="flex-1 overflow-y-auto no-scrollbar">
+
+          <!-- 현재 탭: 투표 진행 중 -->
+          <section data-panel="poll" class="p-4">
+            <div class="flex items-center gap-1.5 text-xs font-bold text-indigo-600 mb-3">
+              <span class="live-dot" style="background:#4f46e5"></span> 발표자가 띄운 투표
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5">
+              <div class="text-xs font-semibold text-slate-400 mb-1">투표 · 객관식</div>
+              <h2 class="font-bold text-lg leading-snug mb-4">우리 조직에서 가장 중요한 가치는 무엇이라고 생각하나요?</h2>
+              <div class="space-y-2.5">
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border-2 border-indigo-500 bg-indigo-50 cursor-pointer">
+                  <span class="w-5 h-5 rounded-full border-[6px] border-indigo-600"></span>
+                  <span class="font-semibold text-sm">성장과 도전</span>
+                </label>
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer">
+                  <span class="w-5 h-5 rounded-full border-2 border-slate-300"></span>
+                  <span class="font-medium text-sm">신뢰와 협력</span>
+                </label>
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer">
+                  <span class="w-5 h-5 rounded-full border-2 border-slate-300"></span>
+                  <span class="font-medium text-sm">안정과 지속</span>
+                </label>
+                <label class="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer">
+                  <span class="w-5 h-5 rounded-full border-2 border-slate-300"></span>
+                  <span class="font-medium text-sm">자율과 책임</span>
+                </label>
+              </div>
+              <button onclick="submitPoll()" class="mt-5 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl">
+                제출하기
+              </button>
+            </div>
+            <p class="text-center text-xs text-slate-400 mt-3">발표자가 다음 활동을 띄우면 화면이 자동으로 전환됩니다</p>
+          </section>
+
+          <!-- 현재 탭: 응답 완료 -->
+          <section data-panel="poll-done" class="p-4 hidden">
+            <div class="bg-white rounded-2xl border border-slate-200 p-5">
+              <div class="flex flex-col items-center text-center mb-4">
+                <div class="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mb-2">
+                  <i data-lucide="check" class="w-7 h-7 text-emerald-600"></i>
+                </div>
+                <h2 class="font-bold">응답해 주셔서 감사합니다</h2>
+                <p class="text-xs text-slate-500 mt-1">실시간 결과를 함께 확인하세요</p>
+              </div>
+              <div class="border-t border-slate-100 pt-4">
+                <div class="text-xs font-semibold text-slate-400 mb-2">우리 조직에서 가장 중요한 가치는?</div>
+                <div class="space-y-2.5">
+                  <div>
+                    <div class="flex justify-between text-sm mb-1"><span class="font-semibold">성장과 도전</span><span class="text-indigo-600 font-bold">47%</span></div>
+                    <div class="h-3 bg-slate-100 rounded-full"><div class="h-full bg-indigo-600 rounded-full" style="width:47%"></div></div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-sm mb-1"><span class="font-semibold">신뢰와 협력</span><span class="text-slate-500">31%</span></div>
+                    <div class="h-3 bg-slate-100 rounded-full"><div class="h-full bg-indigo-400 rounded-full" style="width:31%"></div></div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-sm mb-1"><span class="font-semibold">안정과 지속</span><span class="text-slate-500">15%</span></div>
+                    <div class="h-3 bg-slate-100 rounded-full"><div class="h-full bg-indigo-300 rounded-full" style="width:15%"></div></div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-sm mb-1"><span class="font-semibold">자율과 책임</span><span class="text-slate-500">7%</span></div>
+                    <div class="h-3 bg-slate-100 rounded-full"><div class="h-full bg-indigo-200 rounded-full" style="width:7%"></div></div>
+                  </div>
+                </div>
+                <div class="text-center text-xs text-slate-400 mt-3">142명 응답</div>
+              </div>
+            </div>
+            <div class="mt-3 bg-indigo-50 rounded-xl p-3.5 text-center">
+              <p class="text-sm text-indigo-700 font-medium">발표자가 다음 활동을 준비 중입니다</p>
+            </div>
+          </section>
+
+          <!-- 현재 탭: 활동 없음 (대기 스테이지) -->
+          <section data-panel="idle" class="p-4 hidden">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 text-center">
+              <div class="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-3">
+                <i data-lucide="presentation" class="w-8 h-8 text-indigo-600"></i>
+              </div>
+              <h2 class="font-bold">발표가 진행 중입니다</h2>
+              <p class="text-sm text-slate-500 mt-1.5 leading-relaxed">
+                발표자가 투표나 활동을 띄우면<br/>이 화면에 바로 나타납니다
+              </p>
+            </div>
+            <div class="mt-3 bg-white rounded-2xl border border-slate-200 p-4">
+              <p class="text-sm text-slate-600 mb-2.5">그동안 궁금한 점이 있다면?</p>
+              <button onclick="selectTab('qna')" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2">
+                <i data-lucide="message-circle" class="w-4 h-4"></i> Q&amp;A에 질문 남기기
+              </button>
+            </div>
+          </section>
+
+          <!-- 현재 탭: 강연자료 진행 중 -->
+          <section data-panel="pdf-live" class="p-4 hidden">
+            <div class="flex items-center gap-1.5 text-xs font-bold text-indigo-600 mb-3">
+              <span class="live-dot" style="background:#4f46e5"></span> 발표 자료 진행 중
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div class="aspect-video bg-slate-50 flex flex-col items-center justify-center text-center px-6 border-b border-slate-100">
+                <div class="text-indigo-600 font-bold text-xs mb-1.5">03. 심리적 안전감</div>
+                <h2 class="font-bold leading-snug">실패를 말할 수 있는 팀이 가장 빠르게 성장한다</h2>
+              </div>
+              <div class="p-3 flex items-center justify-between text-xs text-slate-400">
+                <span>김도현 — 조직문화.pdf</span>
+                <span class="font-semibold text-slate-500">3 / 38</span>
+              </div>
+            </div>
+            <div class="mt-3 bg-white rounded-2xl border border-slate-200 p-4">
+              <p class="text-sm text-slate-600 mb-2.5">발표를 들으며 궁금한 점이 있다면?</p>
+              <button onclick="selectTab('qna')" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2">
+                <i data-lucide="message-circle" class="w-4 h-4"></i> Q&amp;A에 질문 남기기
+              </button>
+            </div>
+          </section>
+
+          <!-- Q&A 탭 -->
+          <section data-panel="qna" class="p-4 hidden">
+            <!-- 질문 입력 -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+              <textarea rows="2" placeholder="발표자에게 궁금한 점을 질문해 보세요" class="w-full text-sm resize-none focus:outline-none"></textarea>
+              <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+                <label class="flex items-center gap-1.5 text-xs text-slate-500">
+                  <span class="w-8 h-5 bg-indigo-600 rounded-full relative"><span class="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full"></span></span>
+                  익명으로
+                </label>
+                <button class="bg-indigo-600 text-white text-sm font-bold px-4 py-1.5 rounded-lg flex items-center gap-1.5">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i> 질문하기
+                </button>
+              </div>
+            </div>
+
+            <!-- 카테고리 필터 (좌장이 노출 제어) -->
+            <div class="flex gap-1.5 mb-2.5 overflow-x-auto no-scrollbar text-xs" id="catChips">
+              <button data-cat="all" class="qcat shrink-0 px-2.5 py-1 rounded-full font-semibold">전체</button>
+              <button data-cat="리더십" class="qcat shrink-0 px-2.5 py-1 rounded-full font-semibold">리더십</button>
+              <button data-cat="조직문화" class="qcat shrink-0 px-2.5 py-1 rounded-full font-semibold">조직문화</button>
+              <button data-cat="채용·평가" class="qcat shrink-0 px-2.5 py-1 rounded-full font-semibold">채용·평가</button>
+            </div>
+
+            <!-- 정렬 -->
+            <div class="flex gap-1.5 mb-3 text-xs">
+              <button class="px-2.5 py-1 rounded-full bg-indigo-600 text-white font-semibold">인기순</button>
+              <button class="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-500">최신순</button>
+            </div>
+
+            <!-- 질문 목록 -->
+            <div class="space-y-2.5" id="qList">
+              <div class="qitem bg-white rounded-xl border border-slate-200 p-3.5 flex gap-3" data-cat="리더십">
+                <button class="flex flex-col items-center gap-0.5 shrink-0">
+                  <span class="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center"><i data-lucide="thumbs-up" class="w-4 h-4 text-indigo-600"></i></span>
+                  <span class="text-xs font-bold text-indigo-600">38</span>
+                </button>
+                <div>
+                  <p class="text-sm leading-relaxed">리더가 재택근무 팀의 몰입도를 끌어올리려면 무엇부터 시작해야 할까요?</p>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    <span class="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">리더십</span>
+                    <span class="text-xs text-slate-400">익명 · 방금 전</span>
+                  </div>
+                </div>
+              </div>
+              <div class="qitem bg-white rounded-xl border border-slate-200 p-3.5 flex gap-3" data-cat="채용·평가">
+                <button class="flex flex-col items-center gap-0.5 shrink-0">
+                  <span class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center"><i data-lucide="thumbs-up" class="w-4 h-4 text-slate-400"></i></span>
+                  <span class="text-xs font-bold text-slate-400">21</span>
+                </button>
+                <div>
+                  <p class="text-sm leading-relaxed">평가 제도를 바꿀 때 구성원 반발을 줄이는 커뮤니케이션 팁이 궁금합니다.</p>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    <span class="text-[11px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">채용·평가</span>
+                    <span class="text-xs text-slate-400">김민준 · 2분 전</span>
+                  </div>
+                </div>
+              </div>
+              <div class="qitem bg-white rounded-xl border border-slate-200 p-3.5 flex gap-3" data-cat="조직문화">
+                <button class="flex flex-col items-center gap-0.5 shrink-0">
+                  <span class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center"><i data-lucide="thumbs-up" class="w-4 h-4 text-slate-400"></i></span>
+                  <span class="text-xs font-bold text-slate-400">9</span>
+                </button>
+                <div>
+                  <p class="text-sm leading-relaxed">소규모 팀에서도 적용할 수 있는 성과 피드백 루틴을 추천해주세요.</p>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    <span class="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">조직문화</span>
+                    <span class="text-xs text-slate-400">정하윤 · 6분 전</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 정보 탭 -->
+          <section data-panel="info" class="p-4 hidden">
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-3">
+              <h2 class="font-bold mb-3">2026 HR 리더십 컨퍼런스</h2>
+              <div class="space-y-3 text-sm">
+                <div class="flex items-center gap-3">
+                  <i data-lucide="calendar" class="w-4 h-4 text-indigo-600"></i>
+                  <span>2026.05.22 (목) 14:00 – 17:00</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <i data-lucide="map-pin" class="w-4 h-4 text-indigo-600"></i>
+                  <span>코엑스 그랜드볼룸</span>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5">
+              <h3 class="font-bold text-sm mb-3">발표자</h3>
+              <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold">김</div>
+                  <div><div class="font-semibold text-sm">김도현</div><div class="text-xs text-slate-500">조직문화 컨설턴트</div></div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-rose-500 text-white flex items-center justify-center font-bold">박</div>
+                  <div><div class="font-semibold text-sm">박서연</div><div class="text-xs text-slate-500">HR 테크 대표</div></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- 하단 탭 -->
+        <nav class="bg-white border-t border-slate-200 grid grid-cols-3 shrink-0">
+          <button data-tab="now" class="tab-btn py-2.5 flex flex-col items-center gap-0.5 relative">
+            <i data-lucide="radio" class="w-5 h-5"></i>
+            <span class="text-[11px] font-semibold">현재</span>
+            <span data-dot class="hidden absolute top-1.5 right-1/2 mr-[-22px] w-2 h-2 bg-rose-500 rounded-full"></span>
+          </button>
+          <button data-tab="qna" class="tab-btn py-2.5 flex flex-col items-center gap-0.5">
+            <i data-lucide="message-circle" class="w-5 h-5"></i>
+            <span class="text-[11px] font-semibold">Q&amp;A</span>
+          </button>
+          <button data-tab="info" class="tab-btn py-2.5 flex flex-col items-center gap-0.5">
+            <i data-lucide="info" class="w-5 h-5"></i>
+            <span class="text-[11px] font-semibold">정보</span>
+          </button>
+        </nav>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="phone-caption">하단 <b>현재 / Q&amp;A / 정보</b> 탭 · 발표자가 활동을 띄우면 <b>현재</b> 탭이 자동으로 따라감</div>
+</div>
+
+<!-- 데모 컨트롤 패널 -->
+<div class="demo-panel">
+  <h4>발표자 행동 시뮬레이션</h4>
+  <button class="demo-btn" onclick="pushPdf()">발표자가 강연자료를 띄움</button>
+  <button class="demo-btn" onclick="pushPoll()">발표자가 설문을 띄움</button>
+  <button class="demo-btn" onclick="clearActivity()">활동 없음 (대기)</button>
+  <div style="border-top:1px solid rgba(255,255,255,.1); margin:8px 0;"></div>
+  <a href="04-ended.html" class="demo-btn" style="display:block;text-decoration:none;text-align:center;">세션 종료 →</a>
+  <p style="color:#7b7996;font-size:10px;margin-top:6px;line-height:1.4;">투표를 띄우면 '현재' 탭으로 자동 이동합니다</p>
+</div>
+
+<script src="../assets/mockup.js"></script>
+<script>
+  var state = {
+    presenterActivity: 'pdf',  // 'pdf' | 'poll' | null
+    userResponded: false,
+    tab: 'now'                 // 'now' | 'qna' | 'info'
+  };
+
+  function render() {
+    // 현재 탭에서 보여줄 패널 결정
+    var nowPanel;
+    if (state.presenterActivity === 'poll') {
+      nowPanel = state.userResponded ? 'poll-done' : 'poll';
+    } else if (state.presenterActivity === 'pdf') {
+      nowPanel = 'pdf-live';
+    } else {
+      nowPanel = 'idle';
+    }
+    var visible = state.tab === 'now' ? nowPanel : state.tab;
+
+    document.querySelectorAll('[data-panel]').forEach(function (p) {
+      p.classList.toggle('hidden', p.dataset.panel !== visible);
+    });
+
+    // 하단 탭 활성 표시
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      var on = btn.dataset.tab === state.tab;
+      btn.className = 'tab-btn py-2.5 flex flex-col items-center gap-0.5 relative ' +
+        (on ? 'text-indigo-600' : 'text-slate-400');
+    });
+
+    document.getElementById('content').scrollTo(0, 0);
+    if (window.refreshIcons) window.refreshIcons();
+  }
+
+  function selectTab(t) {
+    state.tab = t;
+    if (t === 'now') {
+      var dot = document.querySelector('[data-dot]');
+      if (dot) dot.classList.add('hidden');
+    }
+    render();
+  }
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { selectTab(btn.dataset.tab); });
+  });
+
+  function pushPdf() {
+    state.presenterActivity = 'pdf';
+    state.userResponded = false;
+    state.tab = 'now';
+    var dot = document.querySelector('[data-dot]');
+    if (dot) dot.classList.add('hidden');
+    render();
+    setDemoActive(0);
+  }
+  function pushPoll() {
+    state.presenterActivity = 'poll';
+    state.userResponded = false;
+    state.tab = 'now'; // 발표자 주도: 현재 탭으로 자동 이동
+    var dot = document.querySelector('[data-dot]');
+    if (dot) dot.classList.add('hidden');
+    render();
+    setDemoActive(1);
+  }
+  function clearActivity() {
+    state.presenterActivity = null;
+    state.userResponded = false;
+    state.tab = 'now';
+    render();
+    setDemoActive(2);
+  }
+  function submitPoll() {
+    state.userResponded = true;
+    render();
+  }
+  function setDemoActive(i) {
+    var btns = document.querySelectorAll('.demo-panel .demo-btn');
+    btns.forEach(function (b, idx) {
+      b.classList.toggle('active', idx === i);
+    });
+  }
+
+  /* ----- Q&A 카테고리 필터 ----- */
+  var activeCat = 'all';
+  function renderCatChips() {
+    document.querySelectorAll('.qcat').forEach(function (c) {
+      var on = c.dataset.cat === activeCat;
+      c.className = 'qcat shrink-0 px-2.5 py-1 rounded-full font-semibold ' +
+        (on ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500');
+    });
+    document.querySelectorAll('.qitem').forEach(function (q) {
+      var show = activeCat === 'all' || q.dataset.cat === activeCat;
+      q.classList.toggle('hidden', !show);
+    });
+  }
+  document.querySelectorAll('.qcat').forEach(function (c) {
+    c.addEventListener('click', function () { activeCat = c.dataset.cat; renderCatChips(); });
+  });
+
+  setDemoActive(0);
+  renderCatChips();
+  render();
+</script>
+</body>
+</html>

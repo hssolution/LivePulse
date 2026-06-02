@@ -6,6 +6,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAuth } from '@/context/AuthContext'
+import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { getMenuByRole, getTitleKeyByRole } from '@/config/menuConfig'
 
@@ -18,11 +19,14 @@ export function Sidebar({ isMobile = false, isOpen = false, onClose = () => {}, 
   const location = useLocation()
   const [openMenus, setOpenMenus] = useState({})
   const { profile } = useAuth()
+  const { isViewingAs } = usePartner()
   const { t } = useLanguage()
 
-  const menuItems = getMenuByRole(profile?.role)
-  const titleKey = getTitleKeyByRole(profile?.role)
-  const basePath = profile?.role === 'admin' ? '/adm' : '/partner'
+  // 관리자가 "이 계정으로 보기" 모드일 때는 파트너 메뉴/베이스 경로를 사용한다.
+  const effectiveRole = isViewingAs ? 'partner' : profile?.role
+  const menuItems = getMenuByRole(effectiveRole)
+  const titleKey = getTitleKeyByRole(effectiveRole)
+  const basePath = effectiveRole === 'admin' ? '/adm' : '/partner'
 
   // 스크롤 컨테이너 ref
   const scrollContainerRef = useRef(null)
@@ -247,12 +251,12 @@ export function Sidebar({ isMobile = false, isOpen = false, onClose = () => {}, 
         <Link to={basePath} className="flex items-center gap-3 font-bold" onClick={isMobile ? onClose : undefined}>
           {isCollapsed ? (
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
-              {profile?.role === 'admin' ? <Package className="h-6 w-6 text-primary-foreground" /> : <Building2 className="h-6 w-6 text-primary-foreground" />}
+              {effectiveRole === 'admin' ? <Package className="h-6 w-6 text-primary-foreground" /> : <Building2 className="h-6 w-6 text-primary-foreground" />}
             </div>
           ) : (
             <>
               <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                {profile?.role === 'admin' ? <Package className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
+                {effectiveRole === 'admin' ? <Package className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
               </div>
               <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
                 {t(titleKey)}
@@ -285,7 +289,7 @@ export function Sidebar({ isMobile = false, isOpen = false, onClose = () => {}, 
             <div className="relative z-10 flex h-20 items-center px-6 border-b">
               <Link to={basePath} className="flex items-center gap-3 font-bold" onClick={onClose}>
                 <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                  {profile?.role === 'admin' ? <Package className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
+                  {effectiveRole === 'admin' ? <Package className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
                 </div>
                 <span className="text-xl font-bold text-foreground">{t(titleKey)}</span>
               </Link>

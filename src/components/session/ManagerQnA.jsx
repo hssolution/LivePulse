@@ -95,10 +95,13 @@ function SortableQuestionCard({
   handleDelete,
   handleApprove,
   handleAssignPresenter,
+  categories,
+  handleAssignCategory,
   openAnswerDialog,
   openRejectDialog,
   t
 }) {
+  const questionCategory = categories?.find(c => c.id === question.category_id) || null
   const {
     attributes,
     listeners,
@@ -180,6 +183,15 @@ function SortableQuestionCard({
                 <Badge variant="outline" className="bg-purple-500/10 text-purple-600">
                   <Mic className="h-3 w-3 mr-1" />
                   {question.presenter.display_name}
+                </Badge>
+              )}
+              {questionCategory && (
+                <Badge
+                  variant="outline"
+                  style={{ color: questionCategory.color || '#4f46e5', borderColor: `${questionCategory.color || '#4f46e5'}55` }}
+                >
+                  <span className="w-2 h-2 rounded-full mr-1" style={{ backgroundColor: questionCategory.color || '#4f46e5' }} />
+                  {questionCategory.name}
                 </Badge>
               )}
             </div>
@@ -356,7 +368,31 @@ function SortableQuestionCard({
                     <DropdownMenuSeparator />
                   </>
                 )}
-                <DropdownMenuItem 
+                {/* 카테고리 지정 */}
+                {categories?.length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                      {t('qna.assignCategory') || '카테고리 지정'}
+                    </div>
+                    <DropdownMenuItem onClick={() => handleAssignCategory(question.id, null)}>
+                      <span className="w-2.5 h-2.5 rounded-full mr-2 bg-slate-300" />
+                      {t('qna.noCategory') || '미분류'}
+                      {!question.category_id && <Check className="h-4 w-4 ml-auto" />}
+                    </DropdownMenuItem>
+                    {categories.map(c => (
+                      <DropdownMenuItem
+                        key={c.id}
+                        onClick={() => handleAssignCategory(question.id, c.id)}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: c.color || '#4f46e5' }} />
+                        {c.name}
+                        {question.category_id === c.id && <Check className="h-4 w-4 ml-auto" />}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuItem
                   className="text-red-600"
                   onClick={() => handleDelete(question.id)}
                 >
@@ -386,6 +422,7 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   const [loading, setLoading] = useState(true)
   const [questions, setQuestions] = useState([])
   const [presenters, setPresenters] = useState([])
+  const [categories, setCategories] = useState([])
   const [filter, setFilter] = useState('all') // 'all' | 'pending' | 'approved' | 'answered'
   
   // 답변 다이얼로그
@@ -537,6 +574,39 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
   }, [sessionId])
 
   /**
+   * Q&A 카테고리 로드
+   */
+  const loadCategories = useCallback(async () => {
+    if (!sessionId) return
+    try {
+      const { data, error } = await supabase.rpc('sp_partner_qna_categories_q', {
+        p_session_id: sessionId
+      })
+      if (error) throw error
+      setCategories(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error loading categories:', error)
+    }
+  }, [sessionId])
+
+  /**
+   * 질문 카테고리 지정
+   */
+  const handleAssignCategory = async (questionId, categoryId) => {
+    try {
+      const { data, error } = await supabase.rpc('sp_partner_qna_set_category_s', {
+        p_question_id: questionId,
+        p_category_id: categoryId
+      })
+      if (error || !data?.success) throw new Error('failed')
+      setQuestions(prev => prev.map(q => (q.id === questionId ? { ...q, category_id: categoryId } : q)))
+    } catch (error) {
+      console.error('Error assigning category:', error)
+      toast.error(t('error.updateFailed'))
+    }
+  }
+
+  /**
    * 질문 목록 로드 (프로시저 사용)
    */
   const loadQuestions = useCallback(async (showLoading = true) => {
@@ -575,9 +645,10 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
 
   useEffect(() => {
     loadPresenters()
+    loadCategories()
     loadQuestions()
     loadBroadcastSettings()
-  }, [loadPresenters, loadQuestions, loadBroadcastSettings])
+  }, [loadPresenters, loadCategories, loadQuestions, loadBroadcastSettings])
 
   /**
    * 실시간 구독
@@ -973,17 +1044,6 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
             </Link>
           )}
           
-          {/* 좌장 선택 버튼 */}
-          {sessionCode && (
-            <Link to={`/presenter/${sessionCode}`} target="_blank">
-              <Button variant="outline" className="bg-green-500 hover:bg-green-600 text-white border-green-500">
-                <Monitor className="h-4 w-4 mr-2" />
-                {t('presenter.selectScreen')}
-                <ExternalLink className="h-3 w-3 ml-2" />
-              </Button>
-            </Link>
-          )}
-          
           {/* 송출 화면 버튼 */}
           {sessionCode && (
             <Link to={`/broadcast/${sessionCode}`} target="_blank">
@@ -1039,6 +1099,8 @@ export default function ManagerQnA({ sessionId, sessionCode }) {
                   handleDelete={handleDelete}
                   handleApprove={handleApprove}
                   handleAssignPresenter={handleAssignPresenter}
+                  categories={categories}
+                  handleAssignCategory={handleAssignCategory}
                   openAnswerDialog={openAnswerDialog}
                   openRejectDialog={openRejectDialog}
                   t={t}

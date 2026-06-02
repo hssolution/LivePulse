@@ -3,6 +3,16 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthContext'
 
 const AdminThemeContext = createContext({})
+const THEME_CACHE_KEY = 'livepulse_admin_theme_cache'
+
+const cacheAdminTheme = (theme) => {
+  if (typeof window === 'undefined' || !theme) return
+  try {
+    localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(theme))
+  } catch {
+    // 캐시 실패는 무시
+  }
+}
 
 export const useAdminTheme = () => useContext(AdminThemeContext)
 
@@ -48,13 +58,15 @@ export const AdminThemeProvider = ({ children, initialTheme }) => {
       }
 
       if (data) {
-        setTheme({
+        const loadedTheme = {
           mode: data.mode || 'light',
           preset: data.preset || 'theme-d',
           customColors: data.custom_colors || {},
           fontSize: data.font_size || 'medium'
-        })
-        
+        }
+        setTheme(loadedTheme)
+        cacheAdminTheme({ ...loadedTheme, userId: user.id })
+
         // If this is a new user with default theme, save it to DB
         if (!data.user_id) {
           await supabase.rpc('sp_theme_s', {
@@ -88,6 +100,8 @@ export const AdminThemeProvider = ({ children, initialTheme }) => {
 
       if (error) {
         console.error('Error saving theme:', error)
+      } else {
+        cacheAdminTheme({ ...newTheme, userId: user.id })
       }
     } catch (error) {
       console.error('Error in saveTheme:', error)

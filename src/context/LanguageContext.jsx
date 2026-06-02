@@ -1,40 +1,37 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import koTranslations from '@/locales/ko.json'
+import enTranslations from '@/locales/en.json'
 
 /**
- * 언어 컨텍스트
- * - 앱 전체에서 다국어 지원
- * - 로그인 사용자: DB에 언어 설정 저장
- * - 비로그인 사용자: localStorage에 저장
- * - 설정 없으면 브라우저 언어 기본값
+ * 언어 컨텍스트 (프론트엔드 JSON 기반)
+ * - 번역 데이터는 src/locales/*.json 에서 정적으로 import
+ * - 사용자 선택 언어는 localStorage 에 저장
+ * - 비로그인/로그인 모두 동일하게 동작 (DB 의존 없음)
  */
 
 const LanguageContext = createContext(null)
 
-// 지원 언어 코드
 const SUPPORTED_LANGUAGES = ['ko', 'en']
 const DEFAULT_LANGUAGE = 'ko'
 const STORAGE_KEY = 'livepulse_language'
 
-/**
- * 브라우저 언어 감지
- */
-const getBrowserLanguage = () => {
-  if (typeof window === 'undefined') return DEFAULT_LANGUAGE
-  
-  const browserLang = navigator.language || navigator.userLanguage
-  const langCode = browserLang?.split('-')[0] // 'ko-KR' -> 'ko'
-  
-  // 지원하는 언어인지 확인
-  if (SUPPORTED_LANGUAGES.includes(langCode)) {
-    return langCode
-  }
-  return DEFAULT_LANGUAGE
+const BUNDLES = {
+  ko: koTranslations,
+  en: enTranslations,
 }
 
-/**
- * 초기 언어 결정
- */
+const LANGUAGE_META = [
+  { code: 'ko', name: 'Korean', native_name: '한국어', is_default: true, is_active: true, sort_order: 1 },
+  { code: 'en', name: 'English', native_name: 'English', is_default: false, is_active: true, sort_order: 2 },
+]
+
+const getBrowserLanguage = () => {
+  if (typeof window === 'undefined') return DEFAULT_LANGUAGE
+  const browserLang = navigator.language || navigator.userLanguage
+  const langCode = browserLang?.split('-')[0]
+  return SUPPORTED_LANGUAGES.includes(langCode) ? langCode : DEFAULT_LANGUAGE
+}
+
 const getInitialLanguage = () => {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -45,217 +42,64 @@ const getInitialLanguage = () => {
   return getBrowserLanguage()
 }
 
-/**
- * LanguageProvider
- * 앱 최상위에서 언어 상태 관리
- */
 export function LanguageProvider({ children, initialData }) {
-  // 초기 데이터가 있으면 그것을 사용, 없으면 기존 로직대로 초기화
-  const [language, setLanguageState] = useState(initialData?.initialLanguage || getInitialLanguage)
-  const [translations, setTranslations] = useState(initialData?.translations || {})
-  const [languages, setLanguages] = useState(initialData?.languages || [])
-  const [translationsLoading, setTranslationsLoading] = useState(!initialData) // 초기 데이터가 있으면 로딩 완료 상태
-  const [error, setError] = useState(null)
-  const [user, setUser] = useState(initialData?.session?.user || null)
-  const initialLoadDone = useRef(!!initialData)
+  const [language, setLanguageState] = useState(
+    initialData?.initialLanguage && SUPPORTED_LANGUAGES.includes(initialData.initialLanguage)
+      ? initialData.initialLanguage
+      : getInitialLanguage
+  )
 
-  /**
-   * 지원 언어 목록 로드
-   */
-  const loadLanguages = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('languages')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order')
+  const translations = BUNDLES[language] || BUNDLES[DEFAULT_LANGUAGE]
 
-      if (error) throw error
-      setLanguages(data || [])
-    } catch (err) {
-      console.error('Error loading languages:', err)
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = language
     }
-  }, [])
+  }, [language])
 
-  /**
-   * 번역 데이터 로드
-   */
-  const loadTranslations = useCallback(async (langCode) => {
-    try {
-      setTranslationsLoading(true)
-      setError(null)
-
-      const { data, error } = await supabase
-        .rpc('get_translations', { lang_code: langCode })
-
-      if (error) throw error
-      
-      setTranslations(data || {})
-    } catch (err) {
-      console.error('Error loading translations:', err)
-      setError(err.message)
-      setTranslations({})
-    } finally {
-      setTranslationsLoading(false)
-    }
-  }, [])
-
-  /**
-   * 사용자 언어 설정 로드 (DB에서)
-   */
-  const loadUserLanguage = useCallback(async (userId) => {
-    try {
-      const { data, error } = await supabase.rpc('sp_user_language_q', {
-        p_user_id: userId
-      })
-
-      if (error) throw error
-      
-      const lang = data?.preferred_language
-      if (lang && SUPPORTED_LANGUAGES.includes(lang)) {
-        return lang
-      }
-      return null
-    } catch (err) {
-      console.error('Error loading user language:', err)
-      return null
-    }
-  }, [])
-
-  /**
-   * 사용자 언어 설정 저장 (DB에)
-   */
-  const saveUserLanguage = useCallback(async (langCode) => {
-    if (!user) return false
-    
-    try {
-      const { error } = await supabase.rpc('sp_user_language_s', {
-        p_user_id: user.id,
-        p_language_code: langCode
-      })
-
-      if (error) throw error
-      console.log('[Language] DB update successful')
-      return true
-    } catch (err) {
-      console.error('Error saving user language:', err)
-      return false
-    }
-  }, [user])
-
-  /**
-   * 언어 변경
-   */
-  const setLanguage = useCallback(async (langCode) => {
+  const setLanguage = useCallback((langCode) => {
     if (!SUPPORTED_LANGUAGES.includes(langCode)) return
-    
-    console.log('[Language] Changing language to:', langCode, 'User:', user?.email)
-    
     setLanguageState(langCode)
-    localStorage.setItem(STORAGE_KEY, langCode)
-    
-    if (user) {
-      console.log('[Language] Saving to DB...')
-      await saveUserLanguage(langCode)
-      console.log('[Language] Saved to DB')
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, langCode)
     }
-    
-    await loadTranslations(langCode)
-    console.log('[Language] Translations loaded')
-  }, [user, saveUserLanguage, loadTranslations])
+  }, [])
 
-  /**
-   * 번역 함수
-   */
-  const t = useCallback((key, params = {}) => {
+  const t = useCallback((key, paramsOrFallback) => {
+    // Overloads:
+    //   t(key)
+    //   t(key, 'fallback string')        // used when key missing
+    //   t(key, { name: 'foo', count: 3 }) // substitutes {name}/{count} in the translation
+    const isFallbackString = typeof paramsOrFallback === 'string'
+    const params = !isFallbackString && paramsOrFallback ? paramsOrFallback : null
+
     let value = translations[key]
-    
-    if (!value) {
-      return key
+    if (value === undefined || value === null) {
+      return isFallbackString ? paramsOrFallback : key
     }
-    
-    if (params) {
+    if (params && typeof params === 'object') {
       Object.keys(params).forEach((paramKey) => {
         const regex = new RegExp(`\\{${paramKey}\\}`, 'g')
         value = value.replace(regex, params[paramKey])
       })
     }
-    
     return value
   }, [translations])
 
-  /**
-   * 번역 키 존재 여부 확인
-   */
-  const hasTranslation = useCallback((key) => {
-    return key in translations
-  }, [translations])
-
-  /**
-   * 초기 로드 및 인증 상태 변경 감지
-   */
-  useEffect(() => {
-    // 초기 데이터가 있으면 초기 로드 스킵 (단, 이벤트 리스너는 등록해야 함)
-    const init = async () => {
-    if (initialLoadDone.current) return
-    initialLoadDone.current = true
-
-      console.log('[Language] Initial load started, current language:', language)
-      
-      loadLanguages()
-      
-      const { data: { session } } = await supabase.auth.getSession()
-      const currentUser = session?.user || null
-      setUser(currentUser)
-      
-      let langToLoad = language
-      if (currentUser) {
-        const userLang = await loadUserLanguage(currentUser.id)
-        if (userLang && userLang !== language) {
-          langToLoad = userLang
-          setLanguageState(userLang)
-          localStorage.setItem(STORAGE_KEY, userLang)
-        }
-      }
-      
-      console.log('[Language] Loading translations for:', langToLoad)
-      await loadTranslations(langToLoad)
-      console.log('[Language] Initial load completed')
-    }
-    
-    init()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        const currentUser = session?.user || null
-        setUser(currentUser)
-
-        if (currentUser && event === 'SIGNED_IN') {
-          const userLang = await loadUserLanguage(currentUser.id)
-          if (userLang && userLang !== language) {
-            setLanguageState(userLang)
-            localStorage.setItem(STORAGE_KEY, userLang)
-            await loadTranslations(userLang)
-          }
-        }
-      }
-    )
-
-    return () => subscription.unsubscribe()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const hasTranslation = useCallback((key) => key in translations, [translations])
 
   const value = {
     language,
     setLanguage,
-    languages,
+    languages: LANGUAGE_META,
     translations,
-    loading: translationsLoading,
-    translationsLoading,
-    error,
+    loading: false,
+    translationsLoading: false,
+    error: null,
     t,
     hasTranslation,
-    reload: () => loadTranslations(language),
-    isLoggedIn: !!user
+    reload: () => {},
+    isLoggedIn: false,
   }
 
   return (

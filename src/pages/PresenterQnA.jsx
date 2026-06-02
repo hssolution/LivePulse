@@ -5,8 +5,10 @@ import { useAuth } from '@/context/AuthContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Loader2, Check, Monitor, ExternalLink } from 'lucide-react'
+import { Loader2, Check, Monitor, ExternalLink, MonitorPlay } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import StageControl from '@/components/session/StageControl'
+import StagePhaseBar from '@/components/session/StagePhaseBar'
 
 /**
  * 좌장 선택 화면 (강연자용 Q&A)
@@ -257,14 +259,32 @@ export default function PresenterQnA() {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* 진행 단계 바 — 지금 단계 · 다음 할 일 (콘솔과 공용) */}
+      <StagePhaseBar status={session.status} broadcastMode={session.broadcast_mode} compact />
+
       {/* 메인 컨테이너 */}
-      <div className="max-w-6xl mx-auto my-8 bg-white rounded-lg shadow-lg overflow-hidden">
+      <div className="max-w-6xl mx-auto mt-6 mb-8 grid lg:grid-cols-[360px_1fr] gap-6 items-start px-4">
+        {/* 좌: 통합 무대 제어 */}
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div className="bg-slate-800 text-white px-4 py-3 font-bold text-sm flex items-center gap-2">
+            <MonitorPlay className="w-4 h-4" /> 무대 제어
+          </div>
+          <div className="h-[70vh] flex flex-col">
+            <StageControl sessionId={session.id} />
+          </div>
+        </div>
+
+        {/* 우: 질문 선택 카드 */}
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
         {/* 헤더 - 녹색 */}
         <div className="bg-green-500 text-white px-6 py-5">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl md:text-2xl font-semibold">
-              {t('presenter.selectQuestion')}
-            </h1>
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wide text-white/70 mb-0.5">좌장 콕핏 · 현장 간편판</div>
+              <h1 className="text-xl md:text-2xl font-semibold">
+                {t('presenter.selectQuestion')}
+              </h1>
+            </div>
             <Link to={`/broadcast/${code}`} target="_blank">
               <Button 
                 variant="outline" 
@@ -358,6 +378,7 @@ export default function PresenterQnA() {
             })}
           </ul>
         )}
+        </div>
       </div>
     </div>
   )

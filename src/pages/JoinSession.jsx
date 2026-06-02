@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import { formatKoreanPhone } from '@/utils/phone'
 
 /**
  * 청중 등록 페이지 (템플릿 기반)
@@ -160,11 +161,12 @@ export default function JoinSession() {
       
       if (data?.success) {
         toast.success(t('join.success'))
-        setIsParticipating(true)
-        await loadSession()
+        navigate(`/live/${code}`)
+        return
       } else if (data?.error === 'ALREADY_PARTICIPATING') {
         toast.info(t('join.alreadyParticipating'))
-        setIsParticipating(true)
+        navigate(`/live/${code}`)
+        return
       } else {
         throw new Error(data?.error || 'Unknown error')
       }
@@ -206,24 +208,7 @@ export default function JoinSession() {
     }
   }
 
-  /**
-   * 전화번호 포맷팅 (010-1234-5678)
-   */
-  const formatPhoneNumber = (value) => {
-    // 숫자만 추출
-    const numbers = value.replace(/[^\d]/g, '')
-    
-    // 길이에 따라 포맷 적용
-    if (numbers.length <= 3) {
-      return numbers
-    } else if (numbers.length <= 7) {
-      return `${numbers.slice(0, 3)}-${numbers.slice(3)}`
-    } else if (numbers.length <= 11) {
-      return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7)}`
-    } else {
-      return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`
-    }
-  }
+  // 전화번호 포맷터는 공통 utils로 이전 — formatKoreanPhone 사용
 
   /**
    * 실시간 유효성 검사
@@ -308,7 +293,8 @@ export default function JoinSession() {
         setShowJoinForm(false)
         setFormData({ name: '', email: '', phone: '' })
         setFormErrors({ name: '', email: '', phone: '' })
-        await loadSession()
+        navigate(`/live/${code}`)
+        return
       } else if (data?.error === 'EMAIL_DUPLICATE') {
         setDuplicateAlert({
           open: true,
@@ -410,11 +396,21 @@ export default function JoinSession() {
             <p className="text-sm font-medium">{t('join.alreadyParticipating')}</p>
           </div>
 
-          {/* 참여 취소 버튼만 표시 */}
-          <Button 
-            size="lg" 
+          {/* 라이브 입장 (주) */}
+          <Button
+            size="lg"
+            className="w-full text-lg bg-slate-900 hover:bg-slate-800 text-white"
+            onClick={() => navigate(`/live/${code}`)}
+          >
+            라이브 입장
+            <ArrowRight className="h-5 w-5 ml-2" />
+          </Button>
+
+          {/* 참여 취소 (보조) */}
+          <Button
+            size="lg"
             variant="outline"
-            className="w-full text-lg border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-400"
+            className="w-full border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-400"
             onClick={handleCancelParticipation}
             disabled={joining}
           >
@@ -575,7 +571,7 @@ export default function JoinSession() {
                   value={formData.phone}
                   onChange={(e) => {
                     const input = e.target
-                    const formatted = formatPhoneNumber(e.target.value)
+                    const formatted = formatKoreanPhone(e.target.value)
                     setFormData({ ...formData, phone: formatted })
                     validateField('phone', formatted)
                     

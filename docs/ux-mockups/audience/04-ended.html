@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>청중 · 종료 화면 · LivePulse 시안</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<link rel="stylesheet" href="../assets/mockup.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+<div class="phone-stage">
+  <div class="phone-caption">
+    <b>STEP 4 · 종료 화면</b> &nbsp;—&nbsp; 발표자가 세션을 종료하면 표시
+  </div>
+
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="phone-screen no-scrollbar">
+
+      <div class="min-h-full bg-gradient-to-b from-indigo-600 to-purple-800 flex flex-col">
+
+        <!-- 중앙 감사 영역 -->
+        <div class="flex-1 flex flex-col items-center justify-center px-7 text-center text-white">
+          <div class="w-20 h-20 rounded-full bg-white/15 backdrop-blur flex items-center justify-center mb-5">
+            <i data-lucide="check-circle-2" class="w-10 h-10 text-white"></i>
+          </div>
+          <h1 class="text-2xl font-bold">강연이 종료되었습니다</h1>
+          <p class="text-sm text-indigo-200 mt-2 leading-relaxed">
+            참여해 주셔서 감사합니다<br/>오늘 함께한 시간이 도움이 되었길 바랍니다
+          </p>
+        </div>
+
+        <!-- 참여 요약 -->
+        <div class="px-5 pb-4">
+          <div class="bg-white rounded-2xl p-5">
+            <h2 class="font-bold text-sm text-slate-400 mb-3">나의 참여 요약</h2>
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <div class="text-2xl font-bold text-indigo-600">2</div>
+                <div class="text-xs text-slate-500 mt-0.5">남긴 질문</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-indigo-600">4</div>
+                <div class="text-xs text-slate-500 mt-0.5">참여한 투표</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-indigo-600">11</div>
+                <div class="text-xs text-slate-500 mt-0.5">누른 공감</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 사후 설문 안내 (옵션) -->
+        <div class="px-5 pb-4">
+          <div class="bg-white/10 backdrop-blur rounded-2xl p-4 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <i data-lucide="clipboard-list" class="w-5 h-5 text-white"></i>
+            </div>
+            <div class="flex-1">
+              <div class="font-semibold text-sm text-white">만족도 설문 (1분)</div>
+              <div class="text-xs text-indigo-200">강연을 더 좋게 만드는 데 도움이 됩니다</div>
+            </div>
+            <i data-lucide="chevron-right" class="w-5 h-5 text-white/70"></i>
+          </div>
+        </div>
+
+        <!-- 버튼 -->
+        <div class="px-5 pb-8">
+          <a href="../index.html" class="w-full bg-white text-indigo-700 font-bold py-3 rounded-xl flex items-center justify-center gap-2">
+            <i data-lucide="home" class="w-4 h-4"></i> LivePulse 홈으로
+          </a>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <div class="phone-caption">현재는 단순 카드 → 참여 요약·사후 설문을 더한 마무리 화면으로 개선</div>
+</div>
+
+<script src="../assets/mockup.js"></script>
+</body>
+</html>

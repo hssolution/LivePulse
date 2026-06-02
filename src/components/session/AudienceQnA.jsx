@@ -32,7 +32,7 @@ const POLL_INTERVAL_MS = 10000
  * - 좋아요
  * - 실시간 업데이트
  */
-export default function AudienceQnA({ sessionId, sessionStatus, isPreview = false }) {
+export default function AudienceQnA({ sessionId, sessionStatus, isPreview = false, categories = [] }) {
   const { t, language } = useLanguage()
   
   const [loading, setLoading] = useState(true)
@@ -48,6 +48,9 @@ export default function AudienceQnA({ sessionId, sessionStatus, isPreview = fals
   
   // 정렬
   const [sortBy, setSortBy] = useState('popular') // 'newest' | 'popular' | 'oldest'
+
+  // 카테고리 필터 ('all' | categoryId)
+  const [catFilter, setCatFilter] = useState('all')
   
   // Device ID (비로그인 사용자용)
   const deviceIdRef = useRef(null)
@@ -260,6 +263,15 @@ export default function AudienceQnA({ sessionId, sessionStatus, isPreview = fals
   // 세션이 활성 상태가 아니면 질문 폼 숨김 (미리보기 모드에서는 항상 표시)
   const canSubmit = sessionStatus === 'active' || isPreview
 
+  // 카테고리 노출 제어 + 필터
+  const catMap = new Map(categories.map((c) => [c.id, c]))
+  const visibleQuestions = questions.filter((q) => {
+    // 카테고리가 지정됐는데 노출 카테고리 목록에 없으면(=좌장이 끔) 숨김
+    if (q.category_id && !catMap.has(q.category_id)) return false
+    if (catFilter !== 'all' && q.category_id !== catFilter) return false
+    return true
+  })
+
   return (
     <div className="space-y-4">
       {/* 질문 입력 폼 */}
@@ -321,12 +333,42 @@ export default function AudienceQnA({ sessionId, sessionStatus, isPreview = fals
         </Card>
       )}
 
+      {/* 카테고리 필터 칩 */}
+      {categories.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setCatFilter('all')}
+            className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${
+              catFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500'
+            }`}
+          >
+            전체
+          </button>
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setCatFilter(c.id)}
+              className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors"
+              style={
+                catFilter === c.id
+                  ? { backgroundColor: c.color || '#4f46e5', color: '#fff' }
+                  : { backgroundColor: '#fff', color: '#64748b', border: '1px solid #e2e8f0' }
+              }
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 정렬 옵션 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <MessageCircle className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">
-            {questions.length} {language === 'ko' ? '개의 질문' : 'questions'}
+            {visibleQuestions.length} {language === 'ko' ? '개의 질문' : 'questions'}
           </span>
         </div>
         
@@ -362,7 +404,7 @@ export default function AudienceQnA({ sessionId, sessionStatus, isPreview = fals
         <div className="flex justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
-      ) : questions.length === 0 ? (
+      ) : visibleQuestions.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
             <MessageCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
@@ -374,7 +416,7 @@ export default function AudienceQnA({ sessionId, sessionStatus, isPreview = fals
         </Card>
       ) : (
         <div className="space-y-3">
-          {questions.map((question) => (
+          {visibleQuestions.map((question) => (
             <Card 
               key={question.id}
               className={`transition-all ${
@@ -420,6 +462,21 @@ export default function AudienceQnA({ sessionId, sessionStatus, isPreview = fals
                         <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
                           <Sparkles className="h-3 w-3 mr-1" />
                           {t('qna.highlight')}
+                        </Badge>
+                      )}
+                      {question.category_id && catMap.get(question.category_id) && (
+                        <Badge
+                          variant="outline"
+                          style={{
+                            color: catMap.get(question.category_id).color || '#4f46e5',
+                            borderColor: `${catMap.get(question.category_id).color || '#4f46e5'}55`,
+                          }}
+                        >
+                          <span
+                            className="w-2 h-2 rounded-full mr-1"
+                            style={{ backgroundColor: catMap.get(question.category_id).color || '#4f46e5' }}
+                          />
+                          {catMap.get(question.category_id).name}
                         </Badge>
                       )}
                     </div>

@@ -1,15 +1,17 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Home, ArrowLeft, Search } from 'lucide-react'
+import { useLanguage } from '@/context/LanguageContext'
 
 /**
  * 404 Not Found 페이지
  */
 export default function NotFound() {
+  const { t } = useLanguage()
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <div className="text-center max-w-md">
-        {/* 404 숫자 */}
         <div className="relative mb-8">
           <h1 className="text-[150px] sm:text-[200px] font-bold text-muted-foreground/10 leading-none select-none">
             404
@@ -21,26 +23,24 @@ export default function NotFound() {
           </div>
         </div>
 
-        {/* 메시지 */}
         <h2 className="text-2xl sm:text-3xl font-bold mb-4">
-          페이지를 찾을 수 없습니다
+          {t('notFound.title')}
         </h2>
         <p className="text-muted-foreground mb-8">
-          요청하신 페이지가 존재하지 않거나 이동되었을 수 있습니다.
+          {t('notFound.descLine1')}
           <br />
-          URL을 확인하시거나 아래 버튼을 이용해주세요.
+          {t('notFound.descLine2')}
         </p>
 
-        {/* 버튼 */}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button onClick={() => window.history.back()} variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            이전 페이지
+            {t('notFound.back')}
           </Button>
           <Link to="/">
             <Button className="w-full bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600">
               <Home className="h-4 w-4 mr-2" />
-              홈으로 이동
+              {t('notFound.goHome')}
             </Button>
           </Link>
         </div>

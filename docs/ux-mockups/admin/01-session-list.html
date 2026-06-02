@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>세션 목록 · LivePulse 시안</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<link rel="stylesheet" href="../assets/mockup.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+<div class="flex min-h-screen">
+
+  <!-- 사이드바 -->
+  <aside class="w-60 bg-[#11111b] text-slate-300 flex flex-col shrink-0">
+    <div class="px-5 py-5 flex items-center gap-2 text-white font-bold text-lg border-b border-white/10">
+      <i data-lucide="activity" class="w-5 h-5 text-indigo-400"></i> LivePulse
+    </div>
+    <nav class="flex-1 px-3 py-4 space-y-1 text-sm font-medium">
+      <div class="px-3 py-2 rounded-lg flex items-center gap-3 hover:bg-white/5"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> 대시보드</div>
+      <div class="px-3 py-2 rounded-lg flex items-center gap-3 bg-indigo-600 text-white"><i data-lucide="calendar" class="w-4 h-4"></i> 세션 관리</div>
+      <div class="px-3 py-2 rounded-lg flex items-center gap-3 hover:bg-white/5"><i data-lucide="users-round" class="w-4 h-4"></i> 팀원 관리</div>
+      <div class="px-3 py-2 rounded-lg flex items-center gap-3 hover:bg-white/5"><i data-lucide="mail" class="w-4 h-4"></i> 초대 관리</div>
+      <div class="px-3 py-2 rounded-lg flex items-center gap-3 hover:bg-white/5"><i data-lucide="building-2" class="w-4 h-4"></i> 파트너 정보</div>
+      <div class="px-3 py-2 rounded-lg flex items-center gap-3 hover:bg-white/5"><i data-lucide="settings" class="w-4 h-4"></i> 설정</div>
+    </nav>
+    <div class="px-5 py-4 border-t border-white/10 flex items-center gap-3 text-sm">
+      <div class="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold">이</div>
+      <div>
+        <div class="text-white font-semibold">이희상</div>
+        <div class="text-xs text-slate-400">HS솔루션 · 주최자</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 메인 -->
+  <main class="flex-1 overflow-y-auto">
+    <!-- 상단 헤더 -->
+    <div class="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-bold">세션 관리</h1>
+        <p class="text-sm text-slate-500 mt-0.5">강연·세미나 세션을 만들고 진행하세요</p>
+      </div>
+      <a href="02-session-create.html" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2">
+        <i data-lucide="plus" class="w-4 h-4"></i> 새 세션 만들기
+      </a>
+    </div>
+
+    <div class="p-8">
+      <!-- 통계 -->
+      <div class="grid grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-sm text-slate-500">전체 세션</div>
+          <div class="text-2xl font-bold mt-1">12</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-sm text-slate-500">진행중</div>
+          <div class="text-2xl font-bold mt-1 text-emerald-600">1</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-sm text-slate-500">게시됨</div>
+          <div class="text-2xl font-bold mt-1 text-sky-600">2</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-sm text-slate-500">준비중</div>
+          <div class="text-2xl font-bold mt-1 text-amber-600">3</div>
+        </div>
+      </div>
+
+      <!-- 필터 -->
+      <div class="flex items-center gap-3 mb-6">
+        <div class="relative flex-1 max-w-sm">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+          <input type="text" placeholder="세션명 검색" class="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-400" />
+        </div>
+        <div class="flex gap-1.5 text-sm">
+          <button class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-medium">전체</button>
+          <button class="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-slate-300">진행중</button>
+          <button class="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-slate-300">게시됨</button>
+          <button class="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-slate-300">준비중</button>
+          <button class="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-slate-300">종료</button>
+        </div>
+      </div>
+
+      <!-- 진행중 그룹 -->
+      <section class="mb-8">
+        <h2 class="flex items-center gap-2 text-sm font-bold text-slate-500 mb-3">
+          <span class="live-dot"></span> 진행중
+        </h2>
+        <div class="bg-white rounded-xl border-2 border-emerald-300 p-5 flex items-center gap-5">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">● LIVE</span>
+              <span class="text-xs text-slate-400">참여코드 <b class="text-slate-700">HR2026</b></span>
+            </div>
+            <h3 class="font-bold text-lg">2026 HR 리더십 컨퍼런스</h3>
+            <div class="flex items-center gap-4 text-sm text-slate-500 mt-1.5">
+              <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> 2026.05.22 14:00</span>
+              <span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> 코엑스 그랜드볼룸</span>
+              <span class="flex items-center gap-1 text-emerald-600 font-semibold"><i data-lucide="users" class="w-3.5 h-3.5"></i> 184 / 250명 참여중</span>
+            </div>
+          </div>
+          <a href="04-live-console.html" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-5 py-3 rounded-lg flex items-center gap-2">
+            <i data-lucide="radio" class="w-4 h-4"></i> 진행 콘솔 열기
+          </a>
+        </div>
+      </section>
+
+      <!-- 게시됨 그룹 -->
+      <section class="mb-8">
+        <h2 class="text-sm font-bold text-slate-500 mb-3">게시됨 · 시작 대기</h2>
+        <div class="space-y-3">
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-5">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs font-bold bg-sky-100 text-sky-700 px-2 py-0.5 rounded">게시됨</span>
+                <span class="text-xs text-slate-400">참여코드 <b class="text-slate-700">DX2026</b></span>
+              </div>
+              <h3 class="font-bold text-lg">디지털 전환 워크숍</h3>
+              <div class="flex items-center gap-4 text-sm text-slate-500 mt-1.5">
+                <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> 2026.05.24 10:00</span>
+                <span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> 본사 대강당</span>
+                <span class="flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5"></i> 0 / 80명</span>
+              </div>
+            </div>
+            <a href="03-setup-editor.html" class="bg-white border border-slate-200 hover:border-slate-300 text-slate-600 text-sm font-semibold px-4 py-2.5 rounded-lg">설정</a>
+            <a href="04-live-console.html" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-5 py-2.5 rounded-lg flex items-center gap-2">
+              <i data-lucide="play" class="w-4 h-4"></i> 라이브 시작
+            </a>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-5">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs font-bold bg-sky-100 text-sky-700 px-2 py-0.5 rounded">게시됨</span>
+                <span class="text-xs text-slate-400">참여코드 <b class="text-slate-700">SAFE01</b></span>
+              </div>
+              <h3 class="font-bold text-lg">상반기 안전교육 세미나</h3>
+              <div class="flex items-center gap-4 text-sm text-slate-500 mt-1.5">
+                <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> 2026.05.27 09:30</span>
+                <span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> 교육센터 3층</span>
+                <span class="flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5"></i> 0 / 120명</span>
+              </div>
+            </div>
+            <a href="03-setup-editor.html" class="bg-white border border-slate-200 hover:border-slate-300 text-slate-600 text-sm font-semibold px-4 py-2.5 rounded-lg">설정</a>
+            <a href="04-live-console.html" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-5 py-2.5 rounded-lg flex items-center gap-2">
+              <i data-lucide="play" class="w-4 h-4"></i> 라이브 시작
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- 준비중 그룹 -->
+      <section class="mb-8">
+        <h2 class="text-sm font-bold text-slate-500 mb-3">준비중 · 작성 진행</h2>
+        <div class="space-y-3">
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-5">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded">준비중</span>
+                <span class="text-xs text-slate-400">준비 완료도 60%</span>
+              </div>
+              <h3 class="font-bold text-lg">신입사원 온보딩 데이</h3>
+              <div class="flex items-center gap-4 text-sm text-slate-500 mt-1.5">
+                <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> 2026.06.02 13:00</span>
+                <span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> 미정</span>
+              </div>
+              <div class="w-48 h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                <div class="h-full bg-amber-400 rounded-full" style="width:60%"></div>
+              </div>
+            </div>
+            <a href="03-setup-editor.html" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-5 py-2.5 rounded-lg flex items-center gap-2">
+              <i data-lucide="pencil" class="w-4 h-4"></i> 준비 계속하기
+            </a>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-5">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded">준비중</span>
+                <span class="text-xs text-slate-400">준비 완료도 25%</span>
+              </div>
+              <h3 class="font-bold text-lg">3분기 전사 타운홀</h3>
+              <div class="flex items-center gap-4 text-sm text-slate-500 mt-1.5">
+                <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> 2026.07.10 16:00</span>
+              </div>
+              <div class="w-48 h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                <div class="h-full bg-amber-400 rounded-full" style="width:25%"></div>
+              </div>
+            </div>
+            <a href="03-setup-editor.html" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-5 py-2.5 rounded-lg flex items-center gap-2">
+              <i data-lucide="pencil" class="w-4 h-4"></i> 준비 계속하기
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- 종료 그룹 -->
+      <section>
+        <h2 class="text-sm font-bold text-slate-500 mb-3">종료됨</h2>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-5 opacity-90">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded">종료</span>
+            </div>
+            <h3 class="font-bold text-lg">2026 신년 경영전략 세미나</h3>
+            <div class="flex items-center gap-4 text-sm text-slate-500 mt-1.5">
+              <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> 2026.01.15</span>
+              <span class="flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5"></i> 312명 참여</span>
+              <span class="flex items-center gap-1"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> 질문 47개</span>
+            </div>
+          </div>
+          <a href="05-report.html" class="bg-white border border-slate-200 hover:border-slate-300 text-slate-600 text-sm font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2">
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i> 리포트 보기
+          </a>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script src="../assets/mockup.js"></script>
+</body>
+</html>

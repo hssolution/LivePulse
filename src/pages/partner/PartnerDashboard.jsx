@@ -67,10 +67,10 @@ const PIE_COLORS = ['#f97316', '#3b82f6', '#22c55e', '#a855f7']
  */
 export default function PartnerDashboard() {
   const { user, profile } = useAuth()
-  const { partner, partnerDetails, loading: partnerLoading } = usePartner()
+  const { partner, partnerDetails, loading: partnerLoading, isViewingAs, viewAs } = usePartner()
   const { t } = useLanguage()
   const navigate = useNavigate()
-  
+
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
     totalSessions: 0,
@@ -166,14 +166,30 @@ export default function PartnerDashboard() {
 
   useEffect(() => {
     let isMounted = true
-    
+
     const fetchData = async () => {
-      if (!user || !partner || !isMounted) return
-      
+      if (!user || !isMounted) return
+
+      // PartnerContext 의 partner 로딩이 아직이면 대기 — 다시 호출됨
+      if (partnerLoading) return
+
+      // 파트너 데이터가 없으면 (admin 직접 접근 등) 스켈레톤만 풀고 빈 상태로 안내
+      if (!partner) {
+        if (isMounted) setLoading(false)
+        return
+      }
+
+      // 보기 모드에서는 대상 파트너의 profile_id 로 호출해야 한다
+      const targetUserId = isViewingAs ? (partner.profile_id || viewAs?.profileId) : user.id
+      if (!targetUserId) {
+        if (isMounted) setLoading(false)
+        return
+      }
+
       setLoading(true)
       try {
-        const { data, error } = await supabase.rpc('sp_partner_dashboard_q', { 
-          p_user_id: user.id 
+        const { data, error } = await supabase.rpc('sp_partner_dashboard_q', {
+          p_user_id: targetUserId
         })
 
         if (error) throw error
@@ -235,11 +251,11 @@ export default function PartnerDashboard() {
     }
     
     fetchData()
-    
+
     return () => {
       isMounted = false
     }
-  }, [user, partner])
+  }, [user, partner, partnerLoading, isViewingAs, viewAs?.profileId])
   
   /**
    * 파트너 타입 레이블
@@ -330,6 +346,30 @@ export default function PartnerDashboard() {
           <Skeleton className="h-80" />
           <Skeleton className="h-80" />
         </div>
+      </div>
+    )
+  }
+
+  // 파트너 데이터가 없는 경우 (관리자가 /partner 직접 접근, view-as 로드 실패 등)
+  if (!partner) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6 text-center">
+        <Building2 className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
+        <h2 className="text-xl font-semibold mb-2">
+          {isViewingAs ? '파트너 데이터를 불러올 수 없습니다' : '파트너 정보가 없습니다'}
+        </h2>
+        <p className="text-sm text-muted-foreground max-w-md">
+          {isViewingAs
+            ? `"${viewAs?.name || '대상 파트너'}" 계정의 데이터에 접근할 수 없습니다. 관리자 권한 또는 RLS 정책을 확인해주세요.`
+            : '관리자 계정에는 파트너 대시보드가 표시되지 않습니다.'}
+        </p>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => navigate(profile?.role === 'admin' ? '/adm/partners' : '/')}
+        >
+          {profile?.role === 'admin' ? '파트너 목록으로' : '홈으로'}
+        </Button>
       </div>
     )
   }

@@ -2,6 +2,7 @@ import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
+import LanguageContext from '@/context/LanguageContext'
 
 /**
  * 에러 바운더리 컴포넌트
@@ -9,6 +10,8 @@ import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
  * 사용자 친화적인 에러 화면을 표시합니다.
  */
 class ErrorBoundary extends React.Component {
+  static contextType = LanguageContext
+
   constructor(props) {
     super(props)
     this.state = { hasError: false, error: null, errorInfo: null }
@@ -20,7 +23,6 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     this.setState({ errorInfo })
-    // 에러 로깅 서비스에 전송할 수 있음
     console.error('ErrorBoundary caught an error:', error, errorInfo)
   }
 
@@ -34,6 +36,7 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const t = this.context?.t || ((key) => key)
       return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-background">
           <Card className="w-full max-w-md">
@@ -41,9 +44,9 @@ class ErrorBoundary extends React.Component {
               <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle className="h-8 w-8 text-red-500" />
               </div>
-              <CardTitle className="text-xl">문제가 발생했습니다</CardTitle>
+              <CardTitle className="text-xl">{t('errorBoundary.title')}</CardTitle>
               <CardDescription>
-                예상치 못한 오류가 발생했습니다. 페이지를 새로고침하거나 홈으로 이동해주세요.
+                {t('errorBoundary.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -55,11 +58,11 @@ class ErrorBoundary extends React.Component {
               <div className="flex gap-3">
                 <Button onClick={this.handleReload} className="flex-1">
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  새로고침
+                  {t('errorBoundary.reload')}
                 </Button>
                 <Button onClick={this.handleGoHome} variant="outline" className="flex-1">
                   <Home className="h-4 w-4 mr-2" />
-                  홈으로
+                  {t('common.goHome')}
                 </Button>
               </div>
             </CardContent>

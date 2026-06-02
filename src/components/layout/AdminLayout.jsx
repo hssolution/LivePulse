@@ -19,7 +19,10 @@ export default function AdminLayout() {
   }, [])
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-[#020617]">
+    <div
+      className="flex w-full overflow-hidden bg-slate-50 dark:bg-[#020617]"
+      style={{ height: 'calc(100vh - var(--view-as-banner-height, 0px))' }}
+    >
       {/* Desktop Sidebar - hidden on mobile */}
       <div className="hidden md:flex">
         <Sidebar 

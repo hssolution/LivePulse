@@ -7,6 +7,20 @@ export default {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			// Pretendard 우선, 미로드 시 시스템 폰트로 폴백
+  			sans: [
+  				'Pretendard',
+  				'-apple-system',
+  				'BlinkMacSystemFont',
+  				'system-ui',
+  				'"Segoe UI"',
+  				'Roboto',
+  				'"Helvetica Neue"',
+  				'Arial',
+  				'sans-serif'
+  			]
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
