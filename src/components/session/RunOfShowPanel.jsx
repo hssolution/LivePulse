@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -72,6 +73,24 @@ function stripHtml(s) {
   return div.textContent || div.innerText || ''
 }
 
+// ISO 문자열 → <input type="datetime-local"> 값 ('YYYY-MM-DDTHH:mm', 로컬 시간 기준)
+function toDatetimeLocal(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// ISO 문자열 → 'HH:mm' (큐 카드 메타 표시용)
+function formatCueTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 const CUE_META = {
   pdf: { label: '강연자료', icon: FileText, color: 'text-indigo-500', chip: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40' },
   survey: { label: '설문', icon: BarChart3, color: 'text-emerald-500', chip: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
@@ -90,6 +109,7 @@ function cueSummary(cue) {
 function SortableCueCard({ cue, index, showPresenterHeader, live, editable, selected, broadcasting, onSelect, onBroadcast, onEdit, onDelete }) {
   const meta = CUE_META[cue.cue_type] || CUE_META.notice
   const Icon = meta.icon
+  const cueTime = formatCueTime(cue.planned_start_at)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cue.id, disabled: !editable })
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
 
@@ -132,7 +152,17 @@ function SortableCueCard({ cue, index, showPresenterHeader, live, editable, sele
             {cue.title && <span className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">{cue.title}</span>}
             {broadcasting && <span className="text-[10px] font-bold text-rose-600 dark:text-rose-300 flex items-center gap-0.5"><Radio className="w-3 h-3" /> 송출 중</span>}
           </span>
-          <span className="block text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">{cueSummary(cue)}</span>
+          <span className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+            {cueTime && (
+              <span className="shrink-0 font-medium text-slate-500 dark:text-slate-400">
+                {cueTime}{cue.duration_min ? ` · ${cue.duration_min}분` : ''}
+              </span>
+            )}
+            {cue.is_public === false && (
+              <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border bg-slate-500/15 text-slate-400 border-slate-500/40">비공개</span>
+            )}
+            <span className="truncate min-w-0">{cueSummary(cue)}</span>
+          </span>
         </span>
 
         <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -176,6 +206,10 @@ const EMPTY_FORM = {
   poll_id: 'none',
   qna_category_id: 'none',
   notice_text: '',
+  plannedStartAt: '',
+  durationMin: '',
+  isPublic: true,
+  publicTitle: '',
 }
 
 export default function RunOfShowPanel({ sessionId, live = false, editable = true, selectedCueId = null, currentCueId = null, onSelect, onBroadcast }) {
@@ -258,6 +292,10 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
       poll_id: cue.poll_id || 'none',
       qna_category_id: cue.qna_category_id || 'none',
       notice_text: cue.notice_text || '',
+      plannedStartAt: toDatetimeLocal(cue.planned_start_at),
+      durationMin: cue.duration_min != null ? String(cue.duration_min) : '',
+      isPublic: cue.is_public !== false,
+      publicTitle: cue.public_title || '',
     })
     setShowDialog(true)
   }
@@ -277,6 +315,11 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
         p_poll_id: form.cue_type === 'survey' && form.poll_id !== 'none' ? form.poll_id : null,
         p_qna_category_id: form.cue_type === 'qna' && form.qna_category_id !== 'none' ? form.qna_category_id : null,
         p_notice_text: form.cue_type === 'notice' ? (form.notice_text?.trim() || null) : null,
+        p_set_schedule: true,
+        p_planned_start_at: form.plannedStartAt ? new Date(form.plannedStartAt).toISOString() : null,
+        p_duration_min: form.durationMin !== '' ? Number(form.durationMin) || null : null,
+        p_is_public: !!form.isPublic,
+        p_public_title: form.publicTitle?.trim() || null,
       }
       const { data, error } = await supabase.rpc('sp_partner_cue_s', params)
       if (error || !data?.success) throw new Error(data?.message || 'save failed')
@@ -465,6 +508,33 @@ export default function RunOfShowPanel({ sessionId, live = false, editable = tru
                 <Textarea value={form.notice_text} onChange={(e) => setForm((f) => ({ ...f, notice_text: e.target.value }))} placeholder="예: 잠시 후 계속됩니다 (휴식 10분)" rows={3} />
               </div>
             )}
+
+            {/* 청중 스케줄표 */}
+            <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400">청중 스케줄표</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 space-y-1.5">
+                  <Label>시작 시각 (선택)</Label>
+                  <Input type="datetime-local" value={form.plannedStartAt} onChange={(e) => setForm((f) => ({ ...f, plannedStartAt: e.target.value }))} />
+                  <p className="text-xs text-slate-400 dark:text-slate-500">비워두면 스케줄표에서 순서만 표시돼요.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>소요 (분)</Label>
+                  <Input type="number" min={1} value={form.durationMin} onChange={(e) => setForm((f) => ({ ...f, durationMin: e.target.value }))} placeholder="예: 30" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="cue-is-public">청중에게 공개</Label>
+                <Switch id="cue-is-public" checked={form.isPublic} onCheckedChange={(v) => setForm((f) => ({ ...f, isPublic: v }))} />
+              </div>
+              {!form.isPublic && (
+                <p className="text-xs text-slate-400 dark:text-slate-500">내부 운영용 큐로 청중 스케줄표에 표시되지 않아요.</p>
+              )}
+              <div className="space-y-1.5">
+                <Label>공개용 제목 (선택)</Label>
+                <Input value={form.publicTitle} onChange={(e) => setForm((f) => ({ ...f, publicTitle: e.target.value }))} placeholder="비워두면 위 제목 그대로 표시" />
+              </div>
+            </div>
           </div>
 
           <DialogFooter>

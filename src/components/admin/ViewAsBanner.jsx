@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePartner } from '@/context/PartnerContext'
 import { Eye, X, LayoutDashboard } from 'lucide-react'
@@ -14,18 +14,36 @@ import { Eye, X, LayoutDashboard } from 'lucide-react'
  */
 export default function ViewAsBanner() {
   const navigate = useNavigate()
+  const bannerRef = useRef(null)
   const { isViewingAs, viewAs, clearViewAs } = usePartner()
 
-  // 배너가 떠 있을 때 레이아웃이 활용할 수 있도록 높이를 CSS 변수로 노출한다.
+  // 배너가 떠 있을 때 레이아웃이 활용할 수 있도록 "실제 렌더링된 높이"를 CSS 변수로 노출한다.
   // (AdminLayout 등 h-screen 컨테이너가 calc(100vh - var(--view-as-banner-height)) 로 빼서 잘림을 방지)
+  // 고정값(44px)을 쓰면 브라우저 배율·폰트에 따라 실제 높이와 어긋나
+  // 배너가 화면을 덮거나(스크롤 발생) 푸터 아래가 들뜨므로 반드시 측정값을 사용한다.
   useEffect(() => {
-    if (isViewingAs && viewAs) {
-      document.documentElement.style.setProperty('--view-as-banner-height', '44px')
-      return () => document.documentElement.style.removeProperty('--view-as-banner-height')
+    if (!isViewingAs || !viewAs) return
+    const el = bannerRef.current
+    if (!el) return
+
+    const apply = () => {
+      document.documentElement.style.setProperty('--view-as-banner-height', `${el.offsetHeight}px`)
+    }
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(el)
+
+    return () => {
+      observer.disconnect()
+      document.documentElement.style.removeProperty('--view-as-banner-height')
     }
   }, [isViewingAs, viewAs])
 
   if (!isViewingAs || !viewAs) return null
+
+  // iframe(화면 디자인 미리보기 등) 안에서는 표시하지 않는다 —
+  // 청중 화면 미리보기에 관리자 배너가 섞여 보이는 문제 방지
+  if (window.self !== window.top) return null
 
   const handleExit = () => {
     clearViewAs()
@@ -37,7 +55,7 @@ export default function ViewAsBanner() {
   }
 
   return (
-    <div className="sticky top-0 z-[60] bg-amber-400 text-amber-950 border-b border-amber-500 shadow-sm">
+    <div ref={bannerRef} className="sticky top-0 z-[60] bg-amber-400 text-amber-950 border-b border-amber-500 shadow-sm">
       <div className="max-w-full px-4 py-2 flex items-center gap-3 text-sm">
         <Eye className="w-4 h-4 flex-shrink-0" />
         <span className="font-semibold truncate">

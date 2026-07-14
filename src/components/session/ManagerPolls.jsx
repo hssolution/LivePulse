@@ -264,20 +264,26 @@ export default function ManagerPolls({ sessionId, sessionCode }) {
 
   /**
    * 노출/비노출 토글 (프로시저 사용)
+   * 015부터 활성화는 라이브 중 청중 폰에 투표를 즉시 띄운다
+   * (broadcast_mode='survey' 원자 전환 — PRD §6, 오픈퀘스천 #6: 동작 유지 + 경고 표기)
    */
   const handleToggleVisibility = async (poll) => {
     const newStatus = poll.status === 'active' ? 'draft' : 'active'
-    
+
     try {
       const { data, error } = await supabase.rpc('sp_partner_poll_toggle_s', {
         p_poll_id: poll.id,
         p_status: newStatus
       })
-      
+
       if (error) throw error
       if (!data?.success) throw new Error('Failed to toggle visibility')
-      
-      toast.success(newStatus === 'active' ? t('poll.shown') : t('poll.hidden'))
+
+      toast.success(
+        newStatus === 'active'
+          ? `${t('poll.shown')} — 라이브 중이면 청중 화면에 즉시 노출됩니다`
+          : t('poll.hidden')
+      )
       loadPolls()
     } catch (error) {
       console.error('Error toggling visibility:', error)

@@ -1,0 +1,9 @@
+-- ============================================================
+-- 021: sp_live_state_q에 design_version 포함 (라이브 중 디자인 게시 반영)
+-- 016의 sp_live_state_q 재정의 + 반환 json에 'design_version' 필드 추가:
+--   SELECT d.version INTO v_design_version FROM session_designs d
+--     WHERE d.session_id = v_session.id AND d.published IS NOT NULL;
+--   ... 'design_version', v_design_version ...
+-- 클라이언트(LiveSession)는 버전 변화 감지 시 sp_live_design_q 1회 재조회.
+-- (원격 적용 완료 — MCP apply_migration, 2026-07-12. 전문은 원격 DB 원본)
+-- ============================================================

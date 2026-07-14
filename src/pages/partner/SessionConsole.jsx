@@ -139,7 +139,10 @@ export default function SessionConsole() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-100 dark:bg-slate-800 overflow-hidden">
+    <div
+      className="flex flex-col bg-slate-100 dark:bg-slate-800 overflow-hidden"
+      style={{ height: 'calc(100vh - var(--view-as-banner-height, 0px))' }}
+    >
       {/* 상단 바 */}
       <header className="bg-[#11111b] text-white px-5 h-14 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">

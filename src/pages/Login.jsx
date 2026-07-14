@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { Zap, ArrowLeft, AlertTriangle, Lock } from 'lucide-react'
 import { useLanguage } from '@/context/LanguageContext'
+import SEO from '@/components/common/SEO'
 import { useAuth } from '@/context/AuthContext'
 import {
   checkLoginAttempt,
@@ -198,6 +199,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex">
+      <SEO title="로그인" noindex />
       {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-orange-500 to-pink-500 p-12 flex-col justify-between relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRjMC0yLjIgMS44LTQgNC00czQgMS44IDQgNC0xLjggNC00IDQtNC0xLjgtNC00eiIvPjwvZz48L2c+PC9zdmc+')] opacity-30"></div>

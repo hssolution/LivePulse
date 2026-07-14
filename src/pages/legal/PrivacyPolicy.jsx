@@ -1,9 +1,12 @@
 import { LegalLayout } from '@/components/legal/LegalLayout'
 import { COMPANY } from '@/config/company'
+import SEO from '@/components/common/SEO'
+import { PAGE_META } from '@/config/seo'
 
 export default function PrivacyPolicy() {
   return (
     <LegalLayout title="개인정보처리방침" lastUpdated="2026-05-12">
+      <SEO title={PAGE_META.legalPrivacy.title} description={PAGE_META.legalPrivacy.description} url={PAGE_META.legalPrivacy.path} />
       <p>
         <strong>{COMPANY.name}</strong>(이하 "회사")은 정보주체의 자유와 권리 보호를 위해 「개인정보 보호법」 및 관계 법령이 정한 바를 준수하여,
         적법하게 개인정보를 처리하고 안전하게 관리하고 있습니다. 회사는 「개인정보 보호법」 제30조에 따라 정보주체에게
@@ -32,7 +35,16 @@ export default function PrivacyPolicy() {
         <li>※ 카드번호 등 민감한 결제 정보는 결제대행사(PG사)가 직접 처리하며 회사 서버에 저장되지 않습니다.</li>
       </ul>
 
-      <h3>4) 자동 수집 항목</h3>
+      <h3>4) 세션(강연) 참가자 등록 시 수집 항목</h3>
+      <ul>
+        <li><strong>수집 항목:</strong> 이름, 이메일, 휴대전화번호 (비회원 참가 시 참여 코드/QR 입장 과정에서 수집)</li>
+        <li><strong>수집 목적:</strong> 세션 참가 확인, 중복 참가 방지, 주최자(파트너)의 행사 운영·안내</li>
+        <li><strong>기기 식별 토큰:</strong> 본인이 작성한 질문 표시 및 중복 투표 방지를 위해 브라우저에 무작위 식별 토큰이 저장됩니다 (개인을 특정하지 않는 편의 식별자)</li>
+        <li><strong>처리 위탁 관계:</strong> 참가자 정보는 해당 세션의 주최자(파트너)에게 행사 운영 목적으로 제공되며, 파트너는 개인정보 보호 관련 법령을 준수할 의무가 있습니다</li>
+        <li><strong>보유 기간:</strong> 세션 종료 후 운영·통계 목적 달성 시까지 보관하며, 참가자 또는 주최자의 삭제 요청 시 지체 없이 파기합니다</li>
+      </ul>
+
+      <h3>5) 자동 수집 항목</h3>
       <ul>
         <li>IP 주소, 쿠키, 접속 로그, 기기 정보, 브라우저 정보</li>
       </ul>

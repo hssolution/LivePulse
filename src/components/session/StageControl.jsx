@@ -131,10 +131,12 @@ export default function StageControl({ sessionId }) {
     const newStatus = poll.status === 'active' ? 'closed' : 'active'
     actionAt.current = Date.now()
     setActivePollId(newStatus === 'active' ? poll.id : null)
+    // 015/016: 토글 프로시저가 broadcast_mode 전환(survey/idle 복귀)까지 원자 수행 —
+    // 별도 switchMode RPC 이중 호출 제거, 로컬 UI 상태만 동기화
     const { error } = await supabase.rpc('sp_partner_poll_toggle_s', { p_poll_id: poll.id, p_status: newStatus })
     if (error) { toast.error('설문 상태 변경 실패'); loadPolls(); return }
     toast.success(newStatus === 'active' ? '청중 화면에 띄웠습니다' : '청중 화면에서 내렸습니다')
-    if (newStatus === 'active') switchMode('survey')
+    setMode(newStatus === 'active' ? 'survey' : 'idle')
     loadPolls()
   }
 

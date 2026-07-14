@@ -7,7 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from '@/context/AuthContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { PublicHeader } from '@/components/layout/PublicHeader'
-import { 
+import SEO from '@/components/common/SEO'
+import { PAGE_META, SERVICE_JSONLD } from '@/config/seo'
+import {
   Search,
   Briefcase,
   GraduationCap,
@@ -125,6 +127,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-orange-100 selection:text-orange-900 dark:selection:bg-orange-900 dark:selection:text-orange-100 overflow-x-hidden">
+      <SEO url={PAGE_META.home.path} description={PAGE_META.home.description} jsonLd={SERVICE_JSONLD} />
       <PublicHeader />
 
       {/* Hero Section */}

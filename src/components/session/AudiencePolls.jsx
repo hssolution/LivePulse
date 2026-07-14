@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useLanguage } from '@/context/LanguageContext'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { HtmlContent } from '@/components/ui/html-content'
+import SectionBand from '@/components/audience/SectionBand'
 import { toast } from 'sonner'
 import {
   Loader2,
@@ -17,20 +18,28 @@ import {
   RefreshCw
 } from 'lucide-react'
 
-const POLL_INTERVAL_MS = 5000
-
 /**
- * 청중용 설문 응답 컴포넌트
+ * 청중용 설문 응답 컴포넌트 (PRD §6 — P0 개편)
  * - 모든 활성 설문 한 화면에 표시
- * - 단일/복수/주관식 응답
- * - 마지막에 "설문 등록" 버튼으로 한번에 제출
- * 
+ * - 단일/복수/주관식 응답, "설문 등록" 버튼으로 한번에 제출
+ * - 자체 인터벌 폴링 제거: 부모(LiveSession)의 단일 신호가 준
+ *   activePollId 변경 시에만 재조회 (설문 상세는 변경 시 1회 조회 원칙)
+ *
  * @param {string} sessionId - 세션 ID
  * @param {string} sessionTitle - 세션 제목 (상단 표시용)
  * @param {boolean} isPreview - 미리보기 모드 여부
+ * @param {string} activePollId - 현재 활성 설문 id (단일 신호에서 파생)
+ * @param {string} participantToken - 참가자 토큰 (중복 참여 판별 키)
+ * @param {object} livePollResults - 단일 신호에 인라인된 실시간 집계 {poll_id,total,counts[]}
  */
-export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
+export default function AudiencePolls({ sessionId, sessionTitle, isPreview, activePollId, participantToken, livePollResults, pollDesign = null, bands = null, bandTokens = null, bandData = {}, simPollId = null }) {
   const { t, language } = useLanguage()
+
+  // 게시 디자인의 poll 장면 설정 소비 — pollDesign 부재 시 전부 현행 동작(하위호환)
+  const dMinimal = pollDesign?.resultStyle === 'minimal'
+  const dShowPercent = pollDesign ? pollDesign.showPercent !== false : true
+  const dShowCount = pollDesign ? pollDesign.showCount !== false : true // null이면 현행(개수 표시)
+  const dThankYouText = pollDesign?.thankYouText || ''
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -40,8 +49,8 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
   const [pollResults, setPollResults] = useState({}) // { pollId: results }
   const [submitting, setSubmitting] = useState(false)
 
-  // 익명 ID (디바이스 식별용)
-  const [anonymousId] = useState(() => {
+  // 참여 판별 키 — 참가자 토큰 우선, 없으면 레거시 anonymous_poll_id (PRD §3.2)
+  const [fallbackAnonId] = useState(() => {
     let id = localStorage.getItem('anonymous_poll_id')
     if (!id) {
       id = crypto.randomUUID()
@@ -49,6 +58,7 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
     }
     return id
   })
+  const anonymousId = participantToken || fallbackAnonId
 
   /**
    * 활성 설문 로드
@@ -58,12 +68,15 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
 
     if (showLoading) setLoading(true)
     try {
-      const { data, error } = await supabase
+      // 시뮬레이터(simPollId)에선 DB status와 무관하게 지정된 설문을 불러온다.
+      // 라이브 청중은 기존대로 status='active' 설문만 본다.
+      const base = supabase
         .from('polls')
         .select('*, poll_options(id, option_text, display_order)')
         .eq('session_id', sessionId)
-        .eq('status', 'active')
-        .order('display_order')
+      const { data, error } = await (simPollId
+        ? base.eq('id', simPollId).order('display_order')
+        : base.eq('status', 'active').order('display_order'))
 
       if (error) throw error
 
@@ -84,7 +97,7 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
     } finally {
       if (showLoading) setLoading(false)
     }
-  }, [sessionId])
+  }, [sessionId, simPollId])
 
   /**
    * 모든 설문 응답 여부 확인
@@ -95,13 +108,18 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
 
     try {
       const pollIds = pollList.map(p => p.id)
-      
+
+      // 참가자 토큰 + 구 anonymous_poll_id 둘 다 검사 — 토큰 체계 전환 전에
+      // 응답한 청중이 재투표 가능해지는 단절 방지 (리뷰 S2)
+      const legacyAnonId = localStorage.getItem('anonymous_poll_id')
+      const anonIds = [...new Set([anonymousId, legacyAnonId].filter(Boolean))]
+
       const { data, error } = await supabase
         .from('poll_responses')
         .select('poll_id')
         .in('poll_id', pollIds)
-        .eq('anonymous_id', anonymousId)
-      
+        .in('anonymous_id', anonIds)
+
       if (error) throw error
       
       const respondedPollIds = new Set(data?.map(r => r.poll_id) || [])
@@ -146,19 +164,41 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
   }, [loadPolls])
 
   /**
-   * 주기 폴링 (청중은 realtime 대신 주기 갱신)
+   * 활성 설문 변경 시에만 재조회 (자체 인터벌 제거 — PRD §6 단일 인터벌)
+   * 설문 상세(본문·옵션)는 activePollId가 곧 버전 신호라 변경 시 1회면 충분하다.
+   */
+  const prevPollIdRef = useRef(activePollId)
+  useEffect(() => {
+    if (prevPollIdRef.current !== activePollId) {
+      prevPollIdRef.current = activePollId
+      setAllSubmitted(false) // 새 설문 — 제출 상태 초기화
+      loadPolls(false)
+    }
+  }, [activePollId, loadPolls])
+
+  /**
+   * 실시간 결과 병합 (PRD §6 — 단일 신호의 poll_results 인라인 소비)
+   * 제출 완료 후에도 집계가 폴링 주기마다 갱신된다 (구 5초 결과 폴링 대체)
    */
   useEffect(() => {
-    if (!sessionId) return
-
-    const intervalId = setInterval(() => {
-      loadPolls(false)
-    }, POLL_INTERVAL_MS)
-
-    return () => {
-      clearInterval(intervalId)
-    }
-  }, [sessionId, loadPolls])
+    if (!allSubmitted || !livePollResults?.poll_id) return
+    const poll = polls.find((p) => p.id === livePollResults.poll_id)
+    if (!poll || poll.poll_type === 'open' || !poll.show_results) return
+    const total = livePollResults.total || 0
+    const results = (poll.poll_options || []).map((opt) => {
+      const count = livePollResults.counts?.find((c) => c.option_id === opt.id)?.count || 0
+      return {
+        option_id: opt.id,
+        option_text: opt.option_text,
+        count,
+        percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+      }
+    })
+    setPollResults((prev) => ({
+      ...prev,
+      [poll.id]: { poll_id: poll.id, poll_type: poll.poll_type, total_responses: total, results },
+    }))
+  }, [livePollResults, allSubmitted, polls])
 
   /**
    * 수동 새로고침
@@ -390,7 +430,7 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
             <div className="text-center space-y-4">
               <CheckCircle className="h-16 w-16 mx-auto text-green-500" />
               <h3 className="text-xl font-bold">{t('poll.submitComplete')}</h3>
-              <p className="text-muted-foreground">{t('poll.thankYou')}</p>
+              <p className="text-muted-foreground">{dThankYouText || t('poll.thankYou')}</p>
             </div>
           </CardContent>
         </Card>
@@ -418,10 +458,16 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
                       <div key={r.option_id}>
                         <div className="flex justify-between text-sm mb-1">
                           <span>{r.option_text}</span>
-                          <span className="font-medium">{r.count} ({r.percentage}%)</span>
+                          <span className="font-medium">
+                            {pollDesign
+                              ? [dShowCount && `${r.count}`, dShowPercent && `${r.percentage}%`]
+                                  .filter(Boolean)
+                                  .join(' · ')
+                              : `${r.count} (${r.percentage}%)`}
+                          </span>
                         </div>
-                        <div className="h-4 bg-muted rounded-full overflow-hidden">
-                          <div 
+                        <div className={`${dMinimal ? 'h-1.5' : 'h-4'} bg-muted rounded-full overflow-hidden`}>
+                          <div
                             className="h-full bg-primary transition-all duration-500"
                             style={{ width: `${r.percentage}%` }}
                           />
@@ -444,6 +490,10 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
   // 설문 입력 폼
   return (
     <div className="space-y-4">
+      {/* 상단 자유 섹션 밴드 (게시 디자인) */}
+      {bands?.header?.length > 0 && (
+        <SectionBand sections={bands.header} tokens={bandTokens} data={bandData} className="!py-0" />
+      )}
       {/* 세션 타이틀 */}
       {sessionTitle && (
         <Card className="bg-primary text-primary-foreground">
@@ -549,6 +599,11 @@ export default function AudiencePolls({ sessionId, sessionTitle, isPreview }) {
         {submitting && <Loader2 className="h-5 w-5 animate-spin mr-2" />}
         {t('poll.submitAll')}
       </Button>
+
+      {/* 하단 자유 섹션 밴드 (게시 디자인) */}
+      {bands?.footer?.length > 0 && (
+        <SectionBand sections={bands.footer} tokens={bandTokens} data={bandData} className="!py-0" />
+      )}
     </div>
   )
 }

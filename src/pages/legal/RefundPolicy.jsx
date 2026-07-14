@@ -1,9 +1,12 @@
 import { LegalLayout } from '@/components/legal/LegalLayout'
 import { COMPANY } from '@/config/company'
+import SEO from '@/components/common/SEO'
+import { PAGE_META } from '@/config/seo'
 
 export default function RefundPolicy() {
   return (
     <LegalLayout title="환불정책" lastUpdated="2026-05-12">
+      <SEO title={PAGE_META.legalRefund.title} description={PAGE_META.legalRefund.description} url={PAGE_META.legalRefund.path} />
       <p>
         <strong>{COMPANY.name}</strong>(이하 "회사")이 제공하는 <strong>{COMPANY.serviceName}</strong> 유료 서비스에 대한 환불은
         「전자상거래 등에서의 소비자보호에 관한 법률」및 「콘텐츠산업진흥법」을 준수하여 처리됩니다.

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { PublicHeader } from '@/components/layout/PublicHeader'
+import SEO from '@/components/common/SEO'
+import { PAGE_META } from '@/config/seo'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -166,6 +168,7 @@ export default function Instructors() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <SEO title={PAGE_META.instructors.title} description={PAGE_META.instructors.description} url={PAGE_META.instructors.path} />
       <PublicHeader />
       
       {/* Hero Section */}

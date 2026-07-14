@@ -8,8 +8,9 @@ export default {
   theme: {
   	extend: {
   		fontFamily: {
-  			// Pretendard 우선, 미로드 시 시스템 폰트로 폴백
+  			// Pretendard 가변폰트 우선, 미로드 시 시스템 폰트로 폴백
   			sans: [
+  				'"Pretendard Variable"',
   				'Pretendard',
   				'-apple-system',
   				'BlinkMacSystemFont',

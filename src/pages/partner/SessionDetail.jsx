@@ -59,7 +59,7 @@ import {
 } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import AssetField from '@/components/session/AssetField'
+import DesignSimulator from '@/components/session/DesignSimulator'
 import CollaborationPanel from '@/components/session/CollaborationPanel'
 import ManagerPolls from '@/components/session/ManagerPolls'
 import ParticipantManager from '@/components/session/ParticipantManager'
@@ -114,8 +114,9 @@ export default function SessionDetail() {
   const isResizing = useRef(false)
   const [previewData, setPreviewData] = useState({})
   const [adminDefaultData, setAdminDefaultData] = useState({})
-  // 미리보기 iframe 강제 리로드용 키. 저장/에셋 변경 성공 시 +1 하여 최신 저장본 반영.
-  const [iframeNonce, setIframeNonce] = useState(0)
+
+  // 준비도 재정의(PRD §7)용 콘텐츠 카운트 — 발표자·공개 큐·콘텐츠(자료/설문)
+  const [prepCounts, setPrepCounts] = useState({ presenters: 0, publicCues: 0, contents: 0, scheduleOff: false })
 
   // 섹션 네비
   const [section, setSection] = useState('basic')
@@ -299,7 +300,6 @@ export default function SessionDetail() {
       if (!data?.success) throw new Error('Failed to save')
       toast.success(t('common.saved') || '저장되었습니다')
       loadSession()
-      setIframeNonce((n) => n + 1)
     } catch (error) {
       console.error('Error saving:', error)
       toast.error(t('error.saveFailed') || '저장 실패')
@@ -330,7 +330,6 @@ export default function SessionDetail() {
       if (!data?.success) throw new Error('Failed to save asset')
       setAssets((prev) => ({ ...prev, [fieldKey]: { ...prev[fieldKey], value: imageUrl } }))
       setPreviewData((prev) => ({ ...prev, [fieldKey]: imageUrl }))
-      setIframeNonce((n) => n + 1)
       toast.success(t('session.imageUploaded') || '이미지가 업로드되었습니다')
     } catch (error) {
       console.error('Upload error:', error)
@@ -359,7 +358,6 @@ export default function SessionDetail() {
         delete c[fieldKey]
         return c
       })
-      setIframeNonce((n) => n + 1)
       toast.success(t('session.imageDeleted') || '이미지가 삭제되었습니다')
     } catch (error) {
       console.error('Delete error:', error)
@@ -379,7 +377,6 @@ export default function SessionDetail() {
       if (error) throw error
       if (!data?.success) throw new Error('Failed to save URL')
       setAssets((prev) => ({ ...prev, [fieldKey]: { ...prev[fieldKey], url } }))
-      setIframeNonce((n) => n + 1)
       toast.success(t('common.saved') || '저장되었습니다')
     } catch (error) {
       console.error('URL save error:', error)
@@ -402,7 +399,6 @@ export default function SessionDetail() {
       if (!data?.success) throw new Error('Failed to save image url')
       setAssets((prev) => ({ ...prev, [fieldKey]: { ...prev[fieldKey], value: url } }))
       setPreviewData((prev) => ({ ...prev, [fieldKey]: url }))
-      setIframeNonce((n) => n + 1)
       toast.success(t('common.saved') || '저장되었습니다')
     } catch (error) {
       console.error('Image URL save error:', error)
@@ -452,21 +448,51 @@ export default function SessionDetail() {
   }
 
   /* ----- 준비 완료도 계산 ----- */
+  // 준비도 재정의 (PRD §7) — "라이브가 실제로 굴러갈 수 있는가" 기준
+  // 기본정보 15 / 발표자 15 / 콘텐츠 15 / 진행 플랜 20 / 화면 디자인 20 / 게시 15
+  // (구 계산의 "코드/QR 존재"는 트리거 자동 생성이라 항상 참 — 제외)
   const completionScore = (() => {
-    let done = 0
-    let total = 5
-    // 1. 기본 정보
-    if (formData.title && formData.venue_name && formData.start_at && formData.end_at && formData.contact_phone && formData.contact_email) done++
-    // 2. 템플릿
-    if (formData.template_id) done++
-    // 3. 에셋 (이미지 하나라도)
-    if (Object.values(assets).some((a) => a?.value)) done++
-    // 4. 게시
-    if (session?.status && session.status !== 'draft') done++
-    // 5. 코드/QR (항상 존재)
-    if (session?.code) done++
-    return Math.round((done / total) * 100)
+    let score = 0
+    // 기본 정보 (15)
+    if (formData.title && formData.venue_name && formData.start_at && formData.end_at && formData.contact_phone && formData.contact_email) score += 15
+    // 발표자 확정 ≥1 (15)
+    if (prepCounts.presenters > 0) score += 15
+    // 콘텐츠: 강연 자료 또는 설문 ≥1 (15)
+    if (prepCounts.contents > 0) score += 15
+    // 진행 플랜: 공개 큐 ≥1 (20) — 없으면 배점을 디자인·게시에 재분배 (라이트 유저 무벌점)
+    const hasPlan = prepCounts.publicCues > 0
+    if (hasPlan) score += 20
+    // 화면 디자인: 템플릿 + 이미지 에셋 1개 이상 (20, 플랜 미사용 시 30)
+    if (formData.template_id && Object.values(assets).some((a) => a?.value)) score += hasPlan ? 20 : 30
+    // 게시 (15, 플랜 미사용 시 25)
+    if (session?.status && session.status !== 'draft') score += hasPlan ? 15 : 25
+    return Math.min(100, score)
   })()
+
+  // 준비도 카운트 로드 (세션 확정 후 1회 — 가벼운 count 쿼리 3종)
+  useEffect(() => {
+    if (!session?.id) return
+    let cancelled = false
+    const loadCounts = async () => {
+      const [pres, cues, polls, lectures] = await Promise.all([
+        supabase.from('session_presenters').select('id', { count: 'exact', head: true }).eq('session_id', session.id).eq('status', 'confirmed'),
+        supabase.from('session_cues').select('id', { count: 'exact', head: true }).eq('session_id', session.id).eq('is_public', true),
+        supabase.from('polls').select('id', { count: 'exact', head: true }).eq('session_id', session.id),
+        supabase.from('lecture_files').select('id', { count: 'exact', head: true }).eq('session_id', session.id),
+      ])
+      if (cancelled) return
+      setPrepCounts({
+        presenters: pres.count || 0,
+        publicCues: cues.count || 0,
+        contents: (polls.count || 0) + (lectures.count || 0),
+        scheduleOff: false,
+      })
+    }
+    loadCounts()
+    return () => {
+      cancelled = true
+    }
+  }, [session?.id])
 
   /* ----- 로딩 ----- */
   const showLoading = loading || (!isAdmin && partnerLoading)
@@ -606,7 +632,6 @@ export default function SessionDetail() {
               adminDefaultData={adminDefaultData}
               previewDevice={previewDevice}
               setPreviewDevice={setPreviewDevice}
-              iframeNonce={iframeNonce}
               leftWidth={leftWidth}
               containerRef={containerRef}
               onMouseDown={handleMouseDown}
@@ -965,375 +990,143 @@ function DesignSection(props) {
   const {
     session,
     formData,
-    templates,
+    template,
+    assets,
     qnaTemplates,
     pollTemplates,
-    template,
-    templateFields,
-    assets,
-    previewData,
-    setPreviewData,
-    setAssets,
-    adminDefaultData,
     previewDevice,
     setPreviewDevice,
-    iframeNonce,
-    leftWidth,
-    containerRef,
-    onMouseDown,
     getPreviewSize,
-    onTemplateChange,
     onQnaTemplateChange,
     onPollTemplateChange,
-    onImageUpload,
-    onImageDelete,
-    onUrlSave,
-    onImageUrlSave,
     onSave,
     saving,
   } = props
 
-  // 우측 미리보기 탭: 'join'(참가) | 'qna'(Q&A 송출) | 'poll'(투표)
-  const [previewTab, setPreviewTab] = useState('join')
+  const navigate = useNavigate()
 
-  // 좌측 아코디언 상태 배지 계산
-  const imageFields = templateFields.filter((f) => f.field_type === 'image')
-  const urlFields = templateFields.filter((f) => f.field_type === 'url')
-  const requiredImageMissing = imageFields.filter(
-    (f) => f.is_required && !assets[f.field_key]?.value,
-  ).length
-  const templateChosen = !!formData.template_id
+  // 디자인 상태 (게시/초안) — 요약 카드용
+  const [designStatus, setDesignStatus] = useState(null) // {published_at, hasDraft, hasPublished}
+  useEffect(() => {
+    if (!session?.id) return
+    let cancelled = false
+    supabase
+      .rpc('sp_partner_design_s', { p_session_id: session.id, p_action: 'get' })
+      .then(({ data }) => {
+        if (cancelled || !data?.success) return
+        setDesignStatus({
+          hasDraft: !!data.draft,
+          hasPublished: !!data.published,
+          publishedAt: data.published_at,
+        })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [session?.id])
 
-  const code = session?.code
-  // 각 탭은 실제 청중 라우트를 embed 모드로 iframe 렌더한다. iframeNonce로 저장 시 강제 리로드.
-  // poll 전용 송출 라우트가 없어 투표는 청중 라이브 뷰(tab=now, 활성 투표 시 표시)로 매핑.
-  const previewSrc = {
-    join: `/join/${code}?preview=true&embed=true&n=${iframeNonce}`,
-    qna: `/broadcast/${code}?embed=true&n=${iframeNonce}`,
-    poll: `/live/${code}?preview=true&embed=true&tab=now&n=${iframeNonce}`,
-  }
-  const previewTabs = [
-    { key: 'join', label: '참가' },
-    { key: 'qna', label: 'Q&A' },
-    { key: 'poll', label: '투표' },
-  ]
+  // 시뮬레이터에 넘길 폴백 템플릿 (디자인 없는 기존 세션용)
+  const selectedTemplate = template || null
 
   return (
     <div className="p-8">
       <div className="mb-6">
-        <SectionHeader title="화면 디자인" desc="템플릿을 고르고 로고·배너를 올린 뒤 오른쪽 미리보기로 확인하세요. 변경 후 좌측 하단 저장 버튼을 누르면 미리보기가 갱신됩니다." />
+        <SectionHeader
+          title="화면 디자인"
+          desc="청중 참가·로비 화면은 디자인 에디터에서 섹션 단위로 자유롭게 편집합니다. 아래 미리보기는 청중이 보는 실제 화면과 동일한 렌더러로 그려져요."
+        />
       </div>
 
-      <div
-        ref={containerRef}
-        className="flex h-[calc(100vh-260px)] gap-0 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-      >
-        {/* 좌측: 설정 (아코디언) */}
-        <div className="flex flex-col overflow-hidden border-r border-slate-200 dark:border-slate-800" style={{ width: `${leftWidth}%` }}>
-          <div className="flex-1 overflow-y-auto">
-            <Accordion type="multiple" defaultValue={['tpl', 'asset']} className="px-4">
-              {/* ① 템플릿 */}
-              <AccordionItem value="tpl">
-                <AccordionTrigger>
-                  <div className="flex flex-1 items-center justify-between pr-2">
-                    <span className="font-bold text-sm">① 템플릿</span>
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${templateChosen ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
-                      {templateChosen ? '✓ 선택됨' : '⚠ 미선택'}
-                    </span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-2.5 text-sm">
-                    {/* 참가 화면 */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-slate-600 dark:text-slate-300 flex-shrink-0">참가 화면</span>
-                      <div className="flex items-center gap-1">
-                        <Select value={formData.template_id} onValueChange={onTemplateChange}>
-                          <SelectTrigger className="w-40">
-                            <SelectValue placeholder="선택" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {templates.map((tp) => (
-                              <SelectItem key={tp.id} value={tp.id}>
-                                {tp.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <button
-                          type="button"
-                          title="전체화면으로 실제 화면 보기"
-                          onClick={() => code && window.open(`/join/${code}?preview=true`, '_blank', 'noopener,noreferrer')}
-                          className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 flex-shrink-0"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    {/* Q&A 화면 */}
-                    {qnaTemplates.length > 0 && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-slate-600 dark:text-slate-300 flex-shrink-0">Q&amp;A 화면</span>
-                        <div className="flex items-center gap-1">
-                          <Select
-                            value={formData.qna_template_id || 'none'}
-                            onValueChange={(v) => onQnaTemplateChange(v === 'none' ? '' : v)}
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue placeholder="참가 따름" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">참가 템플릿 따름</SelectItem>
-                              {qnaTemplates.map((tp) => (
-                                <SelectItem key={tp.id} value={tp.id}>
-                                  {tp.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <button
-                            type="button"
-                            title="전체화면으로 실제 화면 보기"
-                            onClick={() => code && window.open(`/broadcast/${code}`, '_blank', 'noopener,noreferrer')}
-                            className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 flex-shrink-0"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {/* 투표 화면 */}
-                    {pollTemplates.length > 0 && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-slate-600 dark:text-slate-300 flex-shrink-0">투표 화면</span>
-                        <div className="flex items-center gap-1">
-                          <Select
-                            value={formData.poll_template_id || 'none'}
-                            onValueChange={(v) => onPollTemplateChange(v === 'none' ? '' : v)}
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue placeholder="참가 따름" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">참가 템플릿 따름</SelectItem>
-                              {pollTemplates.map((tp) => (
-                                <SelectItem key={tp.id} value={tp.id}>
-                                  {tp.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <button
-                            type="button"
-                            title="전체화면으로 실제 화면 보기"
-                            onClick={() => code && window.open(`/live/${code}?preview=true&tab=now`, '_blank', 'noopener,noreferrer')}
-                            className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 flex-shrink-0"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              {/* ② 이미지 / 에셋 */}
-              <AccordionItem value="asset">
-                <AccordionTrigger>
-                  <div className="flex flex-1 items-center justify-between pr-2">
-                    <span className="font-bold text-sm">② 이미지 / 에셋</span>
-                    {imageFields.length > 0 && (
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${requiredImageMissing === 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
-                        {requiredImageMissing === 0 ? '✓ 완료' : `⚠ 필수 ${requiredImageMissing}건 누락`}
-                      </span>
-                    )}
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  {imageFields.length === 0 ? (
-                    <p className="text-xs text-slate-400 py-2">참가 화면 템플릿을 먼저 선택하면 업로드할 이미지가 표시됩니다.</p>
-                  ) : (
-                    imageFields.map((field) => (
-                      <AssetField
-                        key={field.id}
-                        field={field}
-                        value={assets[field.field_key]?.value}
-                        urlValue={previewData[field.field_key]}
-                        onUploadFile={(file) => onImageUpload(field.field_key, file)}
-                        onUrlChange={(v) => setPreviewData((p) => ({ ...p, [field.field_key]: v }))}
-                        onUrlSave={() => onImageUrlSave(field.field_key, previewData[field.field_key])}
-                        onDelete={() => onImageDelete(field.field_key)}
-                      />
-                    ))
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-
-              {/* ③ 링크 / 기타 설정 */}
-              <AccordionItem value="links" className="border-b-0">
-                <AccordionTrigger>
-                  <span className="font-bold text-sm">③ 링크 / 기타 설정</span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  {urlFields.map((field) => (
-                    <Card key={field.id} className="mb-3">
-                      <CardContent className="p-3 space-y-2">
-                        <Label className="text-sm">{field.field_name}</Label>
-                        {field.description && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">{field.description}</p>
-                        )}
-                        <div className="flex gap-2">
-                          <Input
-                            type="url"
-                            placeholder="https://"
-                            value={previewData[field.field_key] || assets[field.field_key]?.url || ''}
-                            onChange={(e) => {
-                              setPreviewData((p) => ({ ...p, [field.field_key]: e.target.value }))
-                              setAssets((p) => ({
-                                ...p,
-                                [field.field_key]: { ...p[field.field_key], url: e.target.value },
-                              }))
-                            }}
-                            className="text-xs"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onUrlSave(field.field_key, assets[field.field_key]?.url)}
-                          >
-                            저장
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-
-                  <div className="space-y-3 pt-1">
-                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                      실제 화면 새 창으로 열기
-                    </p>
-                    <div className="space-y-1">
-                      <Button asChild variant="outline" className="w-full justify-start">
-                        <Link to={`/join/${session.code}?preview=true`} target="_blank">
-                          <ExternalLink className="h-4 w-4 mr-2 flex-shrink-0" /> 참가 화면 (입장 페이지)
-                        </Link>
-                      </Button>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 pl-2 leading-relaxed">
-                        청중이 QR/링크로 처음 접속했을 때 보는 <b>입장 페이지</b>입니다. 이름·연락처를 입력하고 세션에 들어가는 화면이에요.
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <Button asChild variant="outline" className="w-full justify-start">
-                        <Link to={`/live/${session.code}?preview=true`} target="_blank">
-                          <ExternalLink className="h-4 w-4 mr-2 flex-shrink-0" /> 라이브 화면 (청중용)
-                        </Link>
-                      </Button>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 pl-2 leading-relaxed">
-                        입장 후 청중이 보는 <b>실제 참여 화면</b>입니다. 질문 작성, 투표 참여, 공지/일정 확인 탭이 표시돼요. (참가자 휴대폰 화면)
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <Button asChild variant="outline" className="w-full justify-start">
-                        <Link to={`/broadcast/${session.code}`} target="_blank">
-                          <Monitor className="h-4 w-4 mr-2 flex-shrink-0" /> 송출 화면 (프로젝터/대형 모니터)
-                        </Link>
-                      </Button>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 pl-2 leading-relaxed">
-                        강연장 <b>프로젝터·대형 스크린</b>에 띄우는 송출용 화면입니다. 채택된 질문이 크게 표시되며, 청중이 자기 질문이 올라온 걸 볼 수 있어요.
-                      </p>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </div>
-
-          {/* 하단 sticky 저장 바 */}
-          <div className="border-t border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 flex-shrink-0">
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={saving}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              저장
-            </button>
-          </div>
-        </div>
-
-        {/* 리사이즈 핸들 */}
-        <div
-          className="w-2 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-300 cursor-col-resize flex items-center justify-center transition-colors flex-shrink-0"
-          onMouseDown={onMouseDown}
-        >
-          <GripHorizontal className="h-5 w-5 text-slate-400 dark:text-slate-500 rotate-90" />
-        </div>
-
-        {/* 우측: 실제 화면 미리보기 (iframe 3탭) */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-800/50" style={{ width: `${100 - leftWidth}%` }}>
-          <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0 gap-2">
-            {/* 화면 탭 */}
-            <div className="flex gap-1">
-              {previewTabs.map((tabDef) => (
-                <button
-                  key={tabDef.key}
-                  type="button"
-                  onClick={() => setPreviewTab(tabDef.key)}
-                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                    previewTab === tabDef.key
-                      ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
-                      : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  {tabDef.label}
-                </button>
-              ))}
-            </div>
-            {/* 기기 토글 */}
-            <div className="flex gap-1 text-slate-400 dark:text-slate-500">
-              <button
-                type="button"
-                onClick={() => setPreviewDevice('mobile')}
-                className={`p-1.5 rounded ${previewDevice === 'mobile' ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-              >
-                <Smartphone className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewDevice('tablet')}
-                className={`p-1.5 rounded ${previewDevice === 'tablet' ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-              >
-                <Tablet className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewDevice('desktop')}
-                className={`p-1.5 rounded ${previewDevice === 'desktop' ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-              >
-                <Monitor className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 overflow-auto p-4">
-            {code ? (
-              <div className={`mx-auto bg-white rounded-lg shadow-lg overflow-hidden transition-all duration-300 ${getPreviewSize()}`} style={{ height: 'min(720px, calc(100vh - 360px))' }}>
-                <iframe
-                  key={`${previewTab}-${iframeNonce}`}
-                  src={previewSrc[previewTab]}
-                  title="청중 화면 미리보기"
-                  className="w-full h-full border-0"
-                />
+      {/* 디자인 상태 + 에디터 진입 (구 템플릿·에셋 편집 UI는 에디터로 대체 — 편집 경로 단일화) */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="flex-1 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-5 py-4">
+          {designStatus === null ? (
+            <div className="text-sm text-slate-400">디자인 상태 확인 중…</div>
+          ) : designStatus.hasPublished ? (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">게시됨</span>
+                {designStatus.publishedAt && (
+                  <span className="text-xs text-slate-400">
+                    {new Date(designStatus.publishedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 게시
+                  </span>
+                )}
               </div>
-            ) : (
-              <p className="text-center text-sm text-slate-400 mt-10">세션 코드가 없어 미리보기를 표시할 수 없습니다.</p>
-            )}
-          </div>
-          <div className="px-4 py-2 text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
-            미리보기는 <b>저장된 내용</b>을 보여줍니다. 변경 후 저장하면 자동으로 갱신돼요.
-          </div>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1.5">
+                섹션 디자인이 청중 참가 페이지에 적용되어 있어요.
+                {designStatus.hasDraft && ' 편집 중인 초안이 있으면 게시해야 반영됩니다.'}
+              </p>
+            </>
+          ) : designStatus.hasDraft ? (
+            <>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">초안 있음 · 미게시</span>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1.5">
+                편집하던 초안이 있어요. 에디터에서 <b>게시</b>해야 청중 화면에 적용됩니다.
+              </p>
+            </>
+          ) : (
+            <>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">기본 화면 사용 중</span>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1.5">
+                아직 만든 디자인이 없어요. 에디터에서 시작하면 현재 화면 구성을 그대로 가져와 자유롭게 편집할 수 있어요.
+              </p>
+            </>
+          )}
         </div>
+        <button
+          type="button"
+          onClick={() => navigate(`/partner/sessions/${session.id}/design`)}
+          className="sm:w-56 shrink-0 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-base flex flex-col items-center justify-center gap-1 py-5 transition-colors"
+        >
+          <span className="text-xl">🎨</span>
+          디자인 편집
+          <span className="text-[11px] font-normal opacity-80">섹션·로고·색·배치 전부 여기서</span>
+        </button>
+      </div>
+
+      {/* 미리보기 — 게시/초안 디자인 우선, 없으면 기존 템플릿 화면 */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 380px)', minHeight: '420px' }}>
+        <DesignSimulator
+          session={session}
+          template={selectedTemplate}
+          assets={assets}
+          previewDevice={previewDevice}
+          setPreviewDevice={setPreviewDevice}
+          getPreviewSize={getPreviewSize}
+        />
+      </div>
+
+      {/* 무대 송출·폰 Q&A/투표 — 디자인 에디터의 해당 장면으로 바로가기 */}
+      <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-5 py-4">
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <div className="font-bold text-sm">송출 화면 · 청중 Q&amp;A · 투표 디자인</div>
+          <span className="text-[11px] text-slate-400">각 화면을 바로 편집</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {[
+            ['broadcast', '📺', '송출 화면', '프로젝터/대형 스크린'],
+            ['qna', '💬', '청중 Q&A', '휴대폰 질문 화면'],
+            ['poll', '📊', '청중 투표', '휴대폰 투표 화면'],
+          ].map(([key, icon, title, desc]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => navigate(`/partner/sessions/${session.id}/design?scene=${key}`)}
+              className="text-left rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 px-3.5 py-3 transition-colors group"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{icon}</span>
+                <span className="font-semibold text-sm text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-300">
+                  {title}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1 pl-7">{desc} 디자인 편집 →</p>
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-400 mt-2.5">
+          청중 폰 화면은 위 <b>디자인 편집</b>의 브랜드 테마(색·폰트)를 함께 따릅니다.
+        </p>
       </div>
     </div>
   )

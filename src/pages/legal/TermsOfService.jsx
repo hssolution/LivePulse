@@ -1,9 +1,12 @@
 import { LegalLayout } from '@/components/legal/LegalLayout'
 import { COMPANY } from '@/config/company'
+import SEO from '@/components/common/SEO'
+import { PAGE_META } from '@/config/seo'
 
 export default function TermsOfService() {
   return (
     <LegalLayout title="이용약관" lastUpdated="2026-05-12">
+      <SEO title={PAGE_META.legalTerms.title} description={PAGE_META.legalTerms.description} url={PAGE_META.legalTerms.path} />
       <h2>제1조 (목적)</h2>
       <p>
         본 약관은 <strong>{COMPANY.name}</strong>(이하 "회사")이 제공하는 <strong>{COMPANY.serviceName}</strong> 서비스

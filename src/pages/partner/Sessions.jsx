@@ -17,6 +17,7 @@ import {
   Edit,
   Trash2,
   Copy,
+  Files,
   QrCode,
   ExternalLink,
   Link as LinkIcon,
@@ -102,6 +103,18 @@ export default function Sessions() {
     toast.success(t('session.previewLinkCopied') || '미리보기 링크가 복사되었습니다')
   }
 
+  const handleDuplicate = async (sessionId) => {
+    try {
+      const { data, error } = await supabase.rpc('sp_partner_session_duplicate_s', { p_session_id: sessionId })
+      if (error || !data?.success) throw error || new Error(data?.error || 'fail')
+      toast.success('세션을 복제했어요 — 초안으로 저장됩니다')
+      navigate(`/partner/sessions/${data.session_id}`)
+    } catch (error) {
+      console.error('Error duplicating session:', error)
+      toast.error('복제 실패')
+    }
+  }
+
   const handleDelete = async (sessionId) => {
     if (!confirm(t('session.deleteConfirm') || '정말 삭제하시겠습니까?')) return
     try {
@@ -152,7 +165,7 @@ export default function Sessions() {
     )
   }
 
-  const handlers = { copyCode, copyPreviewLink, handleDelete, navigate }
+  const handlers = { copyCode, copyPreviewLink, handleDelete, handleDuplicate, navigate }
 
   return (
     <div className="space-y-6">
@@ -303,7 +316,7 @@ function Section({ title, icon, sessions, handlers }) {
 
 /* ----- 세션 카드 ----- */
 function SessionCard({ session, handlers }) {
-  const { copyCode, copyPreviewLink, handleDelete, navigate } = handlers
+  const { copyCode, copyPreviewLink, handleDelete, handleDuplicate, navigate } = handlers
 
   // 상태별 시각 강조
   const isActive = session.status === 'active'
@@ -381,6 +394,9 @@ function SessionCard({ session, handlers }) {
               <LinkIcon className="w-4 h-4 mr-2" /> 미리보기 링크 복사
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleDuplicate(session.id)}>
+              <Files className="w-4 h-4 mr-2" /> 세션 복제
+            </DropdownMenuItem>
             <DropdownMenuItem>
               <QrCode className="w-4 h-4 mr-2" /> QR 코드 보기
             </DropdownMenuItem>
@@ -419,13 +435,23 @@ function PrimaryAction({ session, navigate }) {
   switch (session.status) {
     case 'active':
       return (
-        <button
-          type="button"
-          onClick={() => navigate(`/partner/sessions/${id}/console`)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Radio className="w-4 h-4" /> 진행 콘솔 열기
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => navigate(`/partner/sessions/${id}`)}
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-semibold px-3 py-2.5 rounded-lg transition-colors"
+            title="라이브 중에도 설정·디자인 확인/편집"
+          >
+            설정
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(`/partner/sessions/${id}/console`)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Radio className="w-4 h-4" /> 진행 콘솔 열기
+          </button>
+        </>
       )
     case 'published':
       return (

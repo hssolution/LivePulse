@@ -1,0 +1,13 @@
+-- ============================================================
+-- 020: 디자인 히스토리 조회·복원 (E2 — 게시 스냅샷 롤백)
+-- sp_partner_design_s 'get'에 history(타임스탬프 목록) 포함 +
+-- 'restore' 액션(스냅샷 → 초안 복원, 게시는 별도) + 시그니처 확장.
+-- (원격 적용 완료 — MCP apply_migration, 2026-07-12)
+-- 함수 본문은 019와 동일 골격에 아래 두 블록이 추가된 것:
+--   ELSIF p_action = 'restore' THEN ... history -> p_history_index -> 'design'을 draft로
+--   'get' 반환에 published_at + history(각 항목 at만) 포함
+-- 전문은 원격 DB가 원본이며, 차이분만 기록해 파일 중복을 피한다.
+-- ============================================================
+
+-- 시그니처: sp_partner_design_s(UUID, TEXT, JSONB, INTEGER, INTEGER p_history_index)
+-- GRANT EXECUTE ... TO authenticated; DROP FUNCTION (구 4-인자 시그니처);

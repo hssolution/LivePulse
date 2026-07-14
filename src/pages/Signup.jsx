@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { Zap, ArrowLeft, CheckCircle, Mail, AlertCircle, RefreshCw } from 'lucide-react'
 import { useLanguage } from '@/context/LanguageContext'
+import SEO from '@/components/common/SEO'
 import {
   Dialog,
   DialogContent,
@@ -197,6 +198,7 @@ export default function Signup() {
 
   return (
     <>
+      <SEO title="회원가입" noindex />
       {/* 1. 이메일 발송 완료 다이얼로그 */}
       <Dialog open={dialogType === 'emailSent'} onOpenChange={handleDialogClose}>
         <DialogContent className="sm:max-w-md">

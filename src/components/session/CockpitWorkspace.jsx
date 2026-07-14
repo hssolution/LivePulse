@@ -99,11 +99,10 @@ export default function CockpitWorkspace({ sessionId, sessionCode, selectedCue, 
   const toggleSurvey = async (poll) => {
     const newStatus = poll.status === 'active' ? 'closed' : 'active'
     actionAt.current = Date.now()
+    // 015: sp_partner_poll_toggle_s가 broadcast_mode 전환(survey 설정/idle 복귀)까지
+    // 프로시저 내부에서 원자적으로 수행 — 이중 RPC 제거 (PRD §6)
     const { error } = await supabase.rpc('sp_partner_poll_toggle_s', { p_poll_id: poll.id, p_status: newStatus })
     if (error) { toast.error('설문 상태 변경 실패'); loadPolls(); return }
-    if (newStatus === 'active') {
-      await supabase.rpc('sp_partner_broadcast_mode_s', { p_session_id: sessionId, p_mode: 'survey' })
-    }
     toast.success(newStatus === 'active' ? '청중 화면에 띄웠습니다' : '청중 화면에서 내렸습니다')
     loadState(); loadPolls()
   }

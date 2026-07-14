@@ -1,0 +1,42 @@
+# LivePulse robots.txt
+# https://livepulse.noligo.co.kr
+
+User-agent: *
+Allow: /
+# 비공개/앱 영역 (검색 노출 불필요)
+Disallow: /adm
+Disallow: /partner/
+Disallow: /mypage
+Disallow: /login
+Disallow: /signup
+Disallow: /invite/
+Disallow: /join/
+Disallow: /live/
+Disallow: /presenter/
+Disallow: /broadcast/
+Disallow: /speaker/
+Disallow: /template-preview/
+
+# AI 크롤러 (AEO/GEO — 공개 페이지 학습·인용 허용)
+User-agent: GPTBot
+Allow: /
+Disallow: /adm
+Disallow: /partner/
+Disallow: /mypage
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /adm
+Disallow: /partner/
+Disallow: /mypage
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Yeti
+Allow: /
+
+Sitemap: https://livepulse.noligo.co.kr/sitemap.xml

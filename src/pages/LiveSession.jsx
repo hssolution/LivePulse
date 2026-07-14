@@ -22,6 +22,34 @@ import AudienceQnA from '@/components/session/AudienceQnA'
 import AudiencePolls from '@/components/session/AudiencePolls'
 import SEO from '@/components/common/SEO'
 import PdfPage from '@/components/PdfPage'
+import { useLiveState } from '@/hooks/useLiveState'
+import { getParticipantToken } from '@/lib/participant'
+import ScheduleList from '@/components/audience/ScheduleList'
+import SectionRenderer from '@/components/audience/SectionRenderer'
+import { sceneSettings, deriveTokens } from '@/components/audience/sections/registry'
+import SectionBand from '@/components/audience/SectionBand'
+import { deriveAudienceTheme } from '@/components/audience/theme'
+import { CalendarDays } from 'lucide-react'
+
+/** Q&A 작성 드래프트 저장 키 (AudienceQnA와 공유 — 자동 포커스 예외 판정에 사용) */
+export const qnaDraftKey = (code) => `lp_qna_draft:${code}`
+
+/**
+ * 자동 포커스 예외 판정 (PRD §3.2)
+ * 텍스트 입력에 포커스가 있거나 Q&A 드래프트가 남아 있으면
+ * 좌장 주도 장면 전환이 탭을 강제로 빼앗지 않는다.
+ */
+function isAudienceTyping(code) {
+  const el = document.activeElement
+  if (el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type === 'text'))) {
+    return true
+  }
+  try {
+    return !!(sessionStorage.getItem(qnaDraftKey(code)) || '').trim()
+  } catch {
+    return false
+  }
+}
 
 /**
  * 청중용 라이브 페이지 — 발표자 주도형
@@ -60,14 +88,15 @@ export default function LiveSession() {
     if (initialTabParam === 'qna' || initialTabParam === 'info') return initialTabParam
     return 'now' // 'poll'도 'now'로 매핑 (발표자 주도)
   })
-  const [hasActivePoll, setHasActivePoll] = useState(false)
-  const [broadcast, setBroadcast] = useState(null)
 
   // activeTab을 ref로도 보관해 폴링 효과의 deps churn 방지
   const activeTabRef = useRef(activeTab)
   useEffect(() => {
     activeTabRef.current = activeTab
   }, [activeTab])
+
+  // 참가자 토큰 (내 질문 표시·중복 참여 판별 — PRD §3.2)
+  const participantToken = getParticipantToken(code?.toUpperCase())
 
   // 이 페이지는 항상 라이트 모드
   useEffect(() => {
@@ -146,101 +175,100 @@ export default function LiveSession() {
     loadSession()
   }, [loadSession])
 
-  // 세션 상태 폴링 (10초) — 게시→진행, 진행→종료 전환 감지
+  // ── 게시된 디자인 로드 (E0) — 마운트 시 1회, published만 옴 (019 보안 설계) ──
+  // 실패/없음이면 null 유지 → 기존 템플릿 렌더 그대로 (기존 세션 시각 불변)
+  const [design, setDesign] = useState(null)
   useEffect(() => {
-    if (!session?.id) return
+    if (!code) return
+    let cancelled = false
+    supabase
+      .rpc('sp_live_design_q', { p_code: code.toUpperCase() })
+      .then(({ data }) => {
+        if (!cancelled && data?.design) setDesign(data.design)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [code])
 
-    const intervalId = setInterval(async () => {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('id', session.id)
-        .single()
+  // ── 단일 폴링 (PRD §6) — 상태·송출·투표·큐·Q&A 버전을 한 신호로 ──
+  // 기존 3개 인터벌(status 10s / poll 5s / broadcast 4s)을 대체한다.
+  const { state: live, offline } = useLiveState(code?.toUpperCase(), {
+    enabled: !!session?.id && session?.status !== 'ended',
+  })
 
-      if (error || !data) return
-
-      setSession((prev) => {
-        if (prev?.status !== 'ended' && data.status === 'ended') {
+  // 거시 상태 전환 (published→active, active→ended) + participant_count 상시 병합
+  useEffect(() => {
+    if (!live?.success || !live.status) return
+    setSession((prev) => {
+      if (!prev) return prev
+      if (prev.status === live.status) {
+        // status가 그대로여도 참가자 수는 매 폴링 반영 (리뷰 S2 — 헤더 'N명 참여' 동결 방지)
+        if (live.participant_count != null && prev.participant_count !== live.participant_count) {
+          return { ...prev, participant_count: live.participant_count }
+        }
+        return prev
+      }
+      // 스테일 복귀(오래 잠들었다 깨어남)면 알림 없이 조용히 점프 (§6 라이프사이클)
+      if (!live.stale) {
+        if (prev.status !== 'ended' && live.status === 'ended') {
           toast.info(t('live.sessionEnded') || '강연이 종료되었습니다')
         }
-        if (prev?.status === 'published' && data.status === 'active') {
+        if (prev.status === 'published' && live.status === 'active') {
           toast.info('강연이 시작되었습니다')
         }
-        return { ...prev, ...data }
-      })
-    }, 10000)
+      }
+      return { ...prev, status: live.status, participant_count: live.participant_count ?? prev.participant_count }
+    })
+  }, [live, t])
 
-    return () => clearInterval(intervalId)
-  }, [session?.id, t])
-
-  // 활성 투표 폴링 (라이브 중 5초) — 발표자 주도 핵심 신호
+  // 라이브 중 디자인 게시 반영 (021) — design_version이 바뀌면 게시본 1회 재조회
+  // 최초 수신은 "마운트 로드가 실제로 디자인을 받았을 때만" 건너뛴다
+  // (입장 시 디자인 없음 → 라이브 중 첫 게시 케이스 누락 방지 — 검증 라운드 반영)
+  const designVersionRef = useRef(undefined)
   useEffect(() => {
-    if (!session?.id || session.status !== 'active') {
-      setHasActivePoll(false)
+    if (!live?.success || live.design_version == null) return
+    if (designVersionRef.current === live.design_version) return
+    const isFirst = designVersionRef.current === undefined
+    designVersionRef.current = live.design_version
+    if (isFirst && design) return // 마운트 로드가 이미 이 버전을 반영함
+    supabase.rpc('sp_live_design_q', { p_code: code?.toUpperCase() }).then(({ data }) => {
+      if (data?.design) setDesign(data.design)
+    })
+  }, [live, code, design])
+
+  // 장면 자동 포커스 — 트리거당 최초 1회 + 입력 중 예외 (PRD §3.2)
+  // 초기값 null: 최초 폴링 성공은 "이미 진행 중이던 장면"이므로 기록만 하고
+  // 탭 강탈·알림을 하지 않는다 (리뷰 S3 — ?tab=qna 딥링크 진입 시 오판 방지)
+  const lastTriggerRef = useRef(null)
+  useEffect(() => {
+    if (!live?.success) return
+    const mode = live.broadcast_mode
+    if (!['pdf', 'notice', 'survey', 'qna'].includes(mode)) {
+      lastTriggerRef.current = `${mode || 'idle'}:`
       return
     }
+    const trigger = `${mode}:${live.active_poll_id || ''}:${live.current_cue_id || ''}`
+    if (trigger === lastTriggerRef.current) return
+    const isFirstReception = lastTriggerRef.current === null
+    lastTriggerRef.current = trigger
+    if (isFirstReception) return // 입장 시점의 기존 장면 — 새 트리거 아님
 
-    let cancelled = false
+    if (live.stale) return // 스테일 복귀: 포커스 강탈·알림 생략, 조용한 점프
+    if (activeTabRef.current === 'now') return
 
-    const checkPolls = async () => {
-      const { data } = await supabase
-        .from('polls')
-        .select('id')
-        .eq('session_id', session.id)
-        .eq('status', 'active')
-        .limit(1)
-
-      if (cancelled) return
-      const has = (data?.length || 0) > 0
-
-      setHasActivePoll((prevHas) => {
-        // 새 투표 등장: 다른 탭에 있어도 '현재'로 자동 전환
-        if (!prevHas && has && activeTabRef.current !== 'now') {
-          setActiveTab('now')
-          toast.info('발표자가 새 활동을 띄웠습니다')
-        }
-        return has
-      })
-    }
-
-    checkPolls()
-    const intervalId = setInterval(checkPolls, 5000)
-
-    return () => {
-      cancelled = true
-      clearInterval(intervalId)
-    }
-  }, [session?.id, session?.status])
-
-  // 송출 상태 폴링 (라이브 중 4초) — 강연자료(PDF)/질문 카테고리
-  useEffect(() => {
-    if (!session?.id || session.status !== 'active') {
-      setBroadcast(null)
+    if (isAudienceTyping(code?.toUpperCase())) {
+      // 입력 중 — 강제 전환하지 않고 비침습 알림 + 탭 배지로 대체
+      toast.info('발표자가 새 활동을 띄웠습니다 — 작성이 끝나면 \'현재\' 탭에서 확인하세요')
       return
     }
-    let cancelled = false
-    const load = async () => {
-      const { data } = await supabase.rpc('sp_live_broadcast_q', { p_code: code })
-      if (cancelled || !data?.success) return
-      setBroadcast((prev) => {
-        // 강연자료·안내가 새로 등장하면 '현재' 탭으로 자동 전환
-        if (
-          ['pdf', 'notice'].includes(data.broadcast_mode) &&
-          prev?.broadcast_mode !== data.broadcast_mode &&
-          activeTabRef.current !== 'now'
-        ) {
-          setActiveTab('now')
-        }
-        return data
-      })
-    }
-    load()
-    const intervalId = setInterval(load, 4000)
-    return () => {
-      cancelled = true
-      clearInterval(intervalId)
-    }
-  }, [session?.id, session?.status, code])
+    setActiveTab('now')
+    toast.info('발표자가 새 활동을 띄웠습니다')
+  }, [live, code])
+
+  // 파생값 — 투표 노출 트리거는 broadcast_mode='survey' 하나로 일원화 (PRD §6)
+  const broadcast = session?.status === 'active' && live?.success ? live : null
+  const hasActivePoll = broadcast?.broadcast_mode === 'survey' && !!broadcast?.active_poll_id
 
   // 로딩
   if (loading) {
@@ -258,11 +286,55 @@ export default function LiveSession() {
 
   // 상태별 라우팅
   if (session.status === 'ended') {
-    return <EndedView session={session} navigate={navigate} />
+    const endedBandTokens = design ? deriveTokens(design.tokens) : null
+    const endedHeader = design?.scenes?.ended?.headerSections || []
+    const endedFooter = design?.scenes?.ended?.footerSections || []
+    return (
+      <EndedView
+        session={session}
+        navigate={navigate}
+        template={template}
+        assets={assets}
+        designTokens={design?.tokens}
+        headerBand={
+          endedHeader.length > 0 ? (
+            <SectionBand sections={endedHeader} tokens={endedBandTokens} data={{ session }} className="!py-2" />
+          ) : null
+        }
+        footerBand={
+          endedFooter.length > 0 ? (
+            <SectionBand sections={endedFooter} tokens={endedBandTokens} data={{ session }} className="!py-2" />
+          ) : null
+        }
+      />
+    )
   }
 
   if (session.status === 'published' && !isPreview) {
-    return <LobbyView session={session} presenters={presenters} template={template} assets={assets} />
+    // 로비 섹션화 (E2) — 게시 디자인에 lobby 장면이 있으면 섹션 렌더러가 LobbyView를 대체
+    if (design?.scenes?.lobby?.sections?.length) {
+      return (
+        <>
+          <SEO title={session.title} description={`곧 시작합니다 - ${session.title}`} />
+          <SectionRenderer
+            design={design}
+            scene="lobby"
+            data={{ session, presenters, cues: live?.cues_public || [] }}
+            prepend={<LobbyStatusBanner code={session.code} />}
+          />
+        </>
+      )
+    }
+    return (
+      <LobbyView
+        session={session}
+        presenters={presenters}
+        template={template}
+        assets={assets}
+        cues={live?.cues_public || []}
+        designTokens={design?.tokens}
+      />
+    )
   }
 
   // active (또는 isPreview로 어떤 상태든)
@@ -270,52 +342,73 @@ export default function LiveSession() {
     <LiveView
       session={session}
       presenters={presenters}
+      template={template}
+      assets={assets}
       isPreview={isPreview}
       activeTab={activeTab}
       setActiveTab={setActiveTab}
       hasActivePoll={hasActivePoll}
       broadcast={broadcast}
+      cues={live?.cues_public || []}
+      code={code?.toUpperCase()}
+      participantToken={participantToken}
+      offline={offline}
+      designTokens={design?.tokens}
+      design={design}
     />
+  )
+}
+
+/* ============================================================
+ * 로비 상태 배너 — 섹션화된 로비 상단 고정 (SectionRenderer prepend)
+ * 기존 LobbyView 상단 요소(입장 완료 칩·참여코드·자동 전환 안내)의 축약형.
+ * SectionRenderer 컨테이너의 토큰 CSS 변수(--lp-*)를 그대로 사용한다.
+ * ============================================================ */
+export function LobbyStatusBanner({ code }) {
+  return (
+    <div className="w-full max-w-lg sm:max-w-2xl mx-auto px-4 pt-4 pb-1">
+      <div
+        className="rounded-[var(--lp-radius)] border px-4 py-3"
+        style={{ background: 'var(--lp-card)', borderColor: 'var(--lp-line)' }}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full"
+            style={{ color: 'var(--lp-on-brand)', background: 'var(--lp-brand)' }}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" /> 입장 완료
+          </span>
+          <span className="text-xs" style={{ color: 'var(--lp-mut)' }}>
+            참여코드 {code}
+          </span>
+        </div>
+        <div className="mt-2 text-sm font-bold flex items-center gap-1.5" style={{ color: 'var(--lp-ink)' }}>
+          <Hourglass className="w-4 h-4 animate-pulse" style={{ color: 'var(--lp-brand)' }} />
+          곧 시작합니다
+        </div>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--lp-mut)' }}>
+          발표자가 시작하면 이 화면이 자동으로 전환됩니다
+        </p>
+      </div>
+    </div>
   )
 }
 
 /* ============================================================
  * 대기 로비 (status='published') — 참가 템플릿 브랜딩 지원
  * ============================================================ */
-function LobbyView({ session, presenters, template, assets }) {
-  const bgImage = assets?.background_image?.value
-  const logo = assets?.logo?.value
-  const templateCode = template?.code
-
-  // 템플릿별 폴백 그라데이션 (배경 이미지 미설정 시)
-  const fallbackBg = (() => {
-    switch (templateCode) {
-      case 'symposium':
-        return 'bg-gradient-to-b from-indigo-600 via-indigo-700 to-purple-800'
-      case 'conference':
-        return 'bg-gradient-to-b from-slate-900 via-slate-800 to-slate-700'
-      case 'workshop':
-        return 'bg-gradient-to-br from-slate-100 to-slate-200'
-      default:
-        return 'bg-gradient-to-b from-slate-50 to-indigo-50'
-    }
-  })()
-
-  // 어두운 배경(이미지 또는 dark 템플릿) → 흰색 텍스트, 밝은 배경 → 어두운 텍스트
-  const isDarkBg =
-    !!bgImage || templateCode === 'symposium' || templateCode === 'conference'
-
-  const bgStyle = bgImage
-    ? {
-        backgroundImage: `url(${bgImage})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }
-    : undefined
+export function LobbyView({ session, presenters, template, assets, cues = [], embedded = false, designTokens = null }) {
+  // 테마 파생 단일화 — designTokens 있으면 브랜드 토큰이 폴백 배경까지 관통 (E0)
+  // 없으면 기존 템플릿 폴백 그라데이션 클래스 그대로 (기존 세션 시각 불변)
+  const theme = deriveAudienceTheme(template, assets, designTokens)
+  const { bgImage, logo, fallbackBg, isDarkBg, bgStyle, fallbackStyle } = theme
 
   return (
-    <div className={`min-h-screen ${bgImage ? '' : fallbackBg}`} style={bgStyle}>
-      <SEO title={session.title} description={`곧 시작합니다 - ${session.title}`} />
+    <div
+      className={`min-h-screen ${bgImage || fallbackStyle ? '' : fallbackBg}`}
+      style={bgImage ? bgStyle : fallbackStyle}
+    >
+      {!embedded && <SEO title={session.title} description={`곧 시작합니다 - ${session.title}`} />}
 
       {/* 배경 이미지가 있으면 가독성을 위한 다크 오버레이 */}
       <div
@@ -383,6 +476,16 @@ function LobbyView({ session, presenters, template, assets }) {
               {format(new Date(session.start_at), 'HH:mm')} 시작 예정
             </div>
           </div>
+
+          {/* 오늘의 순서 — 큐시트 공개분 자동 렌더 (PRD §5, 공개 큐 없으면 미표시) */}
+          {cues.length > 0 && (
+            <div className="mt-4 bg-white rounded-2xl shadow-lg border border-slate-100 p-4 w-full max-w-sm text-left">
+              <div className="text-xs font-semibold text-indigo-500 mb-2 flex items-center gap-1">
+                <CalendarDays className="w-3.5 h-3.5" /> 오늘의 순서
+              </div>
+              <ScheduleList cues={cues} isLive={false} />
+            </div>
+          )}
         </div>
 
         {presenters.length > 0 && (
@@ -419,26 +522,60 @@ function LobbyView({ session, presenters, template, assets }) {
 /* ============================================================
  * 라이브 (status='active') — 발표자 주도형
  * ============================================================ */
-function LiveView({ session, presenters, isPreview, activeTab, setActiveTab, hasActivePoll, broadcast }) {
+export function LiveView({ session, presenters, template, assets, isPreview, activeTab, setActiveTab, hasActivePoll, broadcast, cues = [], code, participantToken, offline, embedded = false, designTokens = null, design = null, simulate = false }) {
   const bMode = broadcast?.broadcast_mode
   const liveCategories = broadcast?.categories || []
+  // 게시 디자인의 장면 설정 소비 (E-scene) — design 없으면 null로 넘겨 각 컴포넌트가 현행 동작 유지
+  const qnaDesign = design ? sceneSettings(design, 'qna') : null
+  const pollDesign = design ? sceneSettings(design, 'poll') : null
+  // 기능 화면 상/하단 자유 섹션 밴드 (없으면 null → 현행 불변)
+  const bandTokens = design ? deriveTokens(design.tokens) : null
+  const bandData = { session, presenters, cues }
+  const qnaBands = design
+    ? { header: design.scenes?.qna?.headerSections || [], footer: design.scenes?.qna?.footerSections || [] }
+    : null
+  const pollBands = design
+    ? { header: design.scenes?.poll?.headerSections || [], footer: design.scenes?.poll?.footerSections || [] }
+    : null
+  // 테마 연속 (PRD §4) — 로비까지만 적용되던 브랜딩을 라이브 헤더로 확장
+  // designTokens 있으면 헤더 밴드가 브랜드 그라데이션 style로 대체 (E0)
+  const theme = deriveAudienceTheme(template, assets, designTokens)
+  const hasSchedule = cues.length > 0
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <SEO
-        title={session.title}
-        description={`[Live] ${session.title} - ${session.venue_name || ''}`}
-      />
+      {!embedded && (
+        <SEO
+          title={session.title}
+          description={`[Live] ${session.title} - ${session.venue_name || ''}`}
+        />
+      )}
 
-      {/* 헤더 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+      {/* 연결 불안정 배너 (비차단 — §6 라이프사이클) */}
+      {offline && (
+        <div className="bg-amber-500 text-white text-center text-xs font-semibold py-1.5 px-4" role="status">
+          연결이 불안정해요 — 마지막으로 받은 화면을 보여주고 있어요
+        </div>
+      )}
+
+      {/* 헤더 — 세션 테마 밴드 (입장~종료 테마 연속) · 게시 디자인이 있으면 브랜드 style */}
+      <header className={`sticky top-0 z-30 ${theme.heroBand}`} style={theme.heroBandStyle}>
         <div className="container mx-auto max-w-2xl px-4 py-3">
           <div className="flex items-center gap-1.5">
-            <span className="flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
+            <span
+              className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                theme.isDarkBand ? 'text-white bg-white/15 backdrop-blur' : 'text-rose-600 bg-rose-50'
+              }`}
+            >
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />{' '}
               LIVE
             </span>
             {session.participant_count > 0 && (
-              <span className="text-[11px] text-slate-400">{session.participant_count}명 참여</span>
+              <span className={`text-[11px] ${theme.isDarkBand ? 'text-white/60' : 'text-slate-400'}`}>
+                {session.participant_count}명 참여
+              </span>
+            )}
+            {theme.logo && (
+              <img src={theme.logo} alt="" className="h-4 object-contain ml-auto opacity-90" />
             )}
           </div>
           <h1 className="font-bold text-sm mt-1 leading-tight line-clamp-1">{session.title}</h1>
@@ -464,7 +601,17 @@ function LiveView({ session, presenters, isPreview, activeTab, setActiveTab, has
               sessionId={session.id}
               sessionTitle={session.title}
               isPreview={isPreview}
+              activePollId={broadcast?.active_poll_id}
+              participantToken={participantToken}
+              livePollResults={broadcast?.poll_results}
+              pollDesign={pollDesign}
+              bands={pollBands}
+              bandTokens={bandTokens}
+              bandData={bandData}
+              simPollId={simulate ? broadcast?.active_poll_id : null}
             />
+          ) : bMode === 'qna' ? (
+            <QnaStage question={broadcast?.question} onAskQna={() => setActiveTab('qna')} />
           ) : (
             <IdleStage onAskQna={() => setActiveTab('qna')} />
           ))}
@@ -472,25 +619,59 @@ function LiveView({ session, presenters, isPreview, activeTab, setActiveTab, has
         {activeTab === 'qna' && (
           <AudienceQnA
             sessionId={session.id}
+            sessionCode={code}
             sessionStatus={session.status}
             isPreview={isPreview}
             categories={liveCategories}
+            participantToken={participantToken}
+            qnaRev={broadcast?.qna_rev}
+            qnaDesign={qnaDesign}
+            bands={qnaBands}
+            bandTokens={bandTokens}
+            bandData={bandData}
           />
         )}
+
+        {/* 일정 탭 (신규 — PRD §3.2) : 큐시트 공개분 + 지금 진행 중 하이라이트 */}
+        {activeTab === 'schedule' &&
+          (hasSchedule ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4">
+              <div className="text-xs font-semibold text-indigo-500 mb-2 flex items-center gap-1">
+                <CalendarDays className="w-3.5 h-3.5" /> 오늘의 순서
+              </div>
+              <ScheduleList
+                cues={cues}
+                currentCueId={broadcast?.current_cue_id}
+                currentCueFiredAt={broadcast?.current_cue_fired_at}
+                isLive
+              />
+            </div>
+          ) : (
+            // 라이브 중 공개 큐가 모두 내려간 엣지 — 빈 화면 방지
+            <IdleStage onAskQna={() => setActiveTab('qna')} />
+          ))}
 
         {activeTab === 'info' && <InfoPanel session={session} presenters={presenters} />}
       </main>
 
-      {/* 하단 탭 */}
+      {/* 하단 탭 — 공개 큐가 있으면 4탭, 없으면 3탭 폴백 (PRD §3.2) */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30">
-        <div className="container mx-auto max-w-2xl grid grid-cols-3">
+        <div className={`container mx-auto max-w-2xl grid ${hasSchedule ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <TabButton
             active={activeTab === 'now'}
             onClick={() => setActiveTab('now')}
             icon={Radio}
             label="현재"
-            badge={(hasActivePoll || bMode === 'pdf') && activeTab !== 'now'}
+            badge={['pdf', 'notice', 'survey', 'qna'].includes(bMode) && activeTab !== 'now'}
           />
+          {hasSchedule && (
+            <TabButton
+              active={activeTab === 'schedule'}
+              onClick={() => setActiveTab('schedule')}
+              icon={CalendarDays}
+              label="일정"
+            />
+          )}
           <TabButton
             active={activeTab === 'qna'}
             onClick={() => setActiveTab('qna')}
@@ -528,19 +709,99 @@ function TabButton({ active, onClick, icon: Icon, label, badge }) {
 }
 
 function PdfStage({ pdf }) {
+  const page = pdf.page || 1
+  // 이미지 로드 실패한 페이지 — 해당 페이지만 PdfPage(클라 렌더) 폴백
+  const [failedPage, setFailedPage] = useState(null)
+
+  // PRD §3.4: 사전 변환된 페이지 이미지(WebP)가 있으면 이미지 렌더 우선
+  const pagesBaseUrl = pdf.pages_path
+    ? supabase.storage.from('session-assets').getPublicUrl(pdf.pages_path).data.publicUrl
+    : null
+  const useImage = !!pagesBaseUrl && failedPage !== page
+
+  // 현재±1 페이지 프리페치 (페이지 넘김 시 지연 최소화)
+  useEffect(() => {
+    if (!pagesBaseUrl) return
+    ;[page - 1, page + 1].forEach((p) => {
+      if (p < 1) return
+      if (pdf.page_count && p > pdf.page_count) return
+      const img = new Image()
+      img.src = `${pagesBaseUrl}/${p}.webp`
+    })
+  }, [pagesBaseUrl, page, pdf.page_count])
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600">
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" /> 발표 자료 진행 중
       </div>
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <PdfPage fileUrl={pdf.file_url} pageNumber={pdf.page || 1} />
+        {useImage ? (
+          <img
+            src={`${pagesBaseUrl}/${page}.webp`}
+            alt={`${pdf.title || '발표 자료'} ${page}페이지`}
+            className="w-full h-auto block"
+            onError={() => setFailedPage(page)}
+          />
+        ) : (
+          <PdfPage fileUrl={pdf.file_url} pageNumber={page} />
+        )}
         <div className="p-3 flex items-center justify-between text-xs text-slate-400 border-t border-slate-100">
           <span className="truncate">{pdf.title}</span>
           <span className="font-semibold text-slate-500 shrink-0">
-            {pdf.page || 1} / {pdf.page_count || '?'}
+            {page} / {pdf.page_count || '?'}
           </span>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Q&A 세그먼트 장면 (mode='qna', PRD §3.2 — v1.0에서 누락됐던 장면)
+ * 송출 중 질문을 크게 보여주고 Q&A 탭으로 유도한다.
+ */
+function QnaStage({ question, onAskQna }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600">
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" /> Q&A 진행 중
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        {question ? (
+          <>
+            {question.category_name && (
+              <span
+                className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full mb-3"
+                style={{
+                  color: question.category_color || '#4f46e5',
+                  backgroundColor: `${question.category_color || '#4f46e5'}18`,
+                }}
+              >
+                {question.category_name}
+              </span>
+            )}
+            <p className="text-lg font-bold text-slate-800 whitespace-pre-wrap leading-relaxed">
+              {question.content}
+            </p>
+            <p className="text-xs text-slate-400 mt-3">
+              {question.is_anonymous ? '익명' : question.author_name || '익명'}
+              {question.likes_count > 0 && ` · 공감 ${question.likes_count}`}
+            </p>
+          </>
+        ) : (
+          <p className="text-center text-slate-500 py-4">질문을 선정하고 있습니다</p>
+        )}
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 p-4">
+        <p className="text-sm text-slate-600 mb-2.5">지금 질문을 남겨보세요</p>
+        <button
+          type="button"
+          onClick={onAskQna}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors"
+        >
+          <MessageCircle className="w-4 h-4" /> 질문하러 가기
+        </button>
       </div>
     </div>
   )
@@ -627,17 +888,43 @@ function InfoPanel({ session, presenters }) {
 /* ============================================================
  * 종료 (status='ended')
  * ============================================================ */
-function EndedView({ session, navigate }) {
+export function EndedView({ session, navigate, template, assets, embedded = false, designTokens = null, headerBand = null, footerBand = null }) {
+  // 테마 연속 (PRD §4) — 종료 화면까지 세션 브랜딩 유지.
+  // 콘텐츠가 흰색 텍스트이므로 어두운 테마(배경 이미지·심포지엄·컨퍼런스)만
+  // 테마 배경을 쓰고, 밝은 테마는 기존 인디고 그라데이션을 유지한다.
+  // E0: 게시 디자인 토큰이 있으면 브랜드 배경/텍스트(endedStyle)로 대체.
+  //     배경 이미지 에셋이 있으면 이미지 우선 (입장·로비와 시각 연속).
+  const theme = deriveAudienceTheme(template, assets, designTokens)
+  const brandEnded = !theme.bgImage && theme.endedStyle ? theme.endedStyle : null
+  const useThemeBg = theme.bgImage || theme.isDarkBg
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-600 to-purple-800 flex flex-col">
-      <SEO title={`${session.title} - 종료`} />
+    <div
+      className={`min-h-screen flex flex-col ${
+        !brandEnded && useThemeBg && !theme.bgImage ? theme.fallbackBg : ''
+      } ${!brandEnded && !useThemeBg ? 'bg-gradient-to-b from-indigo-600 to-purple-800' : ''}`}
+      style={brandEnded || theme.bgStyle}
+    >
+      {!embedded && <SEO title={`${session.title} - 종료`} />}
 
-      <div className="flex-1 flex flex-col items-center justify-center px-7 text-center text-white">
-        <div className="w-20 h-20 rounded-full bg-white/15 backdrop-blur flex items-center justify-center mb-5">
-          <CheckCircle2 className="w-10 h-10 text-white" />
+      {headerBand}
+
+      <div
+        className={`flex-1 flex flex-col items-center justify-center px-7 text-center ${
+          brandEnded ? '' : 'text-white'
+        } ${theme.bgImage ? 'bg-black/50 backdrop-blur-sm' : ''}`}
+      >
+        {theme.logo && (
+          <img src={theme.logo} alt="" className="h-12 object-contain mb-6 max-w-[55%]" />
+        )}
+        <div
+          className={`w-20 h-20 rounded-full backdrop-blur flex items-center justify-center mb-5 ${
+            brandEnded && theme.endedInkDark ? 'bg-black/10' : 'bg-white/15'
+          }`}
+        >
+          <CheckCircle2 className={`w-10 h-10 ${brandEnded ? '' : 'text-white'}`} />
         </div>
         <h1 className="text-2xl font-bold">강연이 종료되었습니다</h1>
-        <p className="text-sm text-indigo-200 mt-2 leading-relaxed">
+        <p className={`text-sm mt-2 leading-relaxed ${brandEnded ? 'opacity-80' : 'text-indigo-200'}`}>
           참여해 주셔서 감사합니다
           <br />
           오늘 함께한 시간이 도움이 되었길 바랍니다
@@ -648,11 +935,16 @@ function EndedView({ session, navigate }) {
         <button
           type="button"
           onClick={() => navigate('/')}
-          className="w-full bg-white text-indigo-700 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors"
+          className={`w-full bg-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors ${
+            brandEnded ? '' : 'text-indigo-700'
+          }`}
+          style={brandEnded ? { color: theme.brand } : undefined}
         >
           <Home className="w-4 h-4" /> LivePulse 홈으로
         </button>
       </div>
+
+      {footerBand}
     </div>
   )
 }

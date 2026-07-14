@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { PublicHeader } from '@/components/layout/PublicHeader'
+import SEO from '@/components/common/SEO'
+import { PAGE_META } from '@/config/seo'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -183,6 +185,7 @@ export default function Lectures() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <SEO title={PAGE_META.lectures.title} description={PAGE_META.lectures.description} url={PAGE_META.lectures.path} />
       <PublicHeader />
       
       {/* Hero Section */}

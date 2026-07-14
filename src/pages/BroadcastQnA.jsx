@@ -24,6 +24,39 @@ import {
 import { Loader2, MessageCircle, Settings, FileText, BarChart3, Megaphone } from 'lucide-react'
 import { toast } from 'sonner'
 import PdfPage from '@/components/PdfPage'
+import { sceneSettings, deriveTokens } from '@/components/audience/sections/registry'
+import SectionBand from '@/components/audience/SectionBand'
+
+/**
+ * 게시 디자인 broadcast 장면의 배경(bg) → 무대 화면 배경 style.
+ * registry의 bgStyle과 동일한 규칙(색/이미지+오버레이/그라데이션 프리셋)을 무대 전체 배경용으로 반영.
+ * (registry.bgStyle은 export되지 않아 로컬로 미러링)
+ */
+function broadcastBgStyle(bg, tokens) {
+  const brand = tokens?.brand || '#5157c9'
+  const brandRgb = tokens?.cssVars?.['--lp-brand-rgb'] || '81,87,201'
+  if (!bg || bg.type === 'none') return { backgroundColor: '#0f172a' }
+  if (bg.type === 'color') return { backgroundColor: bg.color || '#0f172a' }
+  if (bg.type === 'image' && bg.url) {
+    const ov = Math.min(90, Math.max(0, bg.overlay ?? 45)) / 100
+    return {
+      backgroundColor: '#0f172a',
+      backgroundImage: `linear-gradient(rgba(0,0,0,${ov}), rgba(0,0,0,${ov})), url(${bg.url})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    }
+  }
+  if (bg.preset === 'custom') {
+    return { background: `linear-gradient(${bg.angle ?? 135}deg, ${bg.from || brand}, ${bg.to || '#334155'})` }
+  }
+  const presets = {
+    brand: `linear-gradient(135deg, ${brand}, rgba(${brandRgb},0.65))`,
+    night: 'linear-gradient(135deg,#0f172a,#334155)',
+    sunset: 'linear-gradient(135deg,#e8641f,#e11d48)',
+    forest: 'linear-gradient(135deg,#166534,#0d9488)',
+  }
+  return { background: presets[bg.preset] || presets.brand }
+}
 
 /**
  * 송출 화면 (프로젝터/대형 스크린용)
@@ -53,6 +86,12 @@ export default function BroadcastQnA() {
   const [showSettings, setShowSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [previewSettings, setPreviewSettings] = useState(null)
+
+  // 게시 디자인의 무대 송출(broadcast) 설정 — 있으면 broadcast_settings보다 우선.
+  // 없으면 null 유지 → 기존 broadcast_settings 렌더 그대로 (기존 세션 시각 불변)
+  const [broadcastDesign, setBroadcastDesign] = useState(null)
+  const [designTokens, setDesignTokens] = useState(null)
+  const [broadcastBands, setBroadcastBands] = useState({ header: [], footer: [] })
 
   const defaultSettings = {
     width: 0,
@@ -210,6 +249,31 @@ export default function BroadcastQnA() {
   useEffect(() => {
     loadSession()
   }, [loadSession])
+
+  /** 게시 디자인 로드 (마운트 1회) — broadcast 장면 설정이 있으면 우선 적용 */
+  useEffect(() => {
+    if (!code) return
+    let cancelled = false
+    supabase.rpc('sp_live_design_q', { p_code: code }).then(({ data }) => {
+      if (cancelled) return
+      const design = data?.design
+      const b = design?.scenes?.broadcast
+      // 핵심 설정 또는 상/하단 밴드가 하나라도 있으면 게시 디자인 모드로 렌더
+      if (b && (b.settings || b.headerSections?.length || b.footerSections?.length)) {
+        setBroadcastDesign(sceneSettings(design, 'broadcast'))
+      }
+      if (b) {
+        setBroadcastBands({
+          header: b.headerSections || [],
+          footer: b.footerSections || [],
+        })
+      }
+      if (design?.tokens) setDesignTokens(deriveTokens(design.tokens))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [code])
 
   useEffect(() => {
     if (session) {
@@ -379,65 +443,126 @@ export default function BroadcastQnA() {
     )
   }
 
-  /* ===== Q&A / 대기 모드 (기존) ===== */
+  /* ===== Q&A / 대기 모드 ===== */
+  // 게시 디자인 broadcast 설정이 있으면 우선, 없으면 기존 broadcast_settings 폴백(시각 불변)
+  const useDesign = !!broadcastDesign
+  const bd = broadcastDesign
   const settings = previewSettings || { ...defaultSettings, ...session.broadcast_settings }
 
-  const containerStyle = {
-    backgroundColor: settings.backgroundColor || '#ffffff',
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems:
-      settings.verticalAlign === 'top'
-        ? 'flex-start'
-        : settings.verticalAlign === 'bottom'
-        ? 'flex-end'
-        : 'center',
-    justifyContent: 'center',
-    padding: '2rem',
-    position: 'relative',
-    transition: 'background-color 0.3s ease',
-  }
+  const fontColor = useDesign ? bd.fontColor || '#ffffff' : settings.fontColor || '#c0392b'
+  const fontSize = useDesign ? bd.fontSize || 150 : settings.fontSize
+  const cardBg = useDesign ? bd.cardBg : settings.innerBackgroundColor
+  const cardBorder = useDesign ? bd.cardBorder : settings.borderColor
+  const textAlign = useDesign ? bd.align || 'center' : settings.textAlign || 'center'
+
+  const containerStyle = useDesign
+    ? {
+        ...broadcastBgStyle(bd.bg, designTokens),
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem',
+        position: 'relative',
+        transition: 'background-color 0.3s ease',
+      }
+    : {
+        backgroundColor: settings.backgroundColor || '#ffffff',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems:
+          settings.verticalAlign === 'top'
+            ? 'flex-start'
+            : settings.verticalAlign === 'bottom'
+            ? 'flex-end'
+            : 'center',
+        justifyContent: 'center',
+        padding: '2rem',
+        position: 'relative',
+        transition: 'background-color 0.3s ease',
+      }
 
   const textStyle = {
-    fontSize: `${settings.fontSize}px`,
-    color: settings.fontColor || '#c0392b',
-    textAlign: settings.textAlign || 'center',
+    fontSize: `${fontSize}px`,
+    color: fontColor,
+    textAlign,
     fontWeight: 'bold',
-    fontStyle: 'italic',
+    fontStyle: useDesign ? 'normal' : 'italic',
     lineHeight: 1.2,
-    maxWidth: settings.width > 0 ? `${settings.width}px` : '90%',
-    width: settings.width > 0 ? `${settings.width}px` : 'auto',
-    padding: settings.borderColor || settings.innerBackgroundColor ? '2rem' : 0,
-    backgroundColor: settings.innerBackgroundColor || 'transparent',
-    border: settings.borderColor ? `4px solid ${settings.borderColor}` : 'none',
-    borderRadius: settings.borderColor ? '8px' : 0,
+    maxWidth: !useDesign && settings.width > 0 ? `${settings.width}px` : '90%',
+    width: !useDesign && settings.width > 0 ? `${settings.width}px` : 'auto',
+    padding: cardBorder || cardBg ? '2rem' : 0,
+    backgroundColor: cardBg || 'transparent',
+    border: cardBorder ? `4px solid ${cardBorder}` : 'none',
+    borderRadius: cardBorder ? (useDesign ? '12px' : '8px') : useDesign && cardBg ? '12px' : 0,
     transition: 'all 0.3s ease',
   }
+
+  const q = broadcastingQuestion
+  const authorLabel = q ? (q.is_anonymous ? '익명' : q.author_name || '익명') : ''
 
   return (
     <>
       <div style={containerStyle}>
+        {/* 게시 디자인 상단 자유 섹션 밴드 */}
+        {useDesign && broadcastBands.header.length > 0 && (
+          <SectionBand sections={broadcastBands.header} tokens={designTokens} data={{ session }} />
+        )}
+        <div
+          style={
+            useDesign
+              ? { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }
+              : { display: 'contents' }
+          }
+        >
         {broadcastingQuestion ? (
           <div style={textStyle}>
-            {broadcastingQuestion.category?.name && (
+            {/* 카테고리 — 디자인 모드에선 showCategory 토글 반영, 폴백은 기존대로 항상 */}
+            {(useDesign ? bd.showCategory : true) && broadcastingQuestion.category?.name && (
               <div
                 className="inline-block text-base not-italic font-bold rounded-full px-4 py-1 mb-6"
                 style={{
                   color: '#fff',
                   backgroundColor: broadcastingQuestion.category.color || '#4f46e5',
-                  fontSize: `${Math.max(18, Math.round((settings.fontSize || 150) * 0.22))}px`,
+                  fontSize: `${Math.max(18, Math.round((fontSize || 150) * 0.22))}px`,
                 }}
               >
                 {broadcastingQuestion.category.name}
               </div>
             )}
             <div>{broadcastingQuestion.content}</div>
+            {/* 작성자·좋아요 — 게시 디자인 토글 (폴백 모드는 기존처럼 미표시) */}
+            {useDesign && (bd.showAuthor || bd.showLikes) && (
+              <div
+                className="not-italic font-semibold mt-6 opacity-80"
+                style={{ fontSize: `${Math.max(16, Math.round((fontSize || 150) * 0.2))}px` }}
+              >
+                {bd.showAuthor && authorLabel}
+                {bd.showAuthor && bd.showLikes && q.likes_count > 0 && ' · '}
+                {bd.showLikes && q.likes_count > 0 && `♥ ${q.likes_count}`}
+              </div>
+            )}
           </div>
         ) : (
-          <div className="text-center" style={{ color: settings.fontColor ? `${settings.fontColor}50` : '#d1d5db' }}>
+          <div
+            className="text-center"
+            style={{
+              color: useDesign
+                ? `${fontColor}80`
+                : settings.fontColor
+                ? `${settings.fontColor}50`
+                : '#d1d5db',
+            }}
+          >
             <MessageCircle className="h-24 w-24 mx-auto mb-6 opacity-30" />
             <p className="text-3xl">{t('broadcast.waitingForQuestion')}</p>
           </div>
+        )}
+        </div>
+        {/* 게시 디자인 하단 자유 섹션 밴드 */}
+        {useDesign && broadcastBands.footer.length > 0 && (
+          <SectionBand sections={broadcastBands.footer} tokens={designTokens} data={{ session }} />
         )}
 
         {hasPermission && !isEmbed && (

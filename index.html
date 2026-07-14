@@ -11,14 +11,77 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
-    <!-- Pretendard 폰트 (한국어 가독성 우선) -->
+    <!-- Pretendard 가변폰트 동적 서브셋 (한국어 가독성 우선 · 실제 사용 글자만 로드해 용량 최소) -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
     />
 
-    <title>LivePulse</title>
+    <!-- 디자인 에디터 큐레이션 폰트 (Google Fonts — @font-face 지연 로딩: 실제 사용 시에만 다운로드) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;500;700;800&family=Noto+Serif+KR:wght@400;600;700;900&family=Nanum+Myeongjo:wght@400;700;800&family=Jua&family=Gaegu:wght@400;700&family=Black+Han+Sans&family=Do+Hyeon&display=swap"
+    />
+
+    <title>LivePulse - 강연 매칭 & 실시간 청중 소통 플랫폼</title>
+
+    <!-- 기본 SEO 메타 (JS 미실행 크롤러 대응 기본값 — 페이지별 값은 react-helmet이 덮어씀) -->
+    <meta
+      name="description"
+      content="강연, 강연가, 대행사를 연결하는 올인원 강연 매칭 플랫폼. 강연·세미나·워크숍에서 Q&A, 설문, 투표로 청중과 실시간 소통하세요."
+    />
+    <meta
+      name="keywords"
+      content="강연 매칭, 강연가 섭외, 강사 섭외, 강연 플랫폼, 실시간 청중 소통, 라이브 Q&A, 실시간 투표, LivePulse"
+    />
+
+    <!-- Open Graph 기본값 -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="LivePulse" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:url" content="https://livepulse.noligo.co.kr/" />
+    <meta property="og:title" content="LivePulse - 강연 매칭 & 실시간 청중 소통 플랫폼" />
+    <meta
+      property="og:description"
+      content="강연, 강연가, 대행사를 연결하는 올인원 강연 매칭 플랫폼. 강연·세미나·워크숍에서 Q&A, 설문, 투표로 청중과 실시간 소통하세요."
+    />
+    <meta property="og:image" content="https://livepulse.noligo.co.kr/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter Card 기본값 -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="LivePulse - 강연 매칭 & 실시간 청중 소통 플랫폼" />
+    <meta
+      name="twitter:description"
+      content="강연, 강연가, 대행사를 연결하는 올인원 강연 매칭 플랫폼. 실시간 Q&A, 설문, 투표로 청중과 소통하세요."
+    />
+    <meta name="twitter:image" content="https://livepulse.noligo.co.kr/og-image.png" />
+
+    <!-- 구조화 데이터 (정적 JSON-LD — 검색엔진·AI 크롤러가 JS 없이 즉시 인식) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "LivePulse",
+        "url": "https://livepulse.noligo.co.kr",
+        "logo": "https://livepulse.noligo.co.kr/logo.svg",
+        "description": "강연, 강연가, 대행사를 연결하는 올인원 강연 매칭 플랫폼"
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "LivePulse",
+        "url": "https://livepulse.noligo.co.kr",
+        "inLanguage": "ko",
+        "description": "강연, 강연가, 대행사를 연결하는 올인원 강연 매칭 플랫폼. 강연·세미나·워크숍에서 Q&A, 설문, 투표로 청중과 실시간 소통하세요."
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

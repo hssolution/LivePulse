@@ -65,6 +65,7 @@ const Sessions = lazy(() => import('./pages/partner/Sessions'))
 const SessionCreate = lazy(() => import('./pages/partner/SessionCreate'))
 const SessionDetail = lazy(() => import('./pages/partner/SessionDetail'))
 const SessionConsole = lazy(() => import('./pages/partner/SessionConsole'))
+const DesignEditor = lazy(() => import('./pages/partner/DesignEditor'))
 const SessionReport = lazy(() => import('./pages/partner/SessionReport'))
 const Invitations = lazy(() => import('./pages/partner/Invitations'))
 const PartnerFaq = lazy(() => import('./pages/partner/Faq'))
@@ -286,6 +287,17 @@ function AppContent() {
                 <PartnerRoute>
                   <PartnerSuspenseWrapper>
                     <SessionConsole />
+                  </PartnerSuspenseWrapper>
+                </PartnerRoute>
+              </AdminThemeProvider>
+            } />
+
+            {/* 디자인 에디터 (파트너 전용, 풀스크린 3패널) */}
+            <Route path="/partner/sessions/:id/design" element={
+              <AdminThemeProvider initialTheme={initData.adminTheme}>
+                <PartnerRoute>
+                  <PartnerSuspenseWrapper>
+                    <DesignEditor />
                   </PartnerSuspenseWrapper>
                 </PartnerRoute>
               </AdminThemeProvider>
