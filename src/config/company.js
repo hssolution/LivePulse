@@ -12,8 +12,8 @@ export const COMPANY = {
   businessNumber: '109-09-41451',
   businessNumberFormatted: '109-09-41451',
 
-  // 통신판매업 신고번호 (TODO: 정확한 번호 입력 필요)
-  mailOrderNumber: '제0000-경기남양주-0000호',
+  // 통신판매업 신고번호 (출처: 같은 HS솔루션 사업자, MSCALL legal.js)
+  mailOrderNumber: '제2021-다산-0141호',
 
   // 사업장 주소
   address: '경기도 남양주시 다산중앙로19번길 25-23, F445호',
