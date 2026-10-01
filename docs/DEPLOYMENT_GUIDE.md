@@ -1,6 +1,6 @@
 # LivePulse 배포 가이드
 
-> Supabase (백엔드) + Vercel (프론트엔드) 배포 방법
+> Supabase (백엔드) + Tongbig nginx 정적 (프론트엔드) 배포 방법
 
 ---
 
@@ -8,9 +8,9 @@
 
 1. [사전 준비](#사전-준비)
 2. [Part A: Supabase 클라우드 설정](#part-a-supabase-클라우드-설정)
-3. [Part B: Vercel 배포](#part-b-vercel-배포)
+3. [Part B: 운영 배포](#part-b-운영-배포-tongbig-nginx-정적)
 4. [Part C: 환경변수 설정](#part-c-환경변수-설정)
-5. [Part D: 도메인 설정 (선택)](#part-d-도메인-설정-선택)
+5. [Part D: Supabase 인증 URL](#part-d-supabase-인증-url)
 6. [문제 해결](#문제-해결)
 
 ---
@@ -20,7 +20,7 @@
 ### 필요한 계정
 - [x] GitHub 계정
 - [x] Supabase 계정 (https://supabase.com)
-- [x] Vercel 계정 (https://vercel.com)
+- [x] Tongbig 서버 접근 권한
 
 ### 프로젝트 GitHub 업로드
 ```bash
@@ -166,49 +166,31 @@ const supabaseServiceKey = '[SERVICE_ROLE_KEY]'
 
 ---
 
-## Part B: Vercel 배포
+## Part B: 운영 배포 (Tongbig nginx 정적)
 
-### B-1. Vercel 가입 및 GitHub 연결
+운영 주소 `https://livepulse.noligo.co.kr` 는 Tongbig 서버(125.141.139.219)의 nginx 가 정적 파일로 서비스한다.
+서버 경로는 `/home/livepulse/www` (출처: 노리고 ERP `docs/참고/추가 참고/DOMAINS.md` 의 도메인 표).
+Node 프로세스(pm2)는 없다 — 빌드 산출물 `dist/` 를 그 폴더에 올리는 것이 배포다.
 
-1. **https://vercel.com** 접속
-2. **Sign Up** → **Continue with GitHub** 선택
-3. GitHub 계정 연동 승인
+### B-1. 빌드
 
-### B-2. 프로젝트 Import
-
-1. Vercel 대시보드 → **Add New** → **Project**
-2. **Import Git Repository**에서 `LivePulse` 리포지토리 선택
-3. **Import** 클릭
-
-### B-3. 빌드 설정
-
-| 설정 | 값 |
-|------|-----|
-| **Framework Preset** | Vite |
-| **Root Directory** | `./` (기본값) |
-| **Build Command** | `npm run build` (기본값) |
-| **Output Directory** | `dist` (기본값) |
-| **Install Command** | `npm install` (기본값) |
-
-### B-4. 환경변수 설정
-
-**Environment Variables** 섹션에서 추가:
-
-| Key | Value |
-|-----|-------|
-| `VITE_SUPABASE_URL` | `https://[PROJECT_REF].supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Supabase API 페이지의 `anon public` 키 |
-
-### B-5. 배포
-
-**Deploy** 클릭 → 빌드 완료까지 1-2분 대기
-
-### B-6. 배포 URL 확인
-
-배포 완료 후 URL 형식:
+```bash
+npm install
+npm run build        # vite build → dist/
 ```
-https://[PROJECT_NAME].vercel.app
-```
+
+빌드는 루트의 `.env.production` 을 읽는다(아래 Part C). 이 파일이 없으면 Supabase 연결 값이 비어 화면이 동작하지 않는다.
+
+### B-2. 업로드
+
+`dist/` 의 내용을 서버 `/home/livepulse/www/` 로 올린다.
+- 이 저장소에는 배포 스크립트(`deploy*.sh`)나 `package.json` 의 deploy 스크립트가 **없다.** 업로드 방법(rsync/scp 등)과 계정은 이 저장소에서 확인되지 않는다.
+- 접속 방법은 노리고 ERP `docs/archive/09_server_access_and_local_sync.md` 에 있다(키 파일은 저장소 밖).
+
+### B-3. 배포 후 확인
+
+- `https://livepulse.noligo.co.kr` 접속·로그인
+- 브라우저에서 옛 번들이 남으면 강력 새로고침
 
 ---
 
@@ -220,53 +202,31 @@ https://[PROJECT_NAME].vercel.app
 
 프로젝트 루트에 `.env.local` 파일 생성:
 ```env
-# Supabase 리모트 프로젝트 연결
 VITE_SUPABASE_URL=https://[PROJECT_REF].supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+VITE_SUPABASE_ANON_KEY=[anon public 키]
 ```
 
-### 프로덕션용 (.env.production)
+### 운영 빌드용 (.env.production)
+
+`.env.production` 은 **git 에서 추적하지 않는다**(`.gitignore`). 새 환경에서 빌드하려면 직접 만든다. 키 이름은 두 개뿐이다.
 
 ```env
-# Supabase 클라우드 환경
 VITE_SUPABASE_URL=https://[PROJECT_REF].supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+VITE_SUPABASE_ANON_KEY=[anon public 키]
 ```
 
-### Vercel 환경변수
-
-Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variables**
-
-| Key | Production | Preview | Development |
-|-----|------------|---------|-------------|
-| `VITE_SUPABASE_URL` | ✅ | ✅ | ✅ |
-| `VITE_SUPABASE_ANON_KEY` | ✅ | ✅ | ✅ |
+- 값은 Supabase 대시보드 → Settings → API 에서 복사한다.
+- `VITE_*` 값은 번들에 그대로 들어가므로 **anon 키만** 쓴다. `service_role` 키는 절대 넣지 않는다.
 
 ---
 
-## Part D: 도메인 설정 (선택)
+## Part D: Supabase 인증 URL
 
-### D-1. 커스텀 도메인 추가
-
-1. Vercel 대시보드 → 프로젝트 → **Settings** → **Domains**
-2. 도메인 입력 (예: `livepulse.example.com`)
-3. **Add** 클릭
-
-### D-2. DNS 설정
-
-도메인 등록 업체에서 DNS 레코드 추가:
-
-| 타입 | 이름 | 값 |
-|------|------|-----|
-| CNAME | `@` 또는 서브도메인 | `cname.vercel-dns.com` |
-
-### D-3. Supabase Redirect URL 업데이트
+운영 도메인을 Supabase 에 등록한다.
 
 1. Supabase 대시보드 → **Authentication** → **URL Configuration**
-2. **Site URL**: `https://your-domain.com`
-3. **Redirect URLs**에 추가:
-   - `https://your-domain.com/**`
-   - `https://your-project.vercel.app/**`
+2. **Site URL**: `https://livepulse.noligo.co.kr`
+3. **Redirect URLs**: `https://livepulse.noligo.co.kr/**`
 
 ---
 
@@ -284,8 +244,8 @@ npx supabase db reset --linked
 
 ### 환경변수 인식 안 됨
 
-1. Vercel에서 환경변수 이름이 `VITE_`로 시작하는지 확인
-2. 배포 후 **Redeploy** 필요할 수 있음
+1. 환경변수 이름이 `VITE_`로 시작하는지 확인
+2. `.env.production` 수정 후에는 다시 `npm run build` 하고 `dist/` 를 다시 올려야 한다
 
 ### CORS 에러
 
@@ -310,9 +270,9 @@ Supabase 대시보드 → **Authentication** → **URL Configuration**에서:
 | | 마이그레이션 푸시 (`db push`) | ⬜ |
 | | 시드 데이터 적용 | ⬜ |
 | | 테스트 사용자 생성 | ⬜ |
-| **Vercel** | 프로젝트 Import | ⬜ |
-| | 환경변수 설정 | ⬜ |
-| | 배포 완료 | ⬜ |
+| **배포** | `.env.production` 준비 | ⬜ |
+| | `npm run build` | ⬜ |
+| | `dist/` → `/home/livepulse/www/` 업로드 | ⬜ |
 | **확인** | 사이트 접속 테스트 | ⬜ |
 | | 로그인 테스트 | ⬜ |
 | | 기능 테스트 | ⬜ |
@@ -322,7 +282,6 @@ Supabase 대시보드 → **Authentication** → **URL Configuration**에서:
 ## 🔗 참고 링크
 
 - [Supabase 공식 문서](https://supabase.com/docs)
-- [Vercel 공식 문서](https://vercel.com/docs)
 - [Vite 환경변수 가이드](https://vitejs.dev/guide/env-and-mode.html)
 
 ---
