@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { PublicHeader } from '@/components/layout/PublicHeader'
 import SEO from '@/components/common/SEO'
+import { OpenFreeNotice } from '@/components/common/OpenFreeNotice'
 import { PAGE_META, SERVICE_JSONLD } from '@/config/seo'
 import {
   Search,
@@ -175,6 +176,10 @@ export default function Home() {
               </h1>
             </ScrollReveal>
             
+            <ScrollReveal delay={50}>
+              <OpenFreeNotice className="mb-8" />
+            </ScrollReveal>
+
             <ScrollReveal delay={100}>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed">
                 {t('home.heroDescLine1')}

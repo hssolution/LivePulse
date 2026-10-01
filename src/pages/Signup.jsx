@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { Zap, ArrowLeft, CheckCircle, Mail, AlertCircle, RefreshCw } from 'lucide-react'
 import { useLanguage } from '@/context/LanguageContext'
+import { OpenFreeNotice } from '@/components/common/OpenFreeNotice'
 import SEO from '@/components/common/SEO'
 import {
   Dialog,
@@ -409,6 +410,8 @@ export default function Signup() {
             >
               {loading ? t('common.processing') : (isFirstUser ? t('auth.createAdminAccount') : t('auth.signup'))}
             </Button>
+
+            <OpenFreeNotice variant="line" />
 
             <p className="text-xs text-muted-foreground text-center">
               {t('auth.agreeTerms')

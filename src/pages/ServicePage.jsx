@@ -1,4 +1,5 @@
 import { useParams } from 'react-router-dom'
+import { OpenFreeNotice } from '@/components/common/OpenFreeNotice'
 
 export default function ServicePage() {
   const { slug } = useParams()
@@ -13,6 +14,7 @@ export default function ServicePage() {
         <p className="mt-4 text-sm text-gray-500">
           (This page will be customized by the partner in the admin panel)
         </p>
+        <OpenFreeNotice className="mt-6" />
       </div>
     </div>
   )

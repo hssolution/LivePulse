@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { usePartner } from '@/context/PartnerContext'
 import { useLanguage } from '@/context/LanguageContext'
+import { OpenFreeNotice } from '@/components/common/OpenFreeNotice'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -166,6 +167,7 @@ export default function SessionCreate() {
         <div>
           <h1 className="text-2xl font-bold">새 세션 만들기</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">기본 정보를 입력하고 화면 디자인을 고르세요</p>
+          <OpenFreeNotice variant="badge" className="!items-start mt-2" />
         </div>
       </div>
 

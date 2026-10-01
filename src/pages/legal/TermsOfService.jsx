@@ -1,6 +1,7 @@
 import { LegalLayout } from '@/components/legal/LegalLayout'
 import { COMPANY } from '@/config/company'
 import SEO from '@/components/common/SEO'
+import { OpenFreeLegalBox } from '@/components/common/OpenFreeNotice'
 import { PAGE_META } from '@/config/seo'
 
 export default function TermsOfService() {
@@ -75,6 +76,7 @@ export default function TermsOfService() {
       </ol>
 
       <h2>제8조 (유료 서비스 및 결제)</h2>
+      <OpenFreeLegalBox />
       <ol>
         <li>회사가 제공하는 유료 서비스의 가격, 결제 방식, 이용 조건은 서비스 내 가격 안내 페이지를 통해 명시합니다.</li>
         <li>유료 서비스의 결제는 신용카드, 계좌이체 등 회사가 지정하는 방법으로 가능합니다.</li>
