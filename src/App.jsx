@@ -34,7 +34,6 @@ const AdminLayout = lazy(() => import('./components/layout/AdminLayout'))
 // Admin Pages
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
 const UsersPage = lazy(() => import('./pages/admin/Users'))
-const ProfileTest = lazy(() => import('./pages/admin/ProfileTest'))
 const PartnerRequests = lazy(() => import('./pages/admin/PartnerRequests'))
 const Partners = lazy(() => import('./pages/admin/Partners'))
 const AdminSessions = lazy(() => import('./pages/admin/Sessions'))
@@ -350,7 +349,6 @@ function AppContent() {
               <Route path="partners" element={<SuspenseWrapper><Partners /></SuspenseWrapper>} />
               <Route path="sessions" element={<SuspenseWrapper><AdminSessions /></SuspenseWrapper>} />
               <Route path="profile" element={<SuspenseWrapper><Profile /></SuspenseWrapper>} />
-              <Route path="profile-test" element={<SuspenseWrapper><ProfileTest /></SuspenseWrapper>} />
               
               {/* Content Management Routes */}
               <Route path="content/posts" element={<SuspenseWrapper><Posts /></SuspenseWrapper>} />

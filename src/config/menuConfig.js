@@ -3,7 +3,6 @@ import {
   Users, 
   Settings, 
   UserCircle, 
-  TestTube, 
   FileText, 
   Database,
   MessageSquare,
@@ -113,11 +112,6 @@ const adminOnlyMenuItems = [
       { to: '/adm/system/login-logs', labelKey: 'menu.loginLogs' },
       { to: '/adm/system/backup', labelKey: 'menu.backup' }
     ]
-  },
-  {
-    to: '/adm/profile-test',
-    icon: TestTube,
-    labelKey: 'menu.profileTest'
   }
 ]
 
