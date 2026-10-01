@@ -31,7 +31,7 @@ export const COMPANY = {
 
   // 연락처
   email: 'lhscj2466@gmail.com',
-  phone: '0000-0000', // TODO: 고객센터 전화번호 입력 필요
+  phone: '', // TODO: 고객센터 전화번호 확정 시 입력 — 비어 있으면 화면에 전화 줄이 나오지 않는다
 
   // 입금 계좌 (계좌이체용)
   bank: {

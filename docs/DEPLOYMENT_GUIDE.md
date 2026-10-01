@@ -184,7 +184,7 @@ npm run build        # vite build → dist/
 ### B-2. 업로드
 
 `dist/` 의 내용을 서버 `/home/livepulse/www/` 로 올린다.
-- 이 저장소에는 배포 스크립트(`deploy*.sh`)나 `package.json` 의 deploy 스크립트가 **없다.** 업로드 방법(rsync/scp 등)과 계정은 이 저장소에서 확인되지 않는다.
+- 빌드와 업로드를 한 번에: `npm run deploy` (`vite build` → rsync, `--delete` 없음. root 계정·키 `~/.ssh/tongbig_ed25519`, 소유자 `livepulse:livepulse`). 직전 `www` 백업은 서버의 `/home/livepulse/www.bak-20261001`.
 - 접속 방법은 노리고 ERP `docs/archive/09_server_access_and_local_sync.md` 에 있다(키 파일은 저장소 밖).
 
 ### B-3. 배포 후 확인

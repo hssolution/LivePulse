@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "deploy": "vite build && rsync -rlptvz -e \"ssh -i ~/.ssh/tongbig_ed25519\" dist/ root@125.141.139.219:/home/livepulse/www/ && ssh -i ~/.ssh/tongbig_ed25519 root@125.141.139.219 \"chown -R livepulse:livepulse /home/livepulse/www\"",
     "lint": "eslint .",
     "preview": "vite preview"
   },
