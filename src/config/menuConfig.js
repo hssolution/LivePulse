@@ -132,9 +132,8 @@ export const adminMenuItems = (() => {
     adminOnlyMenuItems[4], // 템플릿 관리
     adminOnlyMenuItems[5], // 문의/지원 관리 (관리자용)
     adminOnlyMenuItems[6], // 시스템
-    adminOnlyMenuItems[7], // 프로필 테스트
     common[4], // 설정
-  ]
+  ].filter(Boolean)
 })()
 
 /**
@@ -179,7 +178,7 @@ export const partnerMenuItems = (() => {
     common[2], // 콘텐츠 관리
     common[3], // 문의/지원
     common[4], // 설정
-  ]
+  ].filter(Boolean)
 })()
 
 /**
