@@ -1,0 +1,22 @@
+{
+  "dumpedAt": "2026-10-02",
+  "ref": "pfrdyviyzilhjarnmcec",
+  "prod": {
+    "tables": 37,
+    "functions": 139,
+    "triggers_public": 30,
+    "triggers_other_schema": 1,
+    "policies_public": 119,
+    "policies_storage": 6,
+    "indexes": 135,
+    "constraints": 130,
+    "sequences": 1,
+    "views": 0,
+    "types": 0,
+    "rls_tables": 37,
+    "buckets": 2,
+    "realtime_tables": 4,
+    "event_triggers_public_fn": 0
+  },
+  "dumpedFunctions": 139
+}
