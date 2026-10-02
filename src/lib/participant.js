@@ -114,3 +114,25 @@ export function setParticipantToken(code, token) {
     }
   }
 }
+
+/**
+ * 출석 전용 키 (028) — 참가자 토큰·설문 키와 분리한다.
+ * 서버는 md5만 저장하고, 같은 브라우저의 재출석(이름 고치기)을 한 행으로 묶는 데만 쓴다.
+ */
+const attendKeyFor = (code) => `lp_attend_key:${code}`
+
+export function getAttendKey(code) {
+  if (!code) return null
+  try {
+    let key = localStorage.getItem(attendKeyFor(code))
+    if (!key) {
+      key = crypto.randomUUID()
+      localStorage.setItem(attendKeyFor(code), key)
+    }
+    return key
+  } catch {
+    if (!window.__lpAttendFallback) window.__lpAttendFallback = {}
+    if (!window.__lpAttendFallback[code]) window.__lpAttendFallback[code] = crypto.randomUUID()
+    return window.__lpAttendFallback[code]
+  }
+}

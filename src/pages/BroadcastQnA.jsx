@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import PdfPage from '@/components/PdfPage'
 import { sceneSettings, deriveTokens } from '@/components/audience/sections/registry'
 import SectionBand from '@/components/audience/SectionBand'
+import { TimerStage } from '@/pages/TimerDisplay'
 
 /**
  * 게시 디자인 broadcast 장면의 배경(bg) → 무대 화면 배경 style.
@@ -60,7 +61,7 @@ function broadcastBgStyle(bg, tokens) {
 
 /**
  * 송출 화면 (프로젝터/대형 스크린용)
- * - 좌장이 전환하는 3모드: 강연자료(PDF) / Q&A 질문 / 설문 결과
+ * - 좌장이 전환하는 모드: 강연자료(PDF) / Q&A 질문 / 설문 결과 / 안내 / 발표 타이머(028)
  * - 세션별 스타일 설정 적용 (Q&A 모드)
  * - 실시간 업데이트 (sessions/questions 구독)
  * - 권한 없어도 접속 가능 (설정 버튼만 권한자에게 표시)
@@ -105,6 +106,8 @@ export default function BroadcastQnA() {
   }
 
   const mode = session?.broadcast_mode || 'idle'
+  // 세션 id 기준(028): sessions 행이 바뀔 때마다(타이머 조작 등) 재조회·질문 채널 재구독이 일어나지 않게
+  const sessionId = session?.id
 
   /** 권한 확인 (설정 버튼 표시용) */
   const checkPermission = useCallback(async () => {
@@ -138,7 +141,8 @@ export default function BroadcastQnA() {
     } catch {
       return false
     }
-  }, [user, session])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, sessionId, session?.partner_id])
 
   /** 세션 로드 */
   const loadSession = useCallback(async () => {
@@ -160,21 +164,21 @@ export default function BroadcastQnA() {
 
   /** 송출 중인 질문 로드 */
   const loadBroadcastingQuestion = useCallback(async () => {
-    if (!session) return
+    if (!sessionId) return
     try {
       const { data, error } = await supabase
         .from('questions')
         .select('*, presenter:session_presenters(display_name, manual_name), category:qna_categories(name, color)')
-        .eq('session_id', session.id)
+        .eq('session_id', sessionId)
         .eq('is_broadcasting', true)
-        .single()
+        .maybeSingle()
       if (error && error.code !== 'PGRST116') throw error
       setBroadcastingQuestion(data || null)
     } catch (error) {
       console.error('Error loading broadcasting question:', error)
       setBroadcastingQuestion(null)
     }
-  }, [session])
+  }, [sessionId])
 
   /** 강연자료 로드 */
   useEffect(() => {
@@ -192,11 +196,11 @@ export default function BroadcastQnA() {
 
   /** 설문 + 결과 로드 (survey 모드에서 폴링) */
   const loadSurvey = useCallback(async () => {
-    if (!session) return
+    if (!sessionId) return
     const { data: poll } = await supabase
       .from('polls')
       .select('*')
-      .eq('session_id', session.id)
+      .eq('session_id', sessionId)
       .eq('status', 'active')
       .order('started_at', { ascending: false })
       .limit(1)
@@ -208,7 +212,7 @@ export default function BroadcastQnA() {
     } else {
       setPollResults(null)
     }
-  }, [session])
+  }, [sessionId])
 
   useEffect(() => {
     if (session?.broadcast_mode !== 'survey') return
@@ -276,11 +280,30 @@ export default function BroadcastQnA() {
   }, [code])
 
   useEffect(() => {
-    if (session) {
+    if (sessionId) {
       loadBroadcastingQuestion()
       if (user) checkPermission().then(setHasPermission)
     }
-  }, [session, user, loadBroadcastingQuestion, checkPermission])
+  }, [sessionId, user, loadBroadcastingQuestion, checkPermission])
+
+  /** 송출 전환 보조 폴링(028) — realtime 이벤트를 놓쳐도 8초 안에 모드·페이지를 따라잡는다(바뀐 값만 반영) */
+  useEffect(() => {
+    if (!sessionId) return
+    const i = setInterval(async () => {
+      const { data } = await supabase
+        .from('sessions')
+        .select('broadcast_mode, broadcast_pdf_id, broadcast_pdf_page, broadcast_notice, current_cue_id, status')
+        .eq('id', sessionId)
+        .maybeSingle()
+      if (!data) return
+      setSession((prev) => {
+        if (!prev) return prev
+        const changed = Object.keys(data).some((k) => prev[k] !== data[k])
+        return changed ? { ...prev, ...data } : prev
+      })
+    }, 8000)
+    return () => clearInterval(i)
+  }, [sessionId])
 
   /** 실시간 구독 - 질문 송출 상태 */
   useEffect(() => {
@@ -347,6 +370,11 @@ export default function BroadcastQnA() {
         </div>
       </div>
     )
+  }
+
+  /* ===== 발표 타이머 모드 (028) ===== */
+  if (mode === 'timer') {
+    return <TimerStage code={code} showTitle={false} />
   }
 
   /* ===== 강연자료(PDF) 모드 ===== */

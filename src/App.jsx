@@ -83,6 +83,7 @@ const LiveSession = lazy(() => import('./pages/LiveSession'))
 const PresenterQnA = lazy(() => import('./pages/PresenterQnA'))
 const BroadcastQnA = lazy(() => import('./pages/BroadcastQnA'))
 const SpeakerScreen = lazy(() => import('./pages/SpeakerScreen'))
+const TimerDisplay = lazy(() => import('./pages/TimerDisplay'))
 const TemplatePreviewPublic = lazy(() => import('./pages/TemplatePreviewPublic'))
 const InstructorProfile = lazy(() => import('./pages/InstructorProfile'))
 
@@ -253,6 +254,13 @@ function AppContent() {
             <Route path="/broadcast/:code" element={
               <SuspenseWrapper>
                 <BroadcastQnA />
+              </SuspenseWrapper>
+            } />
+
+            {/* 발표 타이머 전용 화면 (발표자 모니터용, 028) */}
+            <Route path="/timer/:code" element={
+              <SuspenseWrapper>
+                <TimerDisplay />
               </SuspenseWrapper>
             } />
 

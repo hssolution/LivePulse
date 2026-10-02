@@ -12,12 +12,17 @@ import {
   Send,
   EyeOff,
   ListChecks,
+  ClipboardCheck,
+  Timer,
 } from 'lucide-react'
 import ManagerQnA from '@/components/session/ManagerQnA'
+import AttendancePanel from '@/components/session/AttendancePanel'
+import TimerControl from '@/components/session/TimerControl'
+import { useLanguage } from '@/context/LanguageContext'
 
 /**
  * 좌장 콕핏 우측 탭 작업판
- * 탭: 현재 큐 / Q&A / 설문 / 강연자료
+ * 탭: 현재 큐 / Q&A / 설문 / 강연자료 / 타이머 / 출석(028)
  * - 좌측 진행 플랜에서 큐를 선택하면 부모가 activeTab='cue'로 전환하고 selectedCue 전달
  * - 각 탭에서 "송출" + 수동 제어 가능 (즉석 조정)
  *
@@ -36,9 +41,12 @@ const TABS = [
   { key: 'qna', label: 'Q&A', icon: MessageCircle },
   { key: 'survey', label: '설문', icon: BarChart3 },
   { key: 'pdf', label: '강연자료', icon: FileText },
+  { key: 'timer', label: '타이머', labelKey: 'console.tabTimer', icon: Timer },
+  { key: 'attendance', label: '출석', labelKey: 'console.tabAttendance', icon: ClipboardCheck },
 ]
 
 export default function CockpitWorkspace({ sessionId, sessionCode, selectedCue, activeTab, onTabChange, onBroadcast }) {
+  const { t } = useLanguage()
   const [state, setState] = useState({ broadcast_mode: 'idle', broadcast_pdf_id: null, broadcast_pdf_page: 1, active_poll_id: null })
   const [lectures, setLectures] = useState([])
   const [polls, setPolls] = useState([])
@@ -257,7 +265,7 @@ export default function CockpitWorkspace({ sessionId, sessionCode, selectedCue, 
             return (
               <button key={tb.key} type="button" onClick={() => onTabChange?.(tb.key)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition-colors ${on ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
-                <Icon className="w-4 h-4" /> {tb.label}
+                <Icon className="w-4 h-4" /> {tb.labelKey ? t(tb.labelKey, tb.label) : tb.label}
               </button>
             )
           })}
@@ -275,6 +283,8 @@ export default function CockpitWorkspace({ sessionId, sessionCode, selectedCue, 
         {activeTab === 'qna' && <ManagerQnA sessionId={sessionId} sessionCode={sessionCode} />}
         {activeTab === 'survey' && renderSurveyTab()}
         {activeTab === 'pdf' && renderPdfTab()}
+        {activeTab === 'timer' && <TimerControl sessionId={sessionId} sessionCode={sessionCode} onBroadcast={() => { loadState(); onBroadcast?.() }} />}
+        {activeTab === 'attendance' && <AttendancePanel sessionId={sessionId} sessionCode={sessionCode} />}
       </div>
     </div>
   )

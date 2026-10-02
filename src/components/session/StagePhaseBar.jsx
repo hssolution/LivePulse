@@ -1,4 +1,4 @@
-import { Megaphone, Play, FileText, MessageCircle, BarChart3, Pause, CheckCircle2, Clock, ChevronRight } from 'lucide-react'
+import { Megaphone, Play, FileText, MessageCircle, BarChart3, Pause, CheckCircle2, Clock, ChevronRight, Timer } from 'lucide-react'
 
 /**
  * 세션 진행 단계 바 (좌장 콕핏 공용)
@@ -8,7 +8,7 @@ import { Megaphone, Play, FileText, MessageCircle, BarChart3, Pause, CheckCircle
  *
  * props:
  *  - status: 'draft' | 'published' | 'active' | 'ended' | 'cancelled'
- *  - broadcastMode: 'idle' | 'pdf' | 'qna' | 'survey' | null  (status==='active'일 때만 의미)
+ *  - broadcastMode: 'idle' | 'pdf' | 'qna' | 'survey' | 'notice' | 'timer' | null  (status==='active'일 때만 의미)
  *  - compact?: boolean  (좁은 폭에서 스텝퍼 숨김)
  */
 
@@ -32,6 +32,7 @@ function resolvePhase(status, broadcastMode) {
     if (m === 'pdf') return { tone: 'emerald', icon: FileText, label: '라이브 · 강연 중', next: '질문이 쌓이면 Q&A 모드로 전환해 송출하세요' }
     if (m === 'qna') return { tone: 'emerald', icon: MessageCircle, label: '라이브 · Q&A', next: '질문을 승인하고 "송출"로 청중 화면에 올리세요' }
     if (m === 'survey') return { tone: 'emerald', icon: BarChart3, label: '라이브 · 설문', next: '실시간 결과를 확인하고 마무리되면 다음 단계로' }
+    if (m === 'timer') return { tone: 'emerald', icon: Timer, label: '라이브 · 발표 타이머', next: '«타이머» 탭에서 시작·일시정지하고, 끝나면 송출 화면에서 내리세요' }
     return { tone: 'emerald', icon: Pause, label: '라이브 · 대기 화면', next: '강연자료를 선택해 송출하면 강연이 시작됩니다' }
   }
   if (status === 'ended') {

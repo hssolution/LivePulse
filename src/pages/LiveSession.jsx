@@ -26,6 +26,8 @@ import { useLiveState } from '@/hooks/useLiveState'
 import { getParticipantToken } from '@/lib/participant'
 import ScheduleList from '@/components/audience/ScheduleList'
 import SatisfactionSurvey from '@/components/session/SatisfactionSurvey'
+import AttendanceCheck from '@/components/session/AttendanceCheck'
+import CertificateCard from '@/components/session/CertificateCard'
 import SectionRenderer from '@/components/audience/SectionRenderer'
 import { sceneSettings, deriveTokens } from '@/components/audience/sections/registry'
 import SectionBand from '@/components/audience/SectionBand'
@@ -285,6 +287,16 @@ export default function LiveSession() {
     return <ErrorView error={error} code={code} navigate={navigate} t={t} />
   }
 
+  // 출석 체크(028) — 주최가 켠 세션의 게시·진행 중에만 뜬다(미리보기·임베드 제외)
+  const attendance =
+    !isPreview && !isEmbed ? (
+      <AttendanceCheck
+        code={code?.toUpperCase()}
+        status={session.status}
+        bottomClass={session.status === 'active' ? 'bottom-20' : 'bottom-24'}
+      />
+    ) : null
+
   // 상태별 라우팅
   if (session.status === 'ended') {
     const endedBandTokens = design ? deriveTokens(design.tokens) : null
@@ -300,6 +312,10 @@ export default function LiveSession() {
         surveySlot={
           // 만족도 설문 기본 탑재(026) — 주최자가 끈 세션(survey_enabled=false)·미리보기에선 숨김
           session.survey_enabled !== false && !isPreview ? <SatisfactionSurvey code={session.code} /> : null
+        }
+        certificateSlot={
+          // 수료증(028) — 주최가 켠 세션의 출석자만(카드가 서버에 확인)
+          !isPreview && !isEmbed ? <CertificateCard code={session.code} /> : null
         }
         headerBand={
           endedHeader.length > 0 ? (
@@ -327,23 +343,28 @@ export default function LiveSession() {
             data={{ session, presenters, cues: live?.cues_public || [] }}
             prepend={<LobbyStatusBanner code={session.code} />}
           />
+          {attendance}
         </>
       )
     }
     return (
-      <LobbyView
-        session={session}
-        presenters={presenters}
-        template={template}
-        assets={assets}
-        cues={live?.cues_public || []}
-        designTokens={design?.tokens}
-      />
+      <>
+        <LobbyView
+          session={session}
+          presenters={presenters}
+          template={template}
+          assets={assets}
+          cues={live?.cues_public || []}
+          designTokens={design?.tokens}
+        />
+        {attendance}
+      </>
     )
   }
 
   // active (또는 isPreview로 어떤 상태든)
   return (
+    <>
     <LiveView
       session={session}
       presenters={presenters}
@@ -361,6 +382,8 @@ export default function LiveSession() {
       designTokens={design?.tokens}
       design={design}
     />
+    {attendance}
+    </>
   )
 }
 
@@ -893,7 +916,7 @@ function InfoPanel({ session, presenters }) {
 /* ============================================================
  * 종료 (status='ended')
  * ============================================================ */
-export function EndedView({ session, navigate, template, assets, embedded = false, designTokens = null, headerBand = null, footerBand = null, surveySlot = null }) {
+export function EndedView({ session, navigate, template, assets, embedded = false, designTokens = null, headerBand = null, footerBand = null, surveySlot = null, certificateSlot = null }) {
   // 테마 연속 (PRD §4) — 종료 화면까지 세션 브랜딩 유지.
   // 콘텐츠가 흰색 텍스트이므로 어두운 테마(배경 이미지·심포지엄·컨퍼런스)만
   // 테마 배경을 쓰고, 밝은 테마는 기존 인디고 그라데이션을 유지한다.
@@ -934,6 +957,7 @@ export function EndedView({ session, navigate, template, assets, embedded = fals
           <br />
           오늘 함께한 시간이 도움이 되었길 바랍니다
         </p>
+        {certificateSlot && <div className="w-full mt-6 empty:hidden">{certificateSlot}</div>}
         {surveySlot && <div className="w-full mt-6">{surveySlot}</div>}
       </div>
 

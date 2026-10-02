@@ -59,6 +59,7 @@ import {
 } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { SurveyToggle } from '@/components/session/SessionFeedbackPanel'
+import { AttendanceSettings } from '@/components/session/AttendancePanel'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import DesignSimulator from '@/components/session/DesignSimulator'
 import CollaborationPanel from '@/components/session/CollaborationPanel'
@@ -970,6 +971,8 @@ function BasicSection({ sessionId, formData, setFormData, onSave, saving }) {
       </div>
       {/* 끝나면 만족도 설문 — 즉시 저장되는 스위치(026) */}
       <SurveyToggle sessionId={sessionId} />
+      {/* 출석 체크·수료증 — 즉시 저장되는 스위치(028) */}
+      <AttendanceSettings sessionId={sessionId} />
     </div>
   )
 }

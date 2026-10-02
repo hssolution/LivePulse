@@ -33,6 +33,7 @@ import {
 import { formatKoreanPhone } from '@/utils/phone'
 import EnterScene from '@/components/audience/EnterScene'
 import SectionRenderer from '@/components/audience/SectionRenderer'
+import { AttendanceJoinForm } from '@/components/session/AttendanceCheck'
 
 /**
  * 청중 등록 페이지 (템플릿 기반)
@@ -90,6 +91,19 @@ export default function JoinSession() {
       navigate(`/live/${code}`, { replace: true })
     }
   }, [session, isPreview, code, navigate])
+
+  // 출석 체크(028) — 주최가 켠 세션이면 비로그인 입장을 «이름·소속으로 출석하고 입장»으로 받는다(전화번호 없이)
+  const [attendanceOn, setAttendanceOn] = useState(false)
+  useEffect(() => {
+    if (!session?.code || isPreview || !['published', 'active'].includes(session.status)) return
+    let cancelled = false
+    supabase.rpc('sp_live_attendance_q', { p_code: session.code, p_key: null }).then(({ data }) => {
+      if (!cancelled) setAttendanceOn(!!(data?.success && data.attendance_enabled))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [session?.code, session?.status, isPreview])
 
   // 섹션 기반 디자인 (디자인 에디터 게시분) — 있으면 SectionRenderer가 EnterScene을 대체
   // designChecked: 확인 완료 전에는 렌더를 보류해 "구 화면 → 디자인" 플래시 방지 (검증 라운드 반영)
@@ -542,6 +556,18 @@ export default function JoinSession() {
     }
 
     // 비로그인 사용자 (user가 없거나, 참여 확인이 완료되지 않은 경우)
+    if (!user && attendanceOn) {
+      return (
+        <AttendanceJoinForm
+          code={code?.toUpperCase()}
+          onDone={() => {
+            getParticipantToken(code?.toUpperCase())
+            markJoined(code?.toUpperCase())
+            navigate(`/live/${code}`)
+          }}
+        />
+      )
+    }
     if (!user || (!checkingParticipation && !isParticipating)) {
       return (
         <Collapsible open={showJoinForm} onOpenChange={setShowJoinForm}>
