@@ -325,22 +325,27 @@ export default function Signup() {
             </li>
             <li className="flex items-center gap-3">
               <CheckCircle className="h-5 w-5 text-white" />
+              <span>{t('auth.featureScreen')}</span>
+            </li>
+            <li className="flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 text-white" />
               <span>{t('auth.qnaFeature')}</span>
             </li>
             <li className="flex items-center gap-3">
               <CheckCircle className="h-5 w-5 text-white" />
-              <span>{t('auth.qrJoin')}</span>
+              <span>{t('auth.featurePoll')}</span>
             </li>
             <li className="flex items-center gap-3">
               <CheckCircle className="h-5 w-5 text-white" />
               <span>{t('auth.analyticsReport')}</span>
             </li>
+            <li className="flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 text-white" />
+              <span>{t('auth.qrJoin')}</span>
+            </li>
           </ul>
         </div>
 
-        <div className="relative text-white/70 text-sm">
-          {t('auth.usersCount')}
-        </div>
       </div>
 
       {/* Right Side - Signup Form */}
