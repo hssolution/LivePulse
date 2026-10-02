@@ -258,7 +258,6 @@ SELECT _seed_trans('menu.database', '00000000-0000-0000-0001-000000000003'::uuid
 SELECT _seed_trans('menu.logs', '00000000-0000-0000-0001-000000000003'::uuid, '로그 관리', 'Logs');
 SELECT _seed_trans('menu.backup', '00000000-0000-0000-0001-000000000003'::uuid, '백업 관리', 'Backup');
 SELECT _seed_trans('menu.languagePack', '00000000-0000-0000-0001-000000000003'::uuid, '언어팩 관리', 'Language Pack');
-SELECT _seed_trans('menu.profileTest', '00000000-0000-0000-0001-000000000003'::uuid, '프로필 테스트', 'Profile Test');
 SELECT _seed_trans('menu.templateManagement', '00000000-0000-0000-0001-000000000003'::uuid, '템플릿 관리', 'Template Management');
 SELECT _seed_trans('menu.templateMain', '00000000-0000-0000-0001-000000000003'::uuid, '메인 화면', 'Main Screen');
 SELECT _seed_trans('menu.templateQnA', '00000000-0000-0000-0001-000000000003'::uuid, '질문 화면', 'Q&A Screen');

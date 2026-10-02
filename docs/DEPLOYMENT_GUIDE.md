@@ -1,13 +1,13 @@
 # LivePulse 배포 가이드
 
-> Supabase (백엔드) + Tongbig nginx 정적 (프론트엔드) 배포 방법
+> Supabase (백엔드) + Tongbig nginx 정적 (프론트엔드) — 지금 실제로 쓰는 배포 방법
 
 ---
 
 ## 📋 목차
 
-1. [사전 준비](#사전-준비)
-2. [Part A: Supabase 클라우드 설정](#part-a-supabase-클라우드-설정)
+1. [지금 쓰는 배포 순서(요약)](#지금-쓰는-배포-순서요약)
+2. [Part A: 운영 DB 변경(Supabase)](#part-a-운영-db-변경supabase)
 3. [Part B: 운영 배포](#part-b-운영-배포-tongbig-nginx-정적)
 4. [Part C: 환경변수 설정](#part-c-환경변수-설정)
 5. [Part D: Supabase 인증 URL](#part-d-supabase-인증-url)
@@ -15,154 +15,50 @@
 
 ---
 
-## 사전 준비
+## 지금 쓰는 배포 순서(요약)
 
-### 필요한 계정
-- [x] GitHub 계정
-- [x] Supabase 계정 (https://supabase.com)
-- [x] Tongbig 서버 접근 권한
+운영 = Supabase 프로젝트 `pfrdyviyzilhjarnmcec`(DB·인증) + Tongbig nginx 정적 파일(`https://livepulse.noligo.co.kr`).
+DB 를 바꾸는 변경은 **DB 먼저, 화면 나중**이다(새 화면이 아직 없는 함수를 부르지 않게).
 
-### 프로젝트 GitHub 업로드
-```bash
-# Git 초기화
-git init
+1. 마이그레이션 파일 `supabase/migrations/NNN_YYYYMMDD_설명.sql` 을 쓴다(번호는 이어서, 추가 위주, `BEGIN; … COMMIT;`).
+2. 로컬 재현 DB 에서 먼저 돌려 본다(`supabase/schema/README.md` 의 «재현 시험» — `_local_stub.sql` → 00~07 → 새 마이그레이션).
+3. 운영 DB 에 적용한다(아래 A-1).
+4. `node supabase/schema/dump.mjs` 로 스키마 덤프를 다시 떠서 커밋한다(«지금 운영 모양» 정본, 026 부터 규칙).
+5. `npm run build` 통과 확인 → `npm run deploy`(Part B).
+6. 운영 주소에서 직접 확인하고, 시험 데이터는 지운다.
 
-# 원격 저장소 연결
-git remote add origin https://github.com/[USERNAME]/[REPO_NAME].git
-
-# 파일 추가 및 커밋
-git add .
-git commit -m "초기 커밋"
-
-# 푸시
-git branch -M main
-git push -u origin main
-```
+커밋 예: 기능 커밋(마이그레이션+화면) 하나 + `chore(db): NNN 적용 뒤 운영 스키마 다시 덤프` 하나.
 
 ---
 
-## Part A: Supabase 클라우드 설정
+## Part A: 운영 DB 변경(Supabase)
 
-### A-1. 프로젝트 생성
+### A-1. 마이그레이션 적용 — 대시보드 세션으로 pg-meta
 
-1. **https://supabase.com/dashboard** 접속
-2. **New Project** 클릭
-3. 프로젝트 정보 입력:
-   - **Organization**: 본인 조직 선택
-   - **Name**: `LivePulse` (원하는 이름)
-   - **Database Password**: 강력한 비밀번호 설정 ⚠️ **반드시 메모!**
-   - **Region**: `Northeast Asia (Seoul)` 권장
-4. **Create new project** 클릭
-5. 2-3분 대기 (프로젝트 생성 중)
+이 저장소에는 **Supabase CLI 연결·서비스 키·DB 비밀번호가 없다.** 운영 DB 에 SQL 을 올리는 길은 하나다:
+Aside 브라우저에 로그인된 Supabase 대시보드 세션으로, 백그라운드 탭에서
+`api.supabase.com/platform/pg-meta/<ref>/query` 를 부른다(프로젝트 조회의 `connectionString` 을 `x-connection-encrypted` 헤더로).
 
-### A-2. Project Reference ID 확인
+- 읽기 전용 조회는 `supabase/schema/pgmeta.mjs` 의 `pgmeta([...])`(SELECT/WITH 만 허용)를 쓴다.
+- 마이그레이션 적용도 같은 방식으로 파일 내용을 그대로 보낸다(파일 안의 `BEGIN/COMMIT` 이 한 묶음으로 처리).
+  토큰·접속 문자열은 탭 안에서만 쓰고 저장·출력하지 않는다.
+- 대안: 대시보드 **SQL Editor** 에 파일 내용을 붙여 넣고 실행해도 된다.
+- 적용 뒤 `pgmeta` 로 새 컬럼·함수·정책이 실제로 생겼는지 확인한다.
 
-프로젝트 생성 후 대시보드 URL에서 확인:
-```
-https://supabase.com/dashboard/project/[PROJECT_REF]
-                                        ^^^^^^^^^^^^
-                                        이 부분이 Project Reference ID
-```
-
-**예시**: `pfrdyviyzilhjarnmcec`
-
-### A-3. API 키 확인
-
-1. 프로젝트 대시보드 → **Settings** → **API**
-2. 아래 정보 메모:
-
-| 항목 | 위치 | 예시 |
-|------|------|------|
-| **Project URL** | Project URL | `https://pfrdyviyzilhjarnmcec.supabase.co` |
-| **anon public** | Project API keys | `eyJhbGciOiJIUzI1NiIsInR5cCI6...` |
-| **service_role** | Project API keys | `eyJhbGciOiJIUzI1NiIsInR5cCI6...` (⚠️ 비밀 유지!) |
-
-### A-4. Supabase CLI 로그인
-
-#### 방법 1: 브라우저 로그인 (권장)
-```bash
-npx supabase login
-```
-브라우저가 열리면 로그인 진행
-
-#### 방법 2: Access Token 사용
-1. https://supabase.com/dashboard/account/tokens 접속
-2. **Generate new token** 클릭
-3. 토큰 생성 후 복사
-4. 환경변수 설정:
-```bash
-# Windows PowerShell
-$env:SUPABASE_ACCESS_TOKEN="your-token-here"
-
-# Windows CMD
-set SUPABASE_ACCESS_TOKEN=your-token-here
-
-# Mac/Linux
-export SUPABASE_ACCESS_TOKEN="your-token-here"
-```
-
-### A-5. 프로젝트 연결
+### A-2. 스키마 덤프 갱신
 
 ```bash
-npx supabase link --project-ref [PROJECT_REF]
+node supabase/schema/dump.mjs     # supabase/schema/00~07*.sql, counts.json 을 다시 쓴다
+git diff --stat supabase/schema
 ```
 
-비밀번호 입력 요청 시 → A-1에서 설정한 **Database Password** 입력
+`supabase/schema/` 가 운영 DB 모양의 정본이다. 마이그레이션(`supabase/migrations/`)은 변경 이력이다.
 
-**예시**:
-```bash
-npx supabase link --project-ref pfrdyviyzilhjarnmcec
-# Enter your database password: [비밀번호 입력]
-```
+### A-3. 새 Supabase 프로젝트를 세울 때(평소엔 안 함)
 
-### A-6. 마이그레이션 푸시
-
-로컬의 마이그레이션 파일들을 클라우드에 적용:
-```bash
-npx supabase db push
-```
-
-성공 시 출력:
-```
-Applying migration 001_init.sql...
-Applying migration 002_language.sql...
-...
-Finished supabase db push.
-```
-
-### A-7. 시드 데이터 적용
-
-#### 방법 1: Supabase Dashboard SQL Editor
-1. 프로젝트 대시보드 → **SQL Editor**
-2. `supabase/seeds/` 폴더의 파일들을 순서대로 실행:
-   - `01_app_config.sql`
-   - `02_languages.sql`
-   - `03_categories.sql`
-   - `04_helper_function.sql`
-   - `05_trans_common.sql`
-   - ... (나머지 파일들)
-
-#### 방법 2: CLI 사용
-```bash
-# 시드 파일 직접 실행 (하나씩)
-npx supabase db execute -f supabase/seeds/01_app_config.sql
-npx supabase db execute -f supabase/seeds/02_languages.sql
-# ... 반복
-```
-
-### A-8. 테스트 사용자 생성
-
-```bash
-node scripts/seed-users.js
-```
-
-⚠️ **주의**: `scripts/seed-users.js` 파일의 Supabase URL과 Service Role Key를 클라우드 값으로 변경해야 합니다.
-
-```javascript
-// scripts/seed-users.js 수정
-const supabaseUrl = 'https://[PROJECT_REF].supabase.co'
-const supabaseServiceKey = '[SERVICE_ROLE_KEY]'
-```
+마이그레이션 001~ 을 다시 돌리지 않는다(운영에 직접 만든 객체가 많아 그것만으로는 재현되지 않는다).
+`supabase/schema/` 의 00~07 을 순서대로 적용하고(`supabase/schema/README.md`), 시드(`supabase/seeds/`)를 넣은 뒤
+대시보드 전용 설정(Auth Hook·메일 템플릿·URL·SMTP·Edge Functions)을 `supabase/manual/` 대로 맞춘다.
 
 ---
 
@@ -234,13 +130,8 @@ VITE_SUPABASE_ANON_KEY=[anon public 키]
 
 ### 마이그레이션 실패
 
-```bash
-# 마이그레이션 상태 확인
-npx supabase migration list
-
-# 특정 마이그레이션 다시 실행
-npx supabase db reset --linked
-```
+- 파일이 `BEGIN; … COMMIT;` 로 묶여 있으면 실패 시 아무것도 바뀌지 않는다. 오류 메시지를 보고 로컬 재현 DB 에서 고친 뒤 다시 올린다.
+- `supabase db reset` 같은 초기화 명령은 운영에 절대 쓰지 않는다(운영 데이터가 지워진다).
 
 ### 환경변수 인식 안 됨
 
@@ -263,19 +154,15 @@ Supabase 대시보드 → **Authentication** → **URL Configuration**에서:
 
 | 단계 | 항목 | 완료 |
 |------|------|------|
-| **준비** | GitHub에 코드 푸시 | ⬜ |
-| **Supabase** | 클라우드 프로젝트 생성 | ⬜ |
-| | CLI 로그인 | ⬜ |
-| | 프로젝트 연결 (`supabase link`) | ⬜ |
-| | 마이그레이션 푸시 (`db push`) | ⬜ |
-| | 시드 데이터 적용 | ⬜ |
-| | 테스트 사용자 생성 | ⬜ |
-| **배포** | `.env.production` 준비 | ⬜ |
-| | `npm run build` | ⬜ |
-| | `dist/` → `/home/livepulse/www/` 업로드 | ⬜ |
-| **확인** | 사이트 접속 테스트 | ⬜ |
-| | 로그인 테스트 | ⬜ |
-| | 기능 테스트 | ⬜ |
+| **DB** | 마이그레이션 파일 작성(번호 이어서) | ⬜ |
+| | 로컬 재현 DB 에서 적용 시험 | ⬜ |
+| | 운영 적용(pg-meta 또는 SQL Editor) 후 객체 확인 | ⬜ |
+| | `node supabase/schema/dump.mjs` 후 커밋 | ⬜ |
+| **화면** | `.env.production` 준비 | ⬜ |
+| | `npm run build` 통과 | ⬜ |
+| | `npm run deploy` (`dist/` → `/home/livepulse/www/`) | ⬜ |
+| **확인** | 운영 주소 접속·바뀐 기능 확인 | ⬜ |
+| | 시험 데이터 정리 | ⬜ |
 
 ---
 
@@ -286,4 +173,4 @@ Supabase 대시보드 → **Authentication** → **URL Configuration**에서:
 
 ---
 
-**마지막 업데이트**: 2025-12-01
+**마지막 업데이트**: 2026-10-03 (실제 DB 반영 방식·마이그레이션 순서로 정정)
