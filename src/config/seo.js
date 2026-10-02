@@ -9,18 +9,19 @@ export const SITE_URL = (import.meta.env.VITE_SITE_URL || 'https://livepulse.nol
 export const SITE_NAME = 'LivePulse'
 
 export const DEFAULT_DESCRIPTION =
-  '강연, 강연가, 대행사를 연결하는 올인원 강연 매칭 플랫폼. 강연·세미나·워크숍에서 Q&A, 설문, 투표로 청중과 실시간 소통하세요.'
+  '행사 당일 화면 운영을 한 곳에서. 큐시트 순서대로 발표 자료, 실시간 Q&A, 청중 설문을 송출 화면에 올리는 행사 진행 콘솔입니다. 학회·심포지엄·세미나·기업 교육에 씁니다.'
 
 export const DEFAULT_KEYWORDS = [
-  '강연 매칭',
-  '강연가 섭외',
-  '강사 섭외',
-  '강연 플랫폼',
-  '실시간 청중 소통',
-  '라이브 Q&A',
-  '실시간 투표',
-  '세미나 설문',
-  '웨비나 인터랙션',
+  '행사 진행',
+  '행사 진행 콘솔',
+  '큐시트',
+  '송출 화면',
+  '실시간 Q&A',
+  '청중 설문',
+  '학회',
+  '심포지엄',
+  '세미나',
+  '기업 교육',
   'LivePulse',
 ]
 
@@ -33,6 +34,7 @@ export const PAGE_META = {
     title: null, // 홈은 사이트명 단독 노출
     description: DEFAULT_DESCRIPTION,
   },
+  // 아래 셋은 라우트를 홈으로 돌렸다(마켓은 후순위). 남겨 둔 페이지 파일이 참조해서 지우지 않는다.
   lectures: {
     path: '/lectures',
     title: '강연 찾기',
@@ -102,13 +104,15 @@ export const SERVICE_JSONLD = {
     '@type': 'Offer',
     price: '0',
     priceCurrency: 'KRW',
-    description: '무료로 시작할 수 있습니다.',
+    description: '오픈 기간에는 무료입니다.',
   },
   featureList: [
-    '강연가·대행사 검색 및 매칭',
-    '실시간 청중 Q&A',
-    '실시간 투표 및 설문',
-    '발표자 화면·무대 스크린 송출',
-    '세션 리포트 및 참여 통계',
+    '큐시트(진행 순서) 편성과 큐별 송출',
+    '송출 화면 전환 — 발표 자료·Q&A·설문 결과',
+    '실시간 Q&A — 질문 승인·숨김·고정, 좌장 화면',
+    '청중 설문·투표와 결과 표시',
+    '참가·로비·송출 화면 디자인 에디터',
+    '세션 리포트와 Excel 내려받기',
   ],
+
 }

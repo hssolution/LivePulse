@@ -10,10 +10,8 @@ import {
   Moon,
   Menu,
   X,
-  Search,
-  Users,
-  Building2,
-  PlayCircle
+  LayoutGrid,
+  ListOrdered
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -21,7 +19,7 @@ import { supabase } from '@/lib/supabase'
 /**
  * 공용 헤더 컴포넌트
  * - 메인 로고
- * - 주요 메뉴 (강의, 강사, 대행사)
+ * - 주요 메뉴 (랜딩 구역 앵커: 기능, 진행 흐름)
  * - 다크모드 토글
  * - 언어 선택
  * - 로그인/회원가입/대시보드 접근
@@ -55,9 +53,8 @@ export function PublicHeader() {
   }
 
   const navLinks = [
-    { name: '강연 찾기', href: '/lectures', label: 'nav.lectures', icon: PlayCircle },
-    { name: '강연가 찾기', href: '/instructors', label: 'nav.instructors', icon: Users },
-    { name: '대행사 찾기', href: '/agencies', label: 'nav.agencies', icon: Building2 },
+    { name: '기능', href: '/#features', label: 'nav.features', icon: LayoutGrid },
+    { name: '진행 흐름', href: '/#flow', label: 'nav.flow', icon: ListOrdered },
   ]
 
   return (

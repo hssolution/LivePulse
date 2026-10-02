@@ -1,6 +1,7 @@
 {
   "short_name": "LivePulse",
-  "name": "LivePulse - 실시간 청중 소통 플랫폼",
+  "name": "LivePulse - 행사 당일 진행 콘솔",
+  "description": "큐시트 순서대로 발표 자료, 실시간 Q&A, 청중 설문을 송출 화면에 올리는 행사 진행 콘솔",
   "icons": [
     {
       "src": "logo.svg",

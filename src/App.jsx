@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { PublicThemeProvider } from './context/PublicThemeContext'
@@ -19,9 +19,6 @@ import ViewAsBanner from './components/admin/ViewAsBanner'
 
 // Lazy loaded pages
 const Home = lazy(() => import('./pages/Home'))
-const Lectures = lazy(() => import('./pages/Lectures'))
-const Instructors = lazy(() => import('./pages/Instructors'))
-const Agencies = lazy(() => import('./pages/Agencies'))
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
 const ServicePage = lazy(() => import('./pages/ServicePage'))
@@ -157,27 +154,10 @@ function AppContent() {
                 </SuspenseWrapper>
               </PublicThemeProvider>
             } />
-            <Route path="/lectures" element={
-              <PublicThemeProvider>
-                <SuspenseWrapper>
-                  <Lectures />
-                </SuspenseWrapper>
-              </PublicThemeProvider>
-            } />
-            <Route path="/instructors" element={
-              <PublicThemeProvider>
-                <SuspenseWrapper>
-                  <Instructors />
-                </SuspenseWrapper>
-              </PublicThemeProvider>
-            } />
-            <Route path="/agencies" element={
-              <PublicThemeProvider>
-                <SuspenseWrapper>
-                  <Agencies />
-                </SuspenseWrapper>
-              </PublicThemeProvider>
-            } />
+            {/* 강연·강사·대행사 목록은 후순위(마켓) — 페이지 파일은 남기고 홈으로 돌린다 */}
+            <Route path="/lectures" element={<Navigate to="/" replace />} />
+            <Route path="/instructors" element={<Navigate to="/" replace />} />
+            <Route path="/agencies" element={<Navigate to="/" replace />} />
             <Route path="/service/:slug" element={
               <PublicThemeProvider>
                 <SuspenseWrapper>

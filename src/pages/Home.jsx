@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { useAuth } from '@/context/AuthContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { PublicHeader } from '@/components/layout/PublicHeader'
@@ -11,24 +9,37 @@ import SEO from '@/components/common/SEO'
 import { OpenFreeNotice } from '@/components/common/OpenFreeNotice'
 import { PAGE_META, SERVICE_JSONLD } from '@/config/seo'
 import {
-  Search,
-  Briefcase,
-  GraduationCap,
-  Building2,
-  CheckCircle2,
   ArrowRight,
-  Star,
-  TrendingUp,
-  Users,
-  ShieldCheck,
-  MessageSquare,
-  BarChart3
+  BarChart3,
+  Briefcase,
+  Building2,
+  Check,
+  FileSpreadsheet,
+  FileText,
+  GraduationCap,
+  ListChecks,
+  LogIn,
+  Megaphone,
+  MessageCircle,
+  MonitorPlay,
+  Palette,
+  Pin,
+  Play,
+  Radio,
+  ThumbsUp,
+  Tv,
+  Zap,
 } from 'lucide-react'
 
+/** 참여 코드: 영문 대문자·숫자 6자리 (sessions.code, generate_session_code) */
+const JOIN_CODE_LENGTH = 6
+const normalizeJoinCode = (value) =>
+  value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, JOIN_CODE_LENGTH)
+
 /**
- * 스크롤 시 요소가 나타나는 애니메이션 컴포넌트
+ * 스크롤 시 요소가 나타나는 애니메이션
  */
-const ScrollReveal = ({ children, className = "", delay = 0, direction = "up" }) => {
+const ScrollReveal = ({ children, className = '', delay = 0 }) => {
   const [isVisible, setIsVisible] = useState(false)
   const ref = useRef(null)
 
@@ -40,31 +51,18 @@ const ScrollReveal = ({ children, className = "", delay = 0, direction = "up" })
           observer.disconnect()
         }
       },
-      { threshold: 0.15, rootMargin: "0px 0px -50px 0px" }
+      { threshold: 0.1 }
     )
-
-    if (ref.current) {
-      observer.observe(ref.current)
-    }
-
+    if (ref.current) observer.observe(ref.current)
     return () => observer.disconnect()
   }, [])
-
-  const getTransform = () => {
-    if (isVisible) return "translate-x-0 translate-y-0"
-    if (direction === "up") return "translate-y-20"
-    if (direction === "down") return "-translate-y-20"
-    if (direction === "left") return "translate-x-20"
-    if (direction === "right") return "-translate-x-20"
-    return "translate-y-20"
-  }
 
   return (
     <div
       ref={ref}
-      className={`transition-all duration-1000 ease-out ${
-        isVisible ? "opacity-100" : "opacity-0"
-      } ${getTransform()} ${className}`}
+      className={`transition-all duration-700 ease-out ${
+        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+      } ${className}`}
       style={{ transitionDelay: `${delay}ms` }}
     >
       {children}
@@ -72,595 +70,585 @@ const ScrollReveal = ({ children, className = "", delay = 0, direction = "up" })
   )
 }
 
-/**
- * 스크롤 시 채워지는 프로그레스 바 컴포넌트
- */
-const AnimatedProgressBar = ({ percentage }) => {
-  const [width, setWidth] = useState(0)
-  const ref = useRef(null)
+/* ------------------------------------------------------------------ */
+/* 화면 목업 — 실제 콘솔 UI(파트너 세션 화면)를 본뜬 코드 그림.              */
+/* 사람 이름·연락처·회사명은 넣지 않는다. 숫자는 건수·비율만.               */
+/* ------------------------------------------------------------------ */
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          // 약간의 딜레이 후 애니메이션 시작
-          setTimeout(() => setWidth(percentage), 300)
-          observer.disconnect()
-        }
-      },
-      { threshold: 0.5 }
-    )
+const CUE_STYLE = {
+  pdf: { icon: FileText, chip: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40' },
+  survey: { icon: BarChart3, chip: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
+  qna: { icon: MessageCircle, chip: 'bg-sky-500/15 text-sky-300 border-sky-500/40' },
+  notice: { icon: Megaphone, chip: 'bg-amber-500/15 text-amber-300 border-amber-500/40' },
+}
 
-    if (ref.current) {
-      observer.observe(ref.current)
-    }
-
-    return () => observer.disconnect()
-  }, [percentage])
-
+function MockFrame({ title, icon: Icon, right, children, className = '' }) {
   return (
-    <div ref={ref} className="h-2 bg-slate-800 rounded-full overflow-hidden w-full">
-      <div 
-        className="h-full bg-gradient-to-r from-green-400 to-teal-500 transition-all duration-1500 ease-out relative"
-        style={{ width: `${width}%` }}
-      >
-        <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+    <div className={`rounded-2xl border border-slate-800 bg-slate-900 text-slate-200 shadow-2xl overflow-hidden ${className}`}>
+      <div className="flex items-center justify-between gap-3 bg-[#11111b] px-4 h-11 border-b border-slate-800">
+        <div className="flex items-center gap-2 min-w-0 text-xs font-bold text-slate-200">
+          {Icon && <Icon className="w-4 h-4 shrink-0 text-indigo-300" />}
+          <span className="truncate">{title}</span>
+        </div>
+        {right}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function LiveChip() {
+  return (
+    <span className="flex items-center gap-1.5 text-[11px] font-bold bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full shrink-0">
+      <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+      LIVE
+    </span>
+  )
+}
+
+/** 큐시트(진행 플랜) — 큐 종류 칩 + 큐마다 송출 버튼 */
+function CueList({ t }) {
+  const cues = [
+    { type: 'notice', label: t('home.mockCueNotice'), title: t('home.mockCue1') },
+    { type: 'pdf', label: t('home.mockCueDeck'), title: t('home.mockCue2'), onAir: true },
+    { type: 'survey', label: t('home.mockCuePoll'), title: t('home.mockCue3') },
+    { type: 'qna', label: t('home.mockCueQna'), title: t('home.mockCue4') },
+  ]
+  return (
+    <ul className="p-3 space-y-2">
+      {cues.map((cue, i) => {
+        const style = CUE_STYLE[cue.type]
+        return (
+          <li
+            key={cue.type}
+            className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
+              cue.onAir ? 'border-rose-500/50 bg-rose-500/10' : 'border-slate-800 bg-slate-800/40'
+            }`}
+          >
+            <span className="w-5 text-center text-xs font-mono text-slate-500 shrink-0">{i + 1}</span>
+            <div className="min-w-0 flex-1">
+              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${style.chip}`}>
+                <style.icon className="w-3 h-3" />
+                {cue.label}
+              </span>
+              <p className="mt-1 text-sm text-slate-100 truncate">{cue.title}</p>
+            </div>
+            {cue.onAir ? (
+              <span className="flex items-center gap-1 text-[11px] font-bold text-rose-300 shrink-0">
+                <Radio className="w-3.5 h-3.5" />
+                {t('home.mockOnAir')}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[11px] font-bold text-white bg-indigo-600 rounded-lg px-2.5 py-1.5 shrink-0">
+                <Play className="w-3 h-3 fill-current" />
+                {t('home.mockBroadcast')}
+              </span>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** 송출 화면 — 강연자료 / Q&A / 설문 3모드 전환 */
+function StageScreen({ t, compact = false }) {
+  const modes = [
+    { key: 'pdf', icon: FileText, label: t('home.mockCueDeck') },
+    { key: 'qna', icon: MessageCircle, label: t('home.mockCueQna'), active: true },
+    { key: 'survey', icon: BarChart3, label: t('home.mockCuePoll') },
+  ]
+  return (
+    <div className="p-3 space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {modes.map((m) => (
+          <span
+            key={m.key}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
+              m.active ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+            }`}
+          >
+            <m.icon className="w-3.5 h-3.5" />
+            {m.label}
+          </span>
+        ))}
+      </div>
+      <div className={`aspect-video rounded-xl bg-gradient-to-br from-slate-950 to-indigo-950 border border-slate-800 flex flex-col items-center justify-center text-center ${compact ? 'px-4' : 'px-6 sm:px-10'}`}>
+        <span className="text-[10px] font-bold tracking-widest text-indigo-300 mb-2">Q&amp;A</span>
+        <p className={`font-bold text-white leading-snug ${compact ? 'text-sm' : 'text-base sm:text-xl'}`}>
+          {t('home.mockQuestion1')}
+        </p>
       </div>
     </div>
   )
 }
 
+/** Q&A 모더레이션 — 승인 대기 / 승인됨 / 고정 */
+function QnaBoard({ t }) {
+  const rows = [
+    { text: t('home.mockQuestion1'), likes: 12, pinned: true },
+    { text: t('home.mockQuestion2'), likes: 7 },
+    { text: t('home.mockQuestion3'), likes: 3, pending: true },
+  ]
+  return (
+    <ul className="p-3 space-y-2">
+      {rows.map((q) => (
+        <li key={q.text} className="rounded-xl border border-slate-800 bg-slate-800/40 px-3 py-2.5">
+          <div className="flex items-start gap-3">
+            <span className="flex flex-col items-center text-slate-400 shrink-0 pt-0.5">
+              <ThumbsUp className="w-3.5 h-3.5" />
+              <span className="text-xs font-medium">{q.likes}</span>
+            </span>
+            <p className="flex-1 min-w-0 text-sm text-slate-100 leading-snug">{q.text}</p>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
+            {q.pending ? (
+              <>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-400">
+                  {t('home.mockPending')}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-indigo-600 text-white">
+                  <Check className="w-3 h-3" />
+                  {t('home.mockApprove')}
+                </span>
+              </>
+            ) : (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400">
+                {t('home.mockApproved')}
+              </span>
+            )}
+            {q.pinned && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-orange-500/10 text-orange-400">
+                <Pin className="w-3 h-3" />
+                {t('home.mockPinned')}
+              </span>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** 설문 결과 막대 */
+function PollBars({ t }) {
+  const options = [
+    { label: t('home.mockOption1'), pct: 48 },
+    { label: t('home.mockOption2'), pct: 31 },
+    { label: t('home.mockOption3'), pct: 21 },
+  ]
+  return (
+    <div className="p-4">
+      <p className="text-sm font-bold text-white mb-3">{t('home.mockPollQuestion')}</p>
+      <div className="space-y-3">
+        {options.map((o) => (
+          <div key={o.label}>
+            <div className="flex justify-between text-xs text-slate-300 mb-1">
+              <span>{o.label}</span>
+              <span className="font-mono">{o.pct}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: `${o.pct}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** 디자인 에디터 — 장면 탭 + 청중 화면 미리보기 */
+function DesignMock({ t }) {
+  const scenes = [
+    t('home.mockSceneEnter'),
+    t('home.mockSceneLobby'),
+    t('home.mockBroadcast'),
+    t('home.mockCueQna'),
+    t('home.mockCuePoll'),
+    t('home.mockSceneEnded'),
+  ]
+  return (
+    <div className="p-3">
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {scenes.map((s, i) => (
+          <span
+            key={s}
+            className={`rounded-md px-2 py-1 text-[11px] font-semibold ${
+              i === 1 ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+            }`}
+          >
+            {s}
+          </span>
+        ))}
+      </div>
+      <div className="flex items-center justify-center gap-4 rounded-xl bg-[#14161d] border border-slate-800 py-5 px-3">
+        <div className="w-28 sm:w-32 rounded-2xl border-2 border-slate-700 bg-gradient-to-b from-orange-500 to-pink-600 p-2.5">
+          <div className="h-10 rounded-lg bg-white/25 mb-2" />
+          <div className="h-2 w-4/5 rounded bg-white/80 mb-1.5" />
+          <div className="h-2 w-3/5 rounded bg-white/50 mb-4" />
+          <div className="h-6 rounded-md bg-white/90" />
+        </div>
+        <div className="space-y-2 w-24 sm:w-32">
+          {['bg-orange-500', 'bg-indigo-500', 'bg-emerald-500'].map((c) => (
+            <div key={c} className="flex items-center gap-2">
+              <span className={`w-4 h-4 rounded-full shrink-0 ${c}`} />
+              <span className="h-2 flex-1 rounded bg-slate-700" />
+            </div>
+          ))}
+          <div className="h-6 rounded-md border border-dashed border-slate-600" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** 리포트 — 요약 수치 + 설문 결과 + Excel */
+function ReportMock({ t }) {
+  const stats = [
+    { label: t('home.mockReportVotes'), value: 96 },
+    { label: t('home.mockReportQuestions'), value: 24 },
+  ]
+  return (
+    <div className="p-3 space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-xl border border-slate-800 bg-slate-800/40 px-3 py-2.5">
+            <p className="text-[11px] text-slate-400">{s.label}</p>
+            <p className="text-xl font-bold text-white">
+              {t('home.mockCount', { count: s.value })}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-slate-800 bg-slate-800/40">
+        <PollBars t={t} />
+      </div>
+    </div>
+  )
+}
+
+/** 첫 화면용 — 콘솔 전체(좌: 큐시트, 우: 송출 화면) */
+function ConsoleMock({ t }) {
+  return (
+    <MockFrame title={t('home.mockConsoleTitle')} icon={MonitorPlay} right={<LiveChip />}>
+      <div className="grid md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <div className="border-b md:border-b-0 md:border-r border-slate-800">
+          <p className="px-4 pt-3 text-[11px] font-bold text-slate-400">{t('home.mockCueSheet')}</p>
+          <CueList t={t} />
+        </div>
+        <div>
+          <p className="px-4 pt-3 text-[11px] font-bold text-slate-400">{t('home.mockScreen')}</p>
+          <StageScreen t={t} />
+        </div>
+      </div>
+    </MockFrame>
+  )
+}
+
 /**
- * 홈 페이지 (랜딩 페이지) - 리뉴얼
- * 강의/강사/대행사 매칭 플랫폼 컨셉
+ * 홈 (랜딩) — 행사 당일 진행 콘솔
+ * 대행사·학회 사무국·기업 교육 담당이 세션을 만들고 큐시트·송출·Q&A·설문을 돌린다.
  */
 export default function Home() {
   const { t } = useLanguage()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [scrollY, setScrollY] = useState(0)
+  const { user, profile } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [joinCode, setJoinCode] = useState('')
 
-  // 패럴랙스 효과를 위한 스크롤 감지
+  // 헤더·푸터의 구역 앵커(/#features, /#flow)로 들어오면 그 구역으로 스크롤
   useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY)
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
+    if (!location.hash) return
+    const el = document.getElementById(location.hash.slice(1))
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [location.key, location.hash])
+
+  // 세션 만들기: 파트너(관리자 포함) → 만들기 화면, 일반 회원 → 파트너 신청(마이페이지), 비로그인 → 가입
+  const canRunSessions = profile?.userType === 'partner' || profile?.role === 'admin'
+  const createSessionTo = !user
+    ? `/signup?redirect=${encodeURIComponent('/mypage')}`
+    : canRunSessions
+      ? '/partner/sessions/new'
+      : '/mypage'
+
+  const joinReady = joinCode.length === JOIN_CODE_LENGTH
+  const handleJoin = (e) => {
+    e.preventDefault()
+    if (joinReady) navigate(`/join/${joinCode}`)
+  }
+
+  const audiences = [
+    { icon: Briefcase, title: t('home.who1Title'), desc: t('home.who1Desc') },
+    { icon: GraduationCap, title: t('home.who2Title'), desc: t('home.who2Desc') },
+    { icon: Building2, title: t('home.who3Title'), desc: t('home.who3Desc') },
+  ]
+
+  const features = [
+    {
+      icon: ListChecks,
+      title: t('home.feature1Title'),
+      desc: t('home.feature1Desc'),
+      mockTitle: t('home.mockCueSheet'),
+      mock: <CueList t={t} />,
+    },
+    {
+      icon: Tv,
+      title: t('home.feature2Title'),
+      desc: t('home.feature2Desc'),
+      mockTitle: t('home.mockScreen'),
+      mock: <StageScreen t={t} compact />,
+    },
+    {
+      icon: MessageCircle,
+      title: t('home.feature3Title'),
+      desc: t('home.feature3Desc'),
+      mockTitle: t('home.mockCueQna'),
+      mock: <QnaBoard t={t} />,
+    },
+    {
+      icon: BarChart3,
+      title: t('home.feature4Title'),
+      desc: t('home.feature4Desc'),
+      mockTitle: t('home.mockCuePoll'),
+      mock: <PollBars t={t} />,
+    },
+    {
+      icon: Palette,
+      title: t('home.feature5Title'),
+      desc: t('home.feature5Desc'),
+      mockTitle: t('home.mockDesignTitle'),
+      mock: <DesignMock t={t} />,
+    },
+    {
+      icon: FileSpreadsheet,
+      title: t('home.feature6Title'),
+      desc: t('home.feature6Desc'),
+      mockTitle: t('home.mockReportTitle'),
+      mock: <ReportMock t={t} />,
+      mockRight: (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300">
+          <FileSpreadsheet className="w-3.5 h-3.5" />
+          Excel
+        </span>
+      ),
+    },
+  ]
+
+  const steps = [
+    { title: t('home.flow1Title'), desc: t('home.flow1Desc') },
+    { title: t('home.flow2Title'), desc: t('home.flow2Desc') },
+    { title: t('home.flow3Title'), desc: t('home.flow3Desc') },
+  ]
+
+  const primaryButton =
+    'bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white border-0 shadow-lg shadow-orange-500/20'
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-orange-100 selection:text-orange-900 dark:selection:bg-orange-900 dark:selection:text-orange-100 overflow-x-hidden">
       <SEO url={PAGE_META.home.path} description={PAGE_META.home.description} jsonLd={SERVICE_JSONLD} />
       <PublicHeader />
 
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-24 lg:pt-48 lg:pb-40 overflow-hidden">
-        {/* Rich Animated Background */}
-        <div className="absolute inset-0 -z-10 bg-slate-950">
-          {/* Vivid Gradient Orbs */}
-          <div className="absolute top-[-10%] left-[-10%] w-[800px] h-[800px] rounded-full bg-indigo-600/30 blur-[120px] animate-pulse" />
-          <div className="absolute bottom-[-10%] right-[-10%] w-[800px] h-[800px] rounded-full bg-rose-600/30 blur-[120px] animate-pulse delay-1000" />
-          <div 
-            className="absolute top-[40%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-violet-600/20 blur-[100px]"
-            style={{ transform: `translateY(${scrollY * 0.1}px)` }}
-          />
-          
-          {/* Visible Grid Pattern */}
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
-          
-          {/* Floating Particles */}
-          <div className="absolute inset-0 overflow-hidden">
-            {[...Array(20)].map((_, i) => (
-              <div 
-                key={i}
-                className="absolute rounded-full bg-white/20 animate-float"
-                style={{
-                  top: `${Math.random() * 100}%`,
-                  left: `${Math.random() * 100}%`,
-                  width: `${Math.random() * 4 + 2}px`,
-                  height: `${Math.random() * 4 + 2}px`,
-                  animationDuration: `${Math.random() * 10 + 10}s`,
-                  animationDelay: `${Math.random() * 5}s`
-                }}
-              />
-            ))}
-          </div>
-          </div>
+      {/* ① 첫 화면 */}
+      <section className="relative pt-28 pb-16 sm:pt-36 lg:pt-40 lg:pb-24 overflow-hidden">
+        <div className="absolute inset-0 -z-10 pointer-events-none">
+          <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-600/20 blur-[120px]" />
+          <div className="absolute top-[10%] right-[-15%] w-[600px] h-[600px] rounded-full bg-rose-600/15 blur-[120px]" />
+        </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-4xl mx-auto mb-12">
-            <ScrollReveal delay={0}>
-              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-8 leading-tight">
-                <span className="block text-foreground">{t('home.heroLine1')}</span>
-                <span className="bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 bg-clip-text text-transparent">
-                  {t('home.heroLine2')}
+          <div className="text-center max-w-3xl mx-auto">
+            <ScrollReveal>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight mb-6 break-keep">
+                <span className="block">{t('home.heroTitle1')}</span>
+                <span className="bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 bg-clip-text text-transparent">
+                  {t('home.heroTitle2')}
                 </span>
               </h1>
-            </ScrollReveal>
-            
-            <ScrollReveal delay={50}>
-              <OpenFreeNotice className="mb-8" />
-            </ScrollReveal>
-
-            <ScrollReveal delay={100}>
-              <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed">
-                {t('home.heroDescLine1')}
-                <br className="hidden sm:block" />
-                {t('home.heroDescLine2')}
+              <p className="text-base sm:text-lg text-muted-foreground leading-relaxed mb-8 break-keep">
+                {t('home.heroDesc1')}
+                <br className="hidden sm:block" />{' '}
+                {t('home.heroDesc2')}
               </p>
             </ScrollReveal>
 
-            {/* Integrated Search Box */}
-            <ScrollReveal delay={200}>
-              <div className="bg-white dark:bg-slate-800/50 backdrop-blur-md rounded-3xl p-4 shadow-2xl border border-slate-200 dark:border-slate-700 max-w-3xl mx-auto">
-                <Tabs defaultValue="all" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4 gap-2 mb-6 bg-transparent p-0">
-                    <TabsTrigger
-                      value="all"
-                      className="rounded-xl py-3 text-base font-medium text-slate-400 bg-white/5 hover:bg-white/10 hover:text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-orange-500/20 transition-all duration-300"
-                    >
-                      {t('home.tabAll')}
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="lecture"
-                      className="rounded-xl py-3 text-base font-medium text-slate-400 bg-white/5 hover:bg-white/10 hover:text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-orange-500/20 transition-all duration-300"
-                    >
-                      {t('home.tabLecture')}
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="instructor"
-                      className="rounded-xl py-3 text-base font-medium text-slate-400 bg-white/5 hover:bg-white/10 hover:text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-orange-500/20 transition-all duration-300"
-                    >
-                      {t('home.tabInstructor')}
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="agency"
-                      className="rounded-xl py-3 text-base font-medium text-slate-400 bg-white/5 hover:bg-white/10 hover:text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-orange-500/20 transition-all duration-300"
-                    >
-                      {t('home.tabAgency')}
-                    </TabsTrigger>
-                  </TabsList>
-                  <div className="relative flex items-center">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder={t('home.searchPlaceholder')}
-                      className="pl-12 pr-32 h-14 text-lg bg-transparent border-slate-200 dark:border-slate-700 focus-visible:ring-orange-500 rounded-xl"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    <Button
-                      className="absolute right-2 top-2 bottom-2 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white border-0 rounded-xl px-8 shadow-lg shadow-orange-500/20"
-                    >
-                      {t('home.searchButton')}
-                    </Button>
-                  </div>
-
-                  {/* Search Tags */}
-                  <div className="flex flex-wrap gap-2 mt-4 justify-center text-sm text-muted-foreground">
-                    <span>{t('home.recommendedSearch')}</span>
-                    <button className="hover:text-primary underline">{t('home.tagLeadership')}</button>
-                    <button className="hover:text-primary underline">{t('home.tagCS')}</button>
-                    <button className="hover:text-primary underline">{t('home.tagCorporateEvent')}</button>
-                    <button className="hover:text-primary underline">{t('home.tagMotivation')}</button>
-                  </div>
-                </Tabs>
-              </div>
-            </ScrollReveal>
-          </div>
-        </div>
-      </section>
-
-      {/* Value Proposition Section */}
-      <section className="py-32 relative bg-slate-900">
-        {/* Circuit Board / Connecting Lines Pattern */}
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
-          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="grid-pattern" width="80" height="80" patternUnits="userSpaceOnUse">
-                <path d="M80 0H0V80" fill="none" stroke="white" strokeWidth="0.5"/>
-                <circle cx="0" cy="0" r="1" fill="white"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid-pattern)"/>
-          </svg>
-        </div>
-        
-        {/* Colorful Glows with better positioning */}
-        <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center mb-20">
-            <ScrollReveal>
-              <h2 className="text-3xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-                {t('home.ecosystemTitle')}
-              </h2>
-            </ScrollReveal>
             <ScrollReveal delay={100}>
-              <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed font-light">
-                {t('home.ecosystemDesc')}
-              </p>
-            </ScrollReveal>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 lg:gap-10">
-            {/* For Lecture Hosts/Companies */}
-            <ScrollReveal delay={0} direction="up">
-              <Card className="border border-white/5 shadow-2xl bg-white/5 backdrop-blur-md relative overflow-hidden group hover:-translate-y-2 transition-all duration-500 h-full">
-                <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-blue-500 to-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="absolute -right-20 -top-20 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all duration-500" />
-                
-                <CardContent className="p-8 lg:p-10 relative z-10 flex flex-col h-full">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center mb-8 border border-blue-500/20 shadow-lg shadow-blue-500/10 group-hover:scale-110 transition-transform duration-500">
-                    <Building2 className="h-7 w-7" />
-                  </div>
-                  <h3 className="text-2xl font-bold mb-4 text-white">{t('home.role1Title')}</h3>
-                  <p className="text-slate-400 mb-8 text-sm leading-relaxed min-h-[3rem]">
-                    {t('home.role1Desc')}
-                  </p>
-                  <ul className="space-y-4 text-slate-300 mb-8 flex-grow">
-                    <li className="flex items-center gap-3 text-sm">
-                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
-                      <span>{t('home.role1Item1')}</span>
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
-                      <span>{t('home.role1Item2')}</span>
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
-                      <span>{t('home.role1Item3')}</span>
-                    </li>
-                  </ul>
-                  <Link to="/lectures" className="inline-flex items-center text-blue-400 font-bold text-sm hover:text-blue-300 transition-colors group/link mt-auto">
-                    {t('home.role1Cta')}
-                    <ArrowRight className="ml-2 h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
+              <div
+                id="join"
+                className="scroll-mt-24 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-xl mx-auto"
+              >
+                <Button asChild size="lg" className={`h-12 px-6 text-base font-bold ${primaryButton}`}>
+                  <Link to={createSessionTo}>
+                    {t('home.createSession')}
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
-                </CardContent>
-              </Card>
-            </ScrollReveal>
-
-            {/* For Instructors */}
-            <ScrollReveal delay={200} direction="up">
-              <Card className="border border-white/5 shadow-2xl bg-white/5 backdrop-blur-md relative overflow-hidden group hover:-translate-y-2 transition-all duration-500 h-full">
-                <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-orange-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="absolute -right-20 -top-20 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl group-hover:bg-orange-500/20 transition-all duration-500" />
-                
-                <CardContent className="p-8 lg:p-10 relative z-10 flex flex-col h-full">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500/20 to-pink-500/20 text-orange-400 flex items-center justify-center mb-8 border border-orange-500/20 shadow-lg shadow-orange-500/10 group-hover:scale-110 transition-transform duration-500">
-                    <GraduationCap className="h-7 w-7" />
-                  </div>
-                  <h3 className="text-2xl font-bold mb-4 text-white">{t('home.role2Title')}</h3>
-                  <p className="text-slate-400 mb-8 text-sm leading-relaxed min-h-[3rem]">
-                    {t('home.role2Desc')}
-                  </p>
-                  <ul className="space-y-4 text-slate-300 mb-8 flex-grow">
-                    <li className="flex items-center gap-3 text-sm">
-                      <div className="h-1.5 w-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"></div>
-                      <span>{t('home.role2Item1')}</span>
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <div className="h-1.5 w-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"></div>
-                      <span>{t('home.role2Item2')}</span>
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <div className="h-1.5 w-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"></div>
-                      <span>{t('home.role2Item3')}</span>
-                    </li>
-                  </ul>
-                  <Link to="/signup?type=instructor" className="inline-flex items-center text-orange-400 font-bold text-sm hover:text-orange-300 transition-colors group/link mt-auto">
-                    {t('home.role2Cta')}
-                    <ArrowRight className="ml-2 h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
-                  </Link>
-                </CardContent>
-              </Card>
-            </ScrollReveal>
-
-            {/* For Agencies */}
-            <ScrollReveal delay={400} direction="up">
-              <Card className="border border-white/5 shadow-2xl bg-white/5 backdrop-blur-md relative overflow-hidden group hover:-translate-y-2 transition-all duration-500 h-full">
-                <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-purple-500 to-violet-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="absolute -right-20 -top-20 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl group-hover:bg-purple-500/20 transition-all duration-500" />
-                
-                <CardContent className="p-8 lg:p-10 relative z-10 flex flex-col h-full">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-violet-500/20 text-purple-400 flex items-center justify-center mb-8 border border-purple-500/20 shadow-lg shadow-purple-500/10 group-hover:scale-110 transition-transform duration-500">
-                    <Briefcase className="h-7 w-7" />
-                  </div>
-                  <h3 className="text-2xl font-bold mb-4 text-white">{t('home.role3Title')}</h3>
-                  <p className="text-slate-400 mb-8 text-sm leading-relaxed min-h-[3rem]">
-                    {t('home.role3Desc')}
-                  </p>
-                  <ul className="space-y-4 text-slate-300 mb-8 flex-grow">
-                    <li className="flex items-center gap-3 text-sm">
-                      <div className="h-1.5 w-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]"></div>
-                      <span>{t('home.role3Item1')}</span>
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <div className="h-1.5 w-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]"></div>
-                      <span>{t('home.role3Item2')}</span>
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <div className="h-1.5 w-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]"></div>
-                      <span>{t('home.role3Item3')}</span>
-                    </li>
-                  </ul>
-                  <Link to="/signup?type=agency" className="inline-flex items-center text-purple-400 font-bold text-sm hover:text-purple-300 transition-colors group/link mt-auto">
-                    {t('home.role3Cta')}
-                    <ArrowRight className="ml-2 h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
-                  </Link>
-                </CardContent>
-              </Card>
-            </ScrollReveal>
-          </div>
-        </div>
-        
-        {/* Transition to next section */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-950 to-transparent pointer-events-none"></div>
-      </section>
-
-      {/* Public Features Section (New) */}
-      <section className="py-32 relative bg-slate-950 overflow-hidden">
-        {/* Background Glows */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[500px] bg-gradient-to-r from-green-500/10 to-teal-500/10 blur-[120px] pointer-events-none rounded-full" />
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="flex flex-col lg:flex-row items-center gap-16">
-            <div className="lg:w-1/2">
-              <ScrollReveal direction="right">
-                <div className="inline-flex items-center px-3 py-1 rounded-full border border-green-500/30 bg-green-500/10 text-green-400 text-sm font-medium mb-6">
-                  <Users className="w-4 h-4 mr-2" />
-                  {t('home.publicBadge')}
-                </div>
-                <h2 className="text-3xl md:text-5xl font-bold mb-6 text-white leading-tight">
-                  {t('home.publicTitleLine1')}<br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-teal-400">
-                    {t('home.publicTitleLine2')}<br />{t('home.publicTitleLine3')}
-                  </span>
-                </h2>
-                <p className="text-slate-400 text-lg mb-8 leading-relaxed">
-                  {t('home.publicDescLine1')}<br />
-                  {t('home.publicDescLine2')}
-                </p>
-                
-                <div className="grid sm:grid-cols-2 gap-4 mb-8">
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
-                    <div className="w-10 h-10 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center mb-3">
-                      <MessageSquare className="w-5 h-5" />
-                    </div>
-                    <h4 className="text-white font-bold mb-1">{t('home.publicFeature1Title')}</h4>
-                    <p className="text-sm text-slate-400">{t('home.publicFeature1Desc')}</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
-                    <div className="w-10 h-10 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center mb-3">
-                      <BarChart3 className="w-5 h-5" />
-                    </div>
-                    <h4 className="text-white font-bold mb-1">{t('home.publicFeature2Title')}</h4>
-                    <p className="text-sm text-slate-400">{t('home.publicFeature2Desc')}</p>
-                  </div>
-                </div>
-
-                <Link to="/signup">
-                  <Button size="lg" className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-8 h-14 text-lg shadow-lg shadow-green-900/20">
-                    {t('home.publicCta')}
-                    <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <form onSubmit={handleJoin} className="flex flex-1 items-center gap-2">
+                  <Input
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(normalizeJoinCode(e.target.value))}
+                    placeholder={t('home.joinPlaceholder')}
+                    aria-label={t('home.joinLabel')}
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    maxLength={JOIN_CODE_LENGTH}
+                    className="h-12 flex-1 min-w-0 text-base font-mono tracking-widest placeholder:font-sans placeholder:tracking-normal placeholder:text-sm"
+                  />
+                  <Button type="submit" variant="outline" size="lg" disabled={!joinReady} className="h-12 px-5 text-base shrink-0">
+                    <LogIn className="mr-2 h-4 w-4" />
+                    {t('home.joinButton')}
                   </Button>
-                </Link>
-              </ScrollReveal>
-            </div>
-
-            <div className="lg:w-1/2 relative">
-              {/* Phone Mockup or Feature Graphics */}
-              <div className="relative z-10 grid gap-6">
-                <ScrollReveal delay={200} direction="left">
-                  <Card className="bg-slate-900/80 backdrop-blur-xl border-slate-800 p-6 rotate-[-2deg] hover:rotate-0 transition-transform duration-500 shadow-2xl group">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-2xl">🎓</div>
-                      <div>
-                        <div className="text-white font-bold">{t('home.demoCard1Title')}</div>
-                        <div className="text-xs text-slate-500">{t('home.demoCard1Subtitle')}</div>
-                      </div>
-                      <div className="ml-auto px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded animate-pulse">LIVE</div>
-                    </div>
-                    {/* Animated Progress Bar */}
-                    <AnimatedProgressBar percentage={82} />
-                  </Card>
-                </ScrollReveal>
-
-                <ScrollReveal delay={400} direction="left">
-                  <Card className="bg-slate-900/80 backdrop-blur-xl border-slate-800 p-6 translate-x-8 rotate-[2deg] hover:rotate-0 transition-transform duration-500 shadow-2xl group">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-2xl">🏢</div>
-                      <div>
-                        <div className="text-white font-bold">{t('home.demoCard2Title')}</div>
-                        <div className="text-xs text-slate-500">{t('home.demoCard2Subtitle')}</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <span className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-400">{t('home.demoTagLunch')}</span>
-                      <span className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-400">{t('home.demoTagFlex')}</span>
-                    </div>
-                  </Card>
-                </ScrollReveal>
+                </form>
               </div>
-              
-              {/* Decorative Circle behind */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] border border-white/5 rounded-full animate-[spin_10s_linear_infinite]" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] border border-dashed border-white/10 rounded-full animate-[spin_15s_linear_infinite_reverse]" />
-            </div>
+              <p className="mt-3 text-xs text-muted-foreground">{t('home.joinHint')}</p>
+              <OpenFreeNotice className="mt-8" />
+            </ScrollReveal>
           </div>
-        </div>
-      </section>
 
-      {/* Lecture Hall Image Section */}
-      <section className="relative py-40 bg-slate-950 overflow-hidden group">
-        <div className="absolute inset-0 transition-transform duration-1000 group-hover:scale-105">
-          <div 
-            className="absolute inset-0 transition-transform duration-1000 ease-out"
-            style={{ transform: `scale(1.1) translateY(${(scrollY - 2000) * 0.05}px)` }} 
-          >
-            <img 
-              src="https://images.unsplash.com/photo-1544531586-fde5298cdd40?q=80&w=2070&auto=format&fit=crop" 
-              alt="Conference Hall" 
-              className="w-full h-full object-cover opacity-40"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-slate-950/80" />
-          </div>
-        </div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <ScrollReveal>
-            <div className="inline-block mb-4 px-3 py-1 rounded-full border border-white/20 bg-white/5 backdrop-blur-sm text-xs text-slate-300 font-medium tracking-wider uppercase">{t('home.premiumSpace')}</div>
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-8 tracking-tight leading-tight">
-              {t('home.hallTitleLine1')}<br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-200 to-amber-100">{t('home.hallTitleLine2')}</span>
-            </h2>
-            <p className="text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto font-light leading-relaxed">
-              {t('home.hallDesc')}
-            </p>
+          <ScrollReveal delay={200} className="mt-12 lg:mt-16 max-w-5xl mx-auto">
+            <ConsoleMock t={t} />
           </ScrollReveal>
         </div>
       </section>
 
-      {/* Category Showcase */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8 relative bg-slate-950">
-        {/* Hexagon Pattern Background */}
-        <div className="absolute inset-0 opacity-[0.03]" 
-             style={{ 
-               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M54.627 0l.83.828-1.415 1.415-.828-.828-.828.828-1.415-1.415.828-.828-.828-.828 1.415-1.415.828-.828-.828-.828 1.415 1.415-.828.828zM22.485 0l.83.828-1.415 1.415-.828-.828-.828.828-1.415-1.415.828-.828-.828-.828 1.415-1.415.828-.828-.828-.828 1.415 1.415-.828.828zM0 22.485l.828.83-1.415 1.415-.828-.828-.828.828L-2.83 22.485l.828-.828-.828-.828 1.415-1.415.828.828.828-.828 1.415 1.415-.828.828zM0 54.627l.828.83-1.415 1.415-.828-.828-.828.828L-2.83 54.627l.828-.828-.828-.828 1.415-1.415.828.828.828-.828 1.415 1.415-.828.828zM54.627 60l.83-.828-1.415-1.415-.828.828-.828-.828-1.415 1.415.828.828-.828.828 1.415-1.415.828-.828.828.828 1.415-1.415-.828-.828zM22.485 60l.83-.828-1.415-1.415-.828.828-.828-.828-1.415 1.415.828.828-.828.828 1.415-1.415.828-.828.828.828 1.415-1.415-.828-.828zM32 11.849L32 0l-2-2v13.849l-10 5.774-10-5.774V0l-2-2v13.849L0 17.698v24.604L10 48.075V62l2 2V46.925l10-5.774 10 5.774V62l2 2V46.925l10 5.774V24.604l-10-5.774zM12 44.604V25.774l8-4.619 8 4.619v18.83L20 49.222l-8-4.619zm16-26.52l-8-4.619-8 4.619V14.17l8-4.619 8 4.619v3.914zM48 44.604V25.774l8-4.619 8 4.619v18.83L56 49.222l-8-4.619zm16-26.52l-8-4.619-8 4.619V14.17l8-4.619 8 4.619v3.914z' fill='%239C92AC' fill-opacity='1' fill-rule='evenodd'/%3E%3C/svg%3E")`,
-               backgroundSize: '60px 60px'
-             }}
-        ></div>
-
-        <div className="max-w-7xl mx-auto relative">
+      {/* ② 누가 쓰나 */}
+      <section className="py-16 lg:py-24 border-t bg-muted/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <ScrollReveal>
-            <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
-              <div>
-                <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">{t('home.popularTopicsTitle')}</h2>
-                <p className="text-muted-foreground text-lg">
-                  {t('home.popularTopicsDesc')}
-                </p>
-              </div>
-              <Button variant="outline" className="group border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">
-                {t('home.viewAll')} <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-10 lg:mb-14 break-keep">{t('home.whoTitle')}</h2>
           </ScrollReveal>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {[
-              { key: 'home.category1', slug: '리더십/코칭' },
-              { key: 'home.category2', slug: '디지털 전환' },
-              { key: 'home.category3', slug: '직무 역량' },
-              { key: 'home.category4', slug: '조직 문화' },
-              { key: 'home.category5', slug: '인문/교양' },
-              { key: 'home.category6', slug: '법정 의무' },
-            ].map((category, i) => (
-              <ScrollReveal key={category.key} delay={i * 100} direction="up">
-                <Link
-                  to={`/lectures?category=${category.slug}`}
-                  className="group flex flex-col items-center justify-center p-8 rounded-2xl bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full"
-                >
-                  <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-700/50 mb-4 group-hover:scale-110 group-hover:bg-orange-50 dark:group-hover:bg-orange-900/20 transition-all duration-300 flex items-center justify-center">
-                    <Star className="h-6 w-6 text-slate-400 dark:text-slate-500 group-hover:text-orange-500 transition-colors" />
+          <div className="grid md:grid-cols-3 gap-5 lg:gap-8">
+            {audiences.map((a, i) => (
+              <ScrollReveal key={a.title} delay={i * 100} className="h-full">
+                <div className="h-full rounded-2xl border bg-card p-6 lg:p-8">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-pink-500/20 text-orange-500 flex items-center justify-center mb-5">
+                    <a.icon className="h-6 w-6" />
                   </div>
-                  <span className="font-semibold text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{t(category.key)}</span>
-                </Link>
+                  <h3 className="text-xl font-bold mb-2">{a.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed break-keep">{a.desc}</p>
+                </div>
               </ScrollReveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto">
+      {/* ③ 무엇을 하나 */}
+      <section id="features" className="scroll-mt-16 py-16 lg:py-24 border-t">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <ScrollReveal>
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 text-white border-0 overflow-hidden relative">
-              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=2071&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay"></div>
-              <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-pink-500/20"></div>
-              
-              <CardContent className="p-12 md:p-16 text-center relative z-10">
-                <h2 className="text-3xl md:text-4xl font-bold mb-6">
-                  {t('home.finalCtaTitle')}
-                </h2>
-                <p className="text-lg text-gray-300 mb-10 max-w-2xl mx-auto">
-                  {t('home.finalCtaDescLine1')}
-                  <br />
-                  {t('home.finalCtaDescLine2')}
-                </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                  <Link to="/signup">
-                    <Button size="lg" className="bg-white text-gray-900 hover:bg-gray-100 border-0 text-lg px-8 h-14 font-bold">
-                      {t('home.finalCtaPrimary')}
-                    </Button>
-                  </Link>
-                  <Link to="/contact">
-                    <Button size="lg" variant="outline" className="text-white border-white/20 hover:bg-white/10 text-lg px-8 h-14">
-                      {t('home.finalCtaSecondary')}
-                    </Button>
-                  </Link>
+            <div className="text-center max-w-2xl mx-auto mb-12 lg:mb-20">
+              <h2 className="text-2xl sm:text-3xl font-bold mb-3 break-keep">{t('home.featuresTitle')}</h2>
+              <p className="text-muted-foreground break-keep">{t('home.featuresDesc')}</p>
+            </div>
+          </ScrollReveal>
+
+          <div className="space-y-14 lg:space-y-24">
+            {features.map((f, i) => (
+              <ScrollReveal key={f.title}>
+                <div className="grid lg:grid-cols-2 gap-6 lg:gap-16 items-center">
+                  <div className={i % 2 === 1 ? 'lg:order-2' : ''}>
+                    <div className="w-11 h-11 rounded-xl bg-indigo-500/15 text-indigo-400 flex items-center justify-center mb-4">
+                      <f.icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-bold mb-3 break-keep">{f.title}</h3>
+                    <p className="text-muted-foreground leading-relaxed break-keep">{f.desc}</p>
+                  </div>
+                  <MockFrame title={f.mockTitle} icon={f.icon} right={f.mockRight} className="w-full max-w-xl mx-auto lg:max-w-none">
+                    {f.mock}
+                  </MockFrame>
                 </div>
-              </CardContent>
-            </Card>
+              </ScrollReveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ④ 하루의 흐름 */}
+      <section id="flow" className="scroll-mt-16 py-16 lg:py-24 border-t bg-muted/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <ScrollReveal>
+            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-10 lg:mb-14 break-keep">{t('home.flowTitle')}</h2>
+          </ScrollReveal>
+          <ol className="grid md:grid-cols-3 gap-5 lg:gap-8">
+            {steps.map((s, i) => (
+              <li key={s.title}>
+                <ScrollReveal delay={i * 100} className="h-full">
+                  <div className="h-full rounded-2xl border bg-card p-6 lg:p-8">
+                    <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 text-white text-sm font-bold mb-4">
+                      {i + 1}
+                    </span>
+                    <h3 className="text-xl font-bold mb-2">{s.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed break-keep">{s.desc}</p>
+                  </div>
+                </ScrollReveal>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* ⑤ 마지막 CTA */}
+      <section className="py-16 lg:py-24 border-t">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <ScrollReveal>
+            <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-800 text-white text-center px-6 py-12 md:p-16">
+              <div className="absolute inset-0 bg-gradient-to-r from-orange-500/15 to-pink-500/15 pointer-events-none" />
+              <div className="relative">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 break-keep">{t('home.finalCtaTitle')}</h2>
+                <p className="text-slate-300 mb-8 break-keep">{t('home.finalCtaDesc')}</p>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
+                  <Button asChild size="lg" className="h-12 px-8 text-base font-bold bg-white text-slate-900 hover:bg-slate-100 border-0">
+                    <Link to={createSessionTo}>{t('home.createSession')}</Link>
+                  </Button>
+                  {!user && (
+                    <Button asChild size="lg" variant="outline" className="h-12 px-8 text-base bg-transparent text-white border-white/30 hover:bg-white/10 hover:text-white">
+                      <Link to="/login">{t('auth.login')}</Link>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
           </ScrollReveal>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t py-12 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-900">
+      {/* 푸터 — 실제 있는 라우트만 */}
+      <footer className="border-t py-12 px-4 sm:px-6 lg:px-8 bg-muted/30">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-            <div className="col-span-2 md:col-span-1">
-              <div className="flex items-center gap-2 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+            <div className="col-span-2">
+              <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-white" />
+                  <Zap className="h-5 w-5 text-white" />
                 </div>
                 <span className="text-xl font-bold">LivePulse</span>
               </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t('footer.taglineLine1')}
-                <br />
-                {t('footer.taglineLine2')}
-              </p>
-              <div className="flex gap-4">
-                {/* Social Icons Placeholder */}
-              </div>
+              <p className="text-sm text-muted-foreground break-keep">{t('home.footerTagline')}</p>
             </div>
-            
+
             <div>
-              <h4 className="font-bold mb-4">{t('footer.service')}</h4>
+              <h4 className="font-bold mb-4">{t('home.footerStart')}</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/lectures" className="hover:text-primary">{t('footer.findLecture')}</Link></li>
-                <li><Link to="/instructors" className="hover:text-primary">{t('footer.findInstructor')}</Link></li>
-                <li><Link to="/agencies" className="hover:text-primary">{t('footer.findAgency')}</Link></li>
+                <li><Link to="/#features" className="hover:text-primary">{t('nav.features')}</Link></li>
+                <li><Link to="/#flow" className="hover:text-primary">{t('nav.flow')}</Link></li>
+                <li><Link to="/login" className="hover:text-primary">{t('auth.login')}</Link></li>
+                <li><Link to="/signup" className="hover:text-primary">{t('auth.signup')}</Link></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-bold mb-4">{t('footer.customerSupport')}</h4>
+              <h4 className="font-bold mb-4">{t('home.footerLegal')}</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/notice" className="hover:text-primary">{t('footer.notice')}</Link></li>
-                <li><Link to="/faq" className="hover:text-primary">{t('footer.faqLink')}</Link></li>
-                <li><Link to="/inquiry" className="hover:text-primary">{t('footer.inquiry')}</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-bold mb-4">{t('footer.companyInfo')}</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/about" className="hover:text-primary">{t('footer.aboutLivepulse')}</Link></li>
-                <li><Link to="/terms" className="hover:text-primary">{t('footer.terms')}</Link></li>
-                <li><Link to="/privacy" className="hover:text-primary">{t('footer.privacy')}</Link></li>
+                <li><Link to="/legal/terms" className="hover:text-primary">{t('footer.terms')}</Link></li>
+                <li><Link to="/legal/privacy" className="hover:text-primary">{t('footer.privacy')}</Link></li>
+                <li><Link to="/legal/refund" className="hover:text-primary">{t('home.footerRefund')}</Link></li>
               </ul>
             </div>
           </div>
-          
-          <div className="border-t border-slate-200 dark:border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-xs text-muted-foreground">
-              {t('footer.copyright')}
-            </p>
-            <div className="flex gap-2 items-center text-xs text-muted-foreground">
-               <ShieldCheck className="h-4 w-4" />
-               <span>{t('footer.escrowNotice')}</span>
-            </div>
+
+          <div className="border-t pt-8">
+            <p className="text-xs text-muted-foreground">{t('footer.copyright')}</p>
           </div>
         </div>
       </footer>

@@ -30,7 +30,7 @@ export default function SEO({
   jsonLd,
 }) {
   const location = useLocation()
-  const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} - 강연 매칭 & 실시간 청중 소통 플랫폼`
+  const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} - 행사 당일 진행 콘솔 | 큐시트·송출 화면·실시간 Q&A·설문`
   const canonicalUrl = toAbsolute(url || location.pathname)
   const imageUrl = toAbsolute(image)
   const keywordsContent = keywords || DEFAULT_KEYWORDS.join(', ')
