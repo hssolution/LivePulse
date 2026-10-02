@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { COMPANY } from '@/config/company'
+import { useTranslation } from '@/context/LanguageContext'
 
 /**
  * 공개 페이지용 푸터
@@ -7,22 +8,23 @@ import { COMPANY } from '@/config/company'
  * 약관·개인정보처리방침·환불정책 링크 포함
  */
 export function PublicFooter() {
+  const { t } = useTranslation()
   return (
     <footer className="border-t bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-sm">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* 상단: 약관 링크 */}
         <div className="flex flex-wrap gap-x-6 gap-y-2 mb-6 font-medium">
           <Link to="/legal/terms" className="hover:text-slate-900 dark:hover:text-white">
-            이용약관
+            {t('footer.terms')}
           </Link>
           <Link to="/legal/privacy" className="hover:text-slate-900 dark:hover:text-white font-semibold">
-            개인정보처리방침
+            {t('footer.privacy')}
           </Link>
           <Link to="/legal/refund" className="hover:text-slate-900 dark:hover:text-white">
-            환불정책
+            {t('footer.refund')}
           </Link>
           <a href={`mailto:${COMPANY.email}`} className="hover:text-slate-900 dark:hover:text-white">
-            고객센터
+            {t('footer.customerSupport')}
           </a>
         </div>
 

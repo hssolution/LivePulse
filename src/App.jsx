@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { useEffect } from 'react'
 import { trackMetaPageView, isMetaPublicPath } from './lib/metaPixel'
 import { AuthProvider } from './context/AuthContext'
-import { LanguageProvider } from './context/LanguageContext'
+import { LanguageProvider, useTranslation } from './context/LanguageContext'
 import { PublicThemeProvider } from './context/PublicThemeContext'
 import { AdminThemeProvider } from './context/AdminThemeContext'
 import { PartnerProvider } from './context/PartnerContext'
@@ -92,11 +92,12 @@ const InstructorProfile = lazy(() => import('./pages/InstructorProfile'))
  * 페이지 로딩 중 로딩 UI를 표시합니다.
  */
 function SuspenseWrapper({ children }) {
+  const { t } = useTranslation()
   return (
     <Suspense fallback={
-      <InitialLoading 
+      <InitialLoading
         title="LivePulse"
-        messages={['페이지를 불러오고 있습니다...', '잠시만 기다려주세요...']}
+        messages={[t('common.loadingPage'), t('common.pleaseWait')]}
         speed={2}
       />
     }>
@@ -109,11 +110,12 @@ function SuspenseWrapper({ children }) {
  * 관리자 페이지 로딩용 래퍼
  */
 function AdminSuspenseWrapper({ children }) {
+  const { t } = useTranslation()
   return (
     <Suspense fallback={
-      <InitialLoading 
+      <InitialLoading
         title="Administrator"
-        messages={['관리자 화면을 불러오고 있습니다...']}
+        messages={[t('common.loadingAdmin')]}
         speed={3}
       />
     }>
@@ -126,11 +128,12 @@ function AdminSuspenseWrapper({ children }) {
  * 파트너 페이지 로딩용 래퍼
  */
 function PartnerSuspenseWrapper({ children }) {
+  const { t } = useTranslation()
   return (
     <Suspense fallback={
-      <InitialLoading 
+      <InitialLoading
         title="Partner Center"
-        messages={['파트너 센터를 불러오고 있습니다...']}
+        messages={[t('common.loadingPartner')]}
         speed={3}
       />
     }>

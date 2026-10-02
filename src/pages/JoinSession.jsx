@@ -486,7 +486,7 @@ export default function JoinSession() {
             className="w-full text-lg bg-slate-900 hover:bg-slate-800 text-white"
             onClick={() => navigate(`/live/${code}`)}
           >
-            라이브 입장
+            {t('join.enterLive')}
             <ArrowRight className="h-5 w-5 ml-2" />
           </Button>
 
