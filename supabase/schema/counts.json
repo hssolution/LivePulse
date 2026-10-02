@@ -2,21 +2,21 @@
   "dumpedAt": "2026-10-02",
   "ref": "pfrdyviyzilhjarnmcec",
   "prod": {
-    "tables": 37,
-    "functions": 139,
-    "triggers_public": 30,
+    "tables": 39,
+    "functions": 145,
+    "triggers_public": 32,
     "triggers_other_schema": 1,
-    "policies_public": 119,
+    "policies_public": 123,
     "policies_storage": 6,
-    "indexes": 135,
-    "constraints": 130,
+    "indexes": 142,
+    "constraints": 144,
     "sequences": 1,
     "views": 0,
     "types": 0,
-    "rls_tables": 37,
+    "rls_tables": 39,
     "buckets": 2,
     "realtime_tables": 4,
     "event_triggers_public_fn": 0
   },
-  "dumpedFunctions": 139
+  "dumpedFunctions": 145
 }

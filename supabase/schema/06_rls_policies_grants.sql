@@ -9,6 +9,7 @@ alter table public.app_config enable row level security;
 alter table public.faqs enable row level security;
 alter table public.inquiries enable row level security;
 alter table public.inquiry_replies enable row level security;
+alter table public.instructor_profiles enable row level security;
 alter table public.language_categories enable row level security;
 alter table public.language_keys enable row level security;
 alter table public.languages enable row level security;
@@ -32,6 +33,7 @@ alter table public.questions enable row level security;
 alter table public.session_assets enable row level security;
 alter table public.session_cues enable row level security;
 alter table public.session_designs enable row level security;
+alter table public.session_feedback enable row level security;
 alter table public.session_members enable row level security;
 alter table public.session_partners enable row level security;
 alter table public.session_presenters enable row level security;
@@ -112,6 +114,23 @@ create policy inquiry_replies_select on public.inquiry_replies as PERMISSIVE for
           WHERE ((pm.user_id = auth.uid()) AND (pm.status = 'accepted'::text)))) OR (inquiries.partner_id IN ( SELECT partners.id
            FROM partners
           WHERE (partners.profile_id = auth.uid())))))) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.user_role = 'admin'::text))))));
+create policy instructor_profiles_insert on public.instructor_profiles as PERMISSIVE for INSERT to authenticated
+  with check ((((user_id = auth.uid()) OR ((user_id IS NULL) AND (created_by = auth.uid()))) AND ((partner_id IS NULL) OR (partner_id IN ( SELECT partners.id
+   FROM partners
+  WHERE (partners.profile_id = auth.uid()))))));
+create policy instructor_profiles_select on public.instructor_profiles as PERMISSIVE for SELECT to anon, authenticated
+  using ((is_public OR (user_id = auth.uid()) OR (created_by = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.user_role = 'admin'::text))))));
+create policy instructor_profiles_update on public.instructor_profiles as PERMISSIVE for UPDATE to authenticated
+  using (((user_id = auth.uid()) OR ((user_id IS NULL) AND (created_by = auth.uid())) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.user_role = 'admin'::text))))))
+  with check (((((user_id = auth.uid()) OR ((user_id IS NULL) AND (created_by = auth.uid()))) AND ((partner_id IS NULL) OR (partner_id IN ( SELECT partners.id
+   FROM partners
+  WHERE (partners.profile_id = auth.uid()))))) OR (EXISTS ( SELECT 1
    FROM profiles
   WHERE ((profiles.id = auth.uid()) AND (profiles.user_role = 'admin'::text))))));
 create policy "Categories are viewable by everyone" on public.language_categories as PERMISSIVE for SELECT
@@ -481,6 +500,8 @@ create policy "Session managers can manage cues" on public.session_cues as PERMI
 create policy "managers manage designs" on public.session_designs as PERMISSIVE for ALL
   using (sp_can_control_session(session_id))
   with check (sp_can_control_session(session_id));
+create policy session_feedback_select_manager on public.session_feedback as PERMISSIVE for SELECT to authenticated
+  using (fn_can_manage_session(session_id));
 create policy "Members can view their own membership" on public.session_members as PERMISSIVE for SELECT to authenticated
   using ((user_id = auth.uid()));
 create policy "Session owners can manage members" on public.session_members as PERMISSIVE for ALL to authenticated
@@ -641,6 +662,10 @@ revoke all on table public.inquiry_replies from public, anon, authenticated, ser
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.inquiry_replies to anon;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.inquiry_replies to authenticated;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.inquiry_replies to service_role;
+revoke all on table public.instructor_profiles from public, anon, authenticated, service_role;
+grant select on table public.instructor_profiles to anon;
+grant insert, select, update on table public.instructor_profiles to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on table public.instructor_profiles to service_role;
 revoke all on table public.language_categories from public, anon, authenticated, service_role;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.language_categories to anon;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.language_categories to authenticated;
@@ -739,6 +764,9 @@ revoke all on table public.session_designs from public, anon, authenticated, ser
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_designs to anon;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_designs to authenticated;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_designs to service_role;
+revoke all on table public.session_feedback from public, anon, authenticated, service_role;
+grant select on table public.session_feedback to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_feedback to service_role;
 revoke all on table public.session_members from public, anon, authenticated, service_role;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_members to anon;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_members to authenticated;
@@ -829,6 +857,11 @@ grant execute on function public.decrement_participant_count(session_id uuid) to
 grant execute on function public.decrement_participant_count(session_id uuid) to authenticated;
 grant execute on function public.decrement_participant_count(session_id uuid) to public;
 grant execute on function public.decrement_participant_count(session_id uuid) to service_role;
+revoke all on function public.fn_can_manage_session(p_session_id uuid) from public, anon, authenticated, service_role;
+grant execute on function public.fn_can_manage_session(p_session_id uuid) to authenticated;
+grant execute on function public.fn_can_manage_session(p_session_id uuid) to service_role;
+revoke all on function public.fn_session_presenter_link_profile() from public, anon, authenticated, service_role;
+grant execute on function public.fn_session_presenter_link_profile() to service_role;
 revoke all on function public.generate_invite_token() from public, anon, authenticated, service_role;
 grant execute on function public.generate_invite_token() to anon;
 grant execute on function public.generate_invite_token() to authenticated;
@@ -1092,6 +1125,10 @@ grant execute on function public.sp_init_q(p_user_id uuid, p_language_code text)
 grant execute on function public.sp_init_q(p_user_id uuid, p_language_code text) to authenticated;
 grant execute on function public.sp_init_q(p_user_id uuid, p_language_code text) to public;
 grant execute on function public.sp_init_q(p_user_id uuid, p_language_code text) to service_role;
+revoke all on function public.sp_instructor_profile_q(p_profile_id uuid) from public, anon, authenticated, service_role;
+grant execute on function public.sp_instructor_profile_q(p_profile_id uuid) to anon;
+grant execute on function public.sp_instructor_profile_q(p_profile_id uuid) to authenticated;
+grant execute on function public.sp_instructor_profile_q(p_profile_id uuid) to service_role;
 revoke all on function public.sp_join_session_anon_s(p_session_id uuid, p_name text, p_email text, p_phone text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_join_session_anon_s(p_session_id uuid, p_name text, p_email text, p_phone text) to anon;
 grant execute on function public.sp_join_session_anon_s(p_session_id uuid, p_name text, p_email text, p_phone text) to authenticated;
@@ -1122,6 +1159,10 @@ grant execute on function public.sp_live_design_q(p_code text) to anon;
 grant execute on function public.sp_live_design_q(p_code text) to authenticated;
 grant execute on function public.sp_live_design_q(p_code text) to public;
 grant execute on function public.sp_live_design_q(p_code text) to service_role;
+revoke all on function public.sp_live_feedback_s(p_code text, p_key text, p_rating integer, p_comment text) from public, anon, authenticated, service_role;
+grant execute on function public.sp_live_feedback_s(p_code text, p_key text, p_rating integer, p_comment text) to anon;
+grant execute on function public.sp_live_feedback_s(p_code text, p_key text, p_rating integer, p_comment text) to authenticated;
+grant execute on function public.sp_live_feedback_s(p_code text, p_key text, p_rating integer, p_comment text) to service_role;
 revoke all on function public.sp_live_qna_q(p_code text, p_token text, p_limit integer) from public, anon, authenticated, service_role;
 grant execute on function public.sp_live_qna_q(p_code text, p_token text, p_limit integer) to anon;
 grant execute on function public.sp_live_qna_q(p_code text, p_token text, p_limit integer) to authenticated;
@@ -1375,11 +1416,17 @@ grant execute on function public.sp_partner_session_duplicate_s(p_session_id uui
 grant execute on function public.sp_partner_session_duplicate_s(p_session_id uuid) to authenticated;
 grant execute on function public.sp_partner_session_duplicate_s(p_session_id uuid) to public;
 grant execute on function public.sp_partner_session_duplicate_s(p_session_id uuid) to service_role;
+revoke all on function public.sp_partner_session_feedback_q(p_session_id uuid) from public, anon, authenticated, service_role;
+grant execute on function public.sp_partner_session_feedback_q(p_session_id uuid) to authenticated;
+grant execute on function public.sp_partner_session_feedback_q(p_session_id uuid) to service_role;
 revoke all on function public.sp_partner_session_status_s(p_session_id uuid, p_status text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_partner_session_status_s(p_session_id uuid, p_status text) to anon;
 grant execute on function public.sp_partner_session_status_s(p_session_id uuid, p_status text) to authenticated;
 grant execute on function public.sp_partner_session_status_s(p_session_id uuid, p_status text) to public;
 grant execute on function public.sp_partner_session_status_s(p_session_id uuid, p_status text) to service_role;
+revoke all on function public.sp_partner_session_survey_s(p_session_id uuid, p_enabled boolean) from public, anon, authenticated, service_role;
+grant execute on function public.sp_partner_session_survey_s(p_session_id uuid, p_enabled boolean) to authenticated;
+grant execute on function public.sp_partner_session_survey_s(p_session_id uuid, p_enabled boolean) to service_role;
 revoke all on function public.sp_partner_sessions_q(p_partner_id uuid, p_status text, p_search text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_partner_sessions_q(p_partner_id uuid, p_status text, p_search text) to anon;
 grant execute on function public.sp_partner_sessions_q(p_partner_id uuid, p_status text, p_search text) to authenticated;

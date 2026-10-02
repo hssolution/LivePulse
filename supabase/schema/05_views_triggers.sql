@@ -7,6 +7,7 @@
 -- 앱 테이블 트리거
 CREATE TRIGGER handle_faqs_updated_at BEFORE UPDATE ON faqs FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
 CREATE TRIGGER handle_inquiries_updated_at BEFORE UPDATE ON inquiries FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
+CREATE TRIGGER set_instructor_profiles_updated_at BEFORE UPDATE ON instructor_profiles FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
 CREATE TRIGGER on_language_categories_updated BEFORE UPDATE ON language_categories FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER on_language_keys_updated BEFORE UPDATE ON language_keys FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER on_languages_updated BEFORE UPDATE ON languages FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -29,6 +30,7 @@ CREATE TRIGGER set_session_cues_updated_at BEFORE UPDATE ON session_cues FOR EAC
 CREATE TRIGGER trg_bump_cues_rev AFTER INSERT OR DELETE OR UPDATE ON session_cues FOR EACH ROW EXECUTE FUNCTION bump_cues_rev();
 CREATE TRIGGER set_session_partners_updated_at BEFORE UPDATE ON session_partners FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
 CREATE TRIGGER set_session_presenters_updated_at BEFORE UPDATE ON session_presenters FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
+CREATE TRIGGER zz_session_presenters_link_profile BEFORE INSERT OR UPDATE OF instructor_profile_id, presenter_type, partner_id, user_id, manual_name ON session_presenters FOR EACH ROW EXECUTE FUNCTION fn_session_presenter_link_profile();
 CREATE TRIGGER set_session_templates_updated_at BEFORE UPDATE ON session_templates FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
 CREATE TRIGGER after_session_insert AFTER INSERT ON sessions FOR EACH ROW EXECUTE FUNCTION add_session_owner();
 CREATE TRIGGER before_session_insert BEFORE INSERT ON sessions FOR EACH ROW EXECUTE FUNCTION handle_new_session();

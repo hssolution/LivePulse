@@ -61,6 +61,20 @@ create table public.inquiry_replies (
   created_at timestamp with time zone default now()
 );
 
+create table public.instructor_profiles (
+  id uuid default gen_random_uuid() not null,
+  user_id uuid,
+  partner_id uuid,
+  display_name text not null,
+  title text,
+  bio text,
+  image_url text,
+  created_by uuid,
+  is_public boolean default true not null,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null
+);
+
 create table public.language_categories (
   id uuid default gen_random_uuid() not null,
   name text not null,
@@ -358,6 +372,15 @@ create table public.session_designs (
   updated_at timestamp with time zone default now() not null
 );
 
+create table public.session_feedback (
+  id uuid default gen_random_uuid() not null,
+  session_id uuid not null,
+  respondent_key text not null,
+  rating smallint not null,
+  comment text,
+  created_at timestamp with time zone default now() not null
+);
+
 create table public.session_members (
   id uuid default gen_random_uuid() not null,
   session_id uuid,
@@ -398,7 +421,8 @@ create table public.session_presenters (
   invited_at timestamp with time zone default now(),
   responded_at timestamp with time zone,
   created_at timestamp with time zone default now(),
-  updated_at timestamp with time zone default now()
+  updated_at timestamp with time zone default now(),
+  instructor_profile_id uuid
 );
 
 create table public.session_template_fields (
@@ -461,7 +485,8 @@ create table public.sessions (
   current_cue_fired_at timestamp with time zone,
   broadcast_changed_at timestamp with time zone,
   max_page integer default 1 not null,
-  audience_settings jsonb default '{}'::jsonb not null
+  audience_settings jsonb default '{}'::jsonb not null,
+  survey_enabled boolean default true not null
 );
 
 create table public.translations (
@@ -511,6 +536,9 @@ comment on column public.inquiry_replies.content is '내용';
 comment on column public.inquiry_replies.inquiry_id is '문의 ID';
 comment on column public.inquiry_replies.is_admin is '관리자 답변 여부';
 comment on column public.inquiry_replies.user_id is '작성자 ID';
+comment on column public.instructor_profiles.created_by is '만든 사람 — 계정 없는 강사(수기 등록)는 그 주최자 계정이 관리';
+comment on column public.instructor_profiles.partner_id is '강사 파트너(있으면)';
+comment on column public.instructor_profiles.user_id is '강사 본인 계정(있으면). 본인만 수정';
 comment on column public.language_categories.description is '카테고리 설명';
 comment on column public.language_categories.name is '카테고리명 (예: common, auth, admin, partner)';
 comment on column public.language_categories.sort_order is '정렬 순서';
@@ -667,6 +695,7 @@ comment on column public.session_partners.status is '상태 - pending: 대기, a
 comment on column public.session_presenters.display_name is '표시 이름 (모든 타입에서 사용)';
 comment on column public.session_presenters.display_order is '표시 순서';
 comment on column public.session_presenters.display_title is '표시 직책';
+comment on column public.session_presenters.instructor_profile_id is '이 발표자의 강사 프로필(026). 비면 트리거가 찾아 잇는다';
 comment on column public.session_presenters.manual_bio is '직접 입력 소개 (manual 타입)';
 comment on column public.session_presenters.manual_image is '직접 입력 프로필 이미지 URL (manual 타입)';
 comment on column public.session_presenters.manual_name is '직접 입력 이름 (manual 타입)';
@@ -718,6 +747,7 @@ comment on column public.sessions.qna_template_id is 'Q&A 화면 템플릿 ID - 
 comment on column public.sessions.start_at is '예정 시작 일시';
 comment on column public.sessions.started_at is '실제 시작 일시';
 comment on column public.sessions.status is '상태 - draft: 초안, published: 공개, active: 진행중, ended: 종료, cancelled: 취소';
+comment on column public.sessions.survey_enabled is '세션이 끝나면 청중에게 만족도 설문을 띄울지(기본 켬, 주최자가 끔) (026)';
 comment on column public.sessions.template_id is '메인 화면 템플릿 ID';
 comment on column public.sessions.title is '세션명';
 comment on column public.sessions.venue_address is '상세 주소';
@@ -736,6 +766,7 @@ comment on table public.app_config is '시스템 설정 - 키-값 형태의 전�
 comment on table public.faqs is 'FAQ - 자주 묻는 질문';
 comment on table public.inquiries is '1:1 문의';
 comment on table public.inquiry_replies is '1:1 문의 답변/댓글';
+comment on table public.instructor_profiles is '강사 독립 프로필 — 세션과 무관하게 한 사람 = 한 행. session_presenters.instructor_profile_id 로 세션에 연결 (026)';
 comment on table public.language_categories is '번역 키 카테고리 - 번역 키를 그룹화하여 관리';
 comment on table public.language_keys is '번역 키 - 번역할 텍스트의 고유 식별자';
 comment on table public.languages is '지원 언어 목록 - 시스템에서 지원하는 언어 정의';
@@ -756,6 +787,7 @@ comment on table public.qna_categories is '질문 카테고리 - 청중 필터 +
 comment on table public.question_likes is '질문 좋아요 - 중복 방지를 위한 기록';
 comment on table public.questions is '질문 - 청중이 제출한 질문 관리';
 comment on table public.session_assets is '세션 에셋 - 세션별 이미지/텍스트 값';
+comment on table public.session_feedback is '세션 끝 만족도 응답(1~5점 + 한 줄). 이름·연락처·참가자 토큰 없음 — respondent_key 는 브라우저가 만든 설문 전용 난수의 md5(중복 응답 방지용) (026)';
 comment on table public.session_members is '세션 멤버 - 세션에 참여하는 사용자 역할 관리';
 comment on table public.session_partners is '세션 협업 파트너 - 세션에 초대된 대행업체/행사자 (1:1)';
 comment on table public.session_presenters is '세션 강사/발표자 - 세션에 등록된 발표자 목록';

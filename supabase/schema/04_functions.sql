@@ -286,6 +286,166 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.fn_can_manage_session(p_session_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT auth.uid() IS NOT NULL AND (
+    EXISTS (SELECT 1 FROM public.sessions s JOIN public.partners p ON p.id = s.partner_id
+             WHERE s.id = p_session_id AND p.profile_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.session_partners sp JOIN public.partners p ON p.id = sp.partner_id
+                WHERE sp.session_id = p_session_id AND sp.status = 'accepted' AND p.profile_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND user_role = 'admin')
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.fn_session_presenter_link_profile()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_uid      uuid := auth.uid();
+  v_owner    uuid;          -- 세션 소유 파트너의 계정
+  v_p        public.instructor_profiles%ROWTYPE;
+  v_pid      uuid;
+  v_name     text;
+  v_partner  RECORD;
+  v_user     RECORD;
+  v_person_changed boolean := false;
+BEGIN
+  -- 기존 행 연결(마이그레이션) 중에는 updated_at 을 건드리지 않는다
+  IF TG_OP = 'UPDATE' AND current_setting('livepulse.backfill', true) = 'on' THEN
+    NEW.updated_at := OLD.updated_at;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    v_person_changed := NEW.presenter_type IS DISTINCT FROM OLD.presenter_type
+          OR NEW.partner_id IS DISTINCT FROM OLD.partner_id
+          OR NEW.user_id IS DISTINCT FROM OLD.user_id
+          OR lower(btrim(COALESCE(NEW.manual_name, ''))) IS DISTINCT FROM lower(btrim(COALESCE(OLD.manual_name, '')));
+
+    -- [027] 사람은 그대로인데 연결만 비워졌다 = 명시적 해제 또는 프로필 삭제(FK ON DELETE SET NULL).
+    --       그대로 둔다(026 은 여기서 다시 찾아 프로필을 새로 만들었다).
+    IF NEW.instructor_profile_id IS NULL AND NOT v_person_changed
+       AND COALESCE(current_setting('livepulse.backfill', true), '') <> 'on' THEN
+      RETURN NEW;
+    END IF;
+
+    -- 같은 프로필을 유지한 채 사람(유형·파트너·계정·이름)이 바뀌면 연결을 풀고 다시 찾는다
+    IF NEW.instructor_profile_id IS NOT NULL
+       AND NEW.instructor_profile_id IS NOT DISTINCT FROM OLD.instructor_profile_id
+       AND v_person_changed THEN
+      NEW.instructor_profile_id := NULL;
+    END IF;
+  END IF;
+
+  SELECT pt.profile_id INTO v_owner
+    FROM public.sessions s JOIN public.partners pt ON pt.id = s.partner_id
+   WHERE s.id = NEW.session_id;
+
+  -- (가) 직접 지정 — 지정해도 되는 프로필인지 확인
+  IF NEW.instructor_profile_id IS NOT NULL THEN
+    IF TG_OP = 'UPDATE' AND NEW.instructor_profile_id IS NOT DISTINCT FROM OLD.instructor_profile_id THEN
+      RETURN NEW;
+    END IF;
+    IF v_uid IS NULL THEN
+      RETURN NEW;  -- 서비스 롤·마이그레이션
+    END IF;
+    SELECT * INTO v_p FROM public.instructor_profiles WHERE id = NEW.instructor_profile_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'instructor_profile_not_found' USING ERRCODE = 'P0002';
+    END IF;
+    IF v_p.user_id = v_uid
+       OR v_p.created_by = v_uid
+       OR (v_p.partner_id IS NOT NULL AND v_p.partner_id = NEW.partner_id)
+       OR (v_p.user_id IS NOT NULL AND v_p.user_id = NEW.user_id)
+       OR (v_p.user_id IS NULL AND v_p.partner_id IS NULL AND v_p.created_by = v_owner)
+       OR EXISTS (SELECT 1 FROM public.profiles WHERE id = v_uid AND user_role = 'admin') THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'instructor_profile_forbidden' USING ERRCODE = '42501';
+  END IF;
+
+  -- (나) 자동 연결
+  IF NEW.presenter_type = 'partner' AND NEW.partner_id IS NOT NULL THEN
+    SELECT id INTO v_pid FROM public.instructor_profiles WHERE partner_id = NEW.partner_id;
+    IF v_pid IS NULL THEN
+      SELECT p.id, p.profile_id, p.representative_name,
+             pi.display_name AS pi_name, pi.specialty, pi.bio, pi.profile_image_url
+        INTO v_partner
+        FROM public.partners p
+        LEFT JOIN public.partner_instructors pi ON pi.partner_id = p.id
+       WHERE p.id = NEW.partner_id
+       LIMIT 1;
+      IF FOUND THEN
+        -- 같은 계정으로 이미 프로필이 있으면(멤버로 먼저 올라온 경우) 그 프로필에 파트너를 붙인다
+        SELECT id INTO v_pid FROM public.instructor_profiles WHERE user_id = v_partner.profile_id;
+        IF v_pid IS NOT NULL THEN
+          UPDATE public.instructor_profiles SET partner_id = NEW.partner_id
+           WHERE id = v_pid AND partner_id IS NULL;
+        ELSE
+          INSERT INTO public.instructor_profiles (user_id, partner_id, display_name, title, bio, image_url, created_by)
+          VALUES (v_partner.profile_id, v_partner.id,
+                  left(COALESCE(NULLIF(btrim(v_partner.pi_name), ''), NULLIF(btrim(NEW.display_name), ''),
+                                NULLIF(btrim(v_partner.representative_name), ''), '강사'), 100),
+                  left(COALESCE(NULLIF(btrim(NEW.display_title), ''), v_partner.specialty), 200),
+                  v_partner.bio, v_partner.profile_image_url, v_partner.profile_id)
+          ON CONFLICT DO NOTHING
+          RETURNING id INTO v_pid;
+          IF v_pid IS NULL THEN
+            SELECT id INTO v_pid FROM public.instructor_profiles
+             WHERE partner_id = NEW.partner_id OR user_id = v_partner.profile_id LIMIT 1;
+          END IF;
+        END IF;
+      END IF;
+    END IF;
+
+  ELSIF NEW.presenter_type = 'member' AND NEW.user_id IS NOT NULL THEN
+    SELECT id INTO v_pid FROM public.instructor_profiles WHERE user_id = NEW.user_id;
+    IF v_pid IS NULL THEN
+      SELECT id, display_name INTO v_user FROM public.profiles WHERE id = NEW.user_id;
+      IF FOUND THEN
+        INSERT INTO public.instructor_profiles (user_id, display_name, title, created_by)
+        VALUES (NEW.user_id,
+                left(COALESCE(NULLIF(btrim(NEW.display_name), ''), NULLIF(btrim(v_user.display_name), ''), '강사'), 100),
+                left(NULLIF(btrim(NEW.display_title), ''), 200),
+                NEW.user_id)
+        ON CONFLICT DO NOTHING
+        RETURNING id INTO v_pid;
+        IF v_pid IS NULL THEN
+          SELECT id INTO v_pid FROM public.instructor_profiles WHERE user_id = NEW.user_id;
+        END IF;
+      END IF;
+    END IF;
+
+  ELSE
+    v_name := NULLIF(btrim(COALESCE(NEW.manual_name, NEW.display_name, '')), '');
+    IF v_name IS NOT NULL AND v_owner IS NOT NULL THEN
+      SELECT id INTO v_pid FROM public.instructor_profiles
+       WHERE user_id IS NULL AND partner_id IS NULL
+         AND created_by = v_owner
+         AND lower(btrim(display_name)) = lower(v_name)
+       ORDER BY created_at
+       LIMIT 1;
+      IF v_pid IS NULL THEN
+        INSERT INTO public.instructor_profiles (display_name, title, bio, image_url, created_by)
+        VALUES (left(v_name, 100),
+                left(NULLIF(btrim(COALESCE(NEW.manual_title, NEW.display_title, '')), ''), 200),
+                left(NEW.manual_bio, 5000), NEW.manual_image, v_owner)
+        RETURNING id INTO v_pid;
+      END IF;
+    END IF;
+  END IF;
+
+  NEW.instructor_profile_id := v_pid;
+  RETURN NEW;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.generate_invite_token()
  RETURNS text
  LANGUAGE plpgsql
@@ -2025,6 +2185,68 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.sp_instructor_profile_q(p_profile_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_p   public.instructor_profiles%ROWTYPE;
+  v_sessions json;
+  v_avg numeric;
+  v_cnt integer;
+  v_scnt integer;
+BEGIN
+  SELECT * INTO v_p FROM public.instructor_profiles WHERE id = p_profile_id;
+  IF NOT FOUND OR NOT (v_p.is_public OR v_p.user_id = v_uid OR v_p.created_by = v_uid) THEN
+    RETURN json_build_object('success', false, 'error', 'not_found');
+  END IF;
+
+  WITH ss AS (
+    SELECT DISTINCT s.id, s.title, s.start_at, s.status
+      FROM public.session_presenters sp
+      JOIN public.sessions s ON s.id = sp.session_id
+     WHERE sp.instructor_profile_id = v_p.id
+       AND s.status IN ('published', 'active', 'ended')
+  ), agg AS (
+    SELECT ss.*, f.avg_rating, COALESCE(f.cnt, 0) AS cnt
+      FROM ss
+      LEFT JOIN LATERAL (
+        SELECT round(avg(rating)::numeric, 2) AS avg_rating, count(*)::int AS cnt
+          FROM public.session_feedback WHERE session_id = ss.id
+      ) f ON true
+  )
+  SELECT COALESCE(json_agg(json_build_object(
+           'title', title, 'start_at', start_at, 'status', status,
+           'avg_rating', avg_rating, 'response_count', cnt
+         ) ORDER BY start_at DESC), '[]'::json),
+         count(*)::int
+    INTO v_sessions, v_scnt
+    FROM agg;
+
+  SELECT round(avg(f.rating)::numeric, 2), count(*)::int INTO v_avg, v_cnt
+    FROM public.session_feedback f
+   WHERE f.session_id IN (
+     SELECT DISTINCT sp.session_id FROM public.session_presenters sp
+       JOIN public.sessions s ON s.id = sp.session_id
+      WHERE sp.instructor_profile_id = v_p.id AND s.status IN ('published', 'active', 'ended'));
+
+  RETURN json_build_object(
+    'success', true,
+    'profile', json_build_object(
+      'id', v_p.id, 'display_name', v_p.display_name, 'title', v_p.title,
+      'bio', v_p.bio, 'image_url', v_p.image_url, 'created_at', v_p.created_at,
+      'is_mine', (v_uid IS NOT NULL AND (v_p.user_id = v_uid OR (v_p.user_id IS NULL AND v_p.created_by = v_uid)))
+    ),
+    'rating', json_build_object('avg', v_avg, 'count', COALESCE(v_cnt, 0)),
+    'session_count', COALESCE(v_scnt, 0),
+    'sessions', v_sessions
+  );
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.sp_join_session_anon_s(p_session_id uuid, p_name text, p_email text, p_phone text)
  RETURNS json
  LANGUAGE plpgsql
@@ -2246,6 +2468,51 @@ BEGIN
     RETURN json_build_object('success', true, 'design', NULL);
   END IF;
   RETURN json_build_object('success', true, 'design', v_design, 'version', v_version);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sp_live_feedback_s(p_code text, p_key text, p_rating integer, p_comment text DEFAULT NULL::text)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_session RECORD;
+  v_comment text := NULLIF(btrim(COALESCE(p_comment, '')), '');
+  v_id      uuid;
+BEGIN
+  IF p_rating IS NULL OR p_rating < 1 OR p_rating > 5 THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_rating');
+  END IF;
+  IF p_key IS NULL OR char_length(p_key) < 16 OR char_length(p_key) > 100 THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_key');
+  END IF;
+  IF v_comment IS NOT NULL AND char_length(v_comment) > 200 THEN
+    v_comment := left(v_comment, 200);
+  END IF;
+
+  SELECT id, status, survey_enabled INTO v_session
+    FROM public.sessions WHERE code = upper(btrim(p_code));
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'session_not_found');
+  END IF;
+  IF v_session.status <> 'ended' THEN
+    RETURN json_build_object('success', false, 'error', 'session_not_ended');
+  END IF;
+  IF NOT v_session.survey_enabled THEN
+    RETURN json_build_object('success', false, 'error', 'survey_disabled');
+  END IF;
+
+  INSERT INTO public.session_feedback (session_id, respondent_key, rating, comment)
+  VALUES (v_session.id, md5(p_key), p_rating, v_comment)
+  ON CONFLICT ON CONSTRAINT session_feedback_once DO NOTHING
+  RETURNING id INTO v_id;
+
+  IF v_id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'already_submitted');
+  END IF;
+  RETURN json_build_object('success', true);
 END;
 $function$;
 
@@ -4861,6 +5128,36 @@ begin
 end;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.sp_partner_session_feedback_q(p_session_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_enabled boolean;
+BEGIN
+  IF NOT public.fn_can_manage_session(p_session_id) THEN
+    RETURN json_build_object('success', false, 'error', 'forbidden');
+  END IF;
+  SELECT survey_enabled INTO v_enabled FROM public.sessions WHERE id = p_session_id;
+  RETURN json_build_object(
+    'success', true,
+    'survey_enabled', v_enabled,
+    'avg', (SELECT round(avg(rating)::numeric, 2) FROM public.session_feedback WHERE session_id = p_session_id),
+    'count', (SELECT count(*)::int FROM public.session_feedback WHERE session_id = p_session_id),
+    'distribution', (SELECT json_object_agg(r, (SELECT count(*) FROM public.session_feedback f
+                                                 WHERE f.session_id = p_session_id AND f.rating = r))
+                       FROM generate_series(1, 5) r),
+    'comments', (SELECT COALESCE(json_agg(json_build_object('rating', rating, 'comment', comment, 'created_at', created_at)
+                                          ORDER BY created_at DESC), '[]'::json)
+                   FROM (SELECT rating, comment, created_at FROM public.session_feedback
+                          WHERE session_id = p_session_id AND comment IS NOT NULL
+                          ORDER BY created_at DESC LIMIT 200) c)
+  );
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.sp_partner_session_status_s(p_session_id uuid, p_status text)
  RETURNS json
  LANGUAGE plpgsql
@@ -4890,6 +5187,21 @@ BEGIN
 EXCEPTION
   WHEN OTHERS THEN
     RETURN json_build_object('success', false, 'error', SQLSTATE, 'message', SQLERRM);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sp_partner_session_survey_s(p_session_id uuid, p_enabled boolean)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+BEGIN
+  IF NOT public.fn_can_manage_session(p_session_id) THEN
+    RETURN json_build_object('success', false, 'error', 'forbidden');
+  END IF;
+  UPDATE public.sessions SET survey_enabled = COALESCE(p_enabled, true) WHERE id = p_session_id;
+  RETURN json_build_object('success', true, 'survey_enabled', COALESCE(p_enabled, true));
 END;
 $function$;
 
@@ -5441,6 +5753,7 @@ comment on function public.check_question_liked(p_question_id uuid, p_device_id 
 comment on function public.cleanup_old_sessions() is '오래된 세션 및 로그인 시도 기록 정리';
 comment on function public.custom_access_token_hook(event jsonb) is 'JWT 토큰에 사용자 프로필 정보(user_role, user_type, status 등)를 추가하는 Auth Hook';
 comment on function public.decrement_participant_count(session_id uuid) is '세션 참여자 수 감소 (최소값 0)';
+comment on function public.fn_session_presenter_link_profile() is '발표자 행 → 강사 프로필 자동 연결·직접 지정 권한 확인 (026)';
 comment on function public.generate_invite_token() is '32자리 랜덤 초대 토큰 생성';
 comment on function public.generate_session_code() is '6자리 고유 참여 코드 생성 (혼동 문자 제외)';
 comment on function public.get_invite_by_token(p_token text) is '초대 토큰으로 초대 정보 조회 (RLS 우회)';
@@ -5474,10 +5787,12 @@ comment on function public.sp_admin_template_toggle_s(p_id uuid) is '템플릿 �
 comment on function public.sp_admin_templates_q(p_screen_type text) is '관리자용 템플릿 목록 조회';
 comment on function public.sp_admin_users_q() is '관리자용 회원 목록 조회 - 프로필, 마지막 로그인, 파트너 정보 포함';
 comment on function public.sp_can_control_session(p_session_id uuid) is '세션 송출 제어 권한 확인 (좌장/강연자/협업/팀/관리자)';
+comment on function public.sp_instructor_profile_q(p_profile_id uuid) is '강사 프로필 공개 조회 — 누적 평균·응답 수·세션별 평점(의견 본문은 주지 않음) (026)';
 comment on function public.sp_join_session_anon_s(p_session_id uuid, p_name text, p_email text, p_phone text) is '비로그인 사용자 세션 참여';
 comment on function public.sp_join_session_auth_s(p_session_id uuid, p_user_id uuid) is '로그인한 사용자 세션 참여';
 comment on function public.sp_join_session_q(p_code text, p_user_id uuid, p_is_preview boolean) is '세션 참여 페이지 초기 데이터 로드';
 comment on function public.sp_leave_session_auth_s(p_session_id uuid, p_user_id uuid) is '로그인한 사용자 세션 참여 취소';
+comment on function public.sp_live_feedback_s(p_code text, p_key text, p_rating integer, p_comment text) is '청중 만족도 응답 저장 — 끝난 세션·설문 켜짐·브라우저당 1회 (026)';
 comment on function public.sp_live_qna_q(p_code text, p_token text, p_limit integer) is '청중 Q&A 목록 - 본인(pending 포함) 병합 + 좋아요 인라인 (PRD §6)';
 comment on function public.sp_live_state_q(p_code text, p_cues_rev bigint) is '청중 원-앱 단일 폴링 신호 (PRD §6) - 개인화 필드 금지(캐시 보존), cues_public은 rev 불일치 시에만';
 comment on function public.sp_login_attempt_c(p_email text, p_ip_address text) is '로그인 시도 확인 - 잠금 상태, 시도 횟수 체크';

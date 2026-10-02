@@ -14,6 +14,10 @@ alter table public.inquiries add constraint inquiries_category_check CHECK ((cat
 alter table public.inquiries add constraint inquiries_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'resolved'::text])));
 alter table public.inquiries add constraint inquiries_pkey PRIMARY KEY (id);
 alter table public.inquiry_replies add constraint inquiry_replies_pkey PRIMARY KEY (id);
+alter table public.instructor_profiles add constraint instructor_profiles_bio_check CHECK (((bio IS NULL) OR (char_length(bio) <= 5000)));
+alter table public.instructor_profiles add constraint instructor_profiles_display_name_check CHECK (((char_length(btrim(display_name)) >= 1) AND (char_length(btrim(display_name)) <= 100)));
+alter table public.instructor_profiles add constraint instructor_profiles_title_check CHECK (((title IS NULL) OR (char_length(title) <= 200)));
+alter table public.instructor_profiles add constraint instructor_profiles_pkey PRIMARY KEY (id);
 alter table public.language_categories add constraint language_categories_pkey PRIMARY KEY (id);
 alter table public.language_categories add constraint language_categories_name_key UNIQUE (name);
 alter table public.language_keys add constraint language_keys_pkey PRIMARY KEY (id);
@@ -58,6 +62,11 @@ alter table public.session_assets add constraint session_assets_session_id_field
 alter table public.session_cues add constraint session_cues_cue_type_check CHECK ((cue_type = ANY (ARRAY['pdf'::text, 'survey'::text, 'qna'::text, 'notice'::text])));
 alter table public.session_cues add constraint session_cues_pkey PRIMARY KEY (id);
 alter table public.session_designs add constraint session_designs_pkey PRIMARY KEY (session_id);
+alter table public.session_feedback add constraint session_feedback_comment_check CHECK (((comment IS NULL) OR (char_length(comment) <= 200)));
+alter table public.session_feedback add constraint session_feedback_rating_check CHECK (((rating >= 1) AND (rating <= 5)));
+alter table public.session_feedback add constraint session_feedback_respondent_key_check CHECK ((char_length(respondent_key) = 32));
+alter table public.session_feedback add constraint session_feedback_pkey PRIMARY KEY (id);
+alter table public.session_feedback add constraint session_feedback_once UNIQUE (session_id, respondent_key);
 alter table public.session_members add constraint session_members_pkey PRIMARY KEY (id);
 alter table public.session_members add constraint session_members_session_id_user_id_key UNIQUE (session_id, user_id);
 alter table public.session_partners add constraint session_partners_pkey PRIMARY KEY (id);
@@ -81,6 +90,9 @@ alter table public.faqs add constraint faqs_created_by_fkey FOREIGN KEY (created
 alter table public.inquiries add constraint inquiries_partner_id_fkey FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE;
 alter table public.inquiry_replies add constraint inquiry_replies_inquiry_id_fkey FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE CASCADE;
 alter table public.inquiry_replies add constraint inquiry_replies_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+alter table public.instructor_profiles add constraint instructor_profiles_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.instructor_profiles add constraint instructor_profiles_partner_id_fkey FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE SET NULL;
+alter table public.instructor_profiles add constraint instructor_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.language_keys add constraint language_keys_category_id_fkey FOREIGN KEY (category_id) REFERENCES language_categories(id) ON DELETE SET NULL;
 alter table public.lecture_files add constraint lecture_files_presenter_id_fkey FOREIGN KEY (presenter_id) REFERENCES session_presenters(id) ON DELETE SET NULL;
 alter table public.lecture_files add constraint lecture_files_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
@@ -113,12 +125,14 @@ alter table public.session_cues add constraint session_cues_presenter_id_fkey FO
 alter table public.session_cues add constraint session_cues_qna_category_id_fkey FOREIGN KEY (qna_category_id) REFERENCES qna_categories(id) ON DELETE SET NULL;
 alter table public.session_cues add constraint session_cues_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
 alter table public.session_designs add constraint session_designs_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+alter table public.session_feedback add constraint session_feedback_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
 alter table public.session_members add constraint session_members_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES auth.users(id);
 alter table public.session_members add constraint session_members_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
 alter table public.session_members add constraint session_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table public.session_partners add constraint session_partners_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES auth.users(id);
 alter table public.session_partners add constraint session_partners_partner_id_fkey FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE;
 alter table public.session_partners add constraint session_partners_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+alter table public.session_presenters add constraint session_presenters_instructor_profile_id_fkey FOREIGN KEY (instructor_profile_id) REFERENCES instructor_profiles(id) ON DELETE SET NULL;
 alter table public.session_presenters add constraint session_presenters_partner_id_fkey FOREIGN KEY (partner_id) REFERENCES partners(id);
 alter table public.session_presenters add constraint session_presenters_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
 alter table public.session_presenters add constraint session_presenters_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
@@ -146,6 +160,9 @@ CREATE INDEX idx_inquiries_created_at ON public.inquiries USING btree (created_a
 CREATE INDEX idx_inquiries_partner_id ON public.inquiries USING btree (partner_id);
 CREATE INDEX idx_inquiries_status ON public.inquiries USING btree (status);
 CREATE INDEX idx_inquiry_replies_inquiry_id ON public.inquiry_replies USING btree (inquiry_id);
+CREATE INDEX instructor_profiles_manual_idx ON public.instructor_profiles USING btree (created_by, lower(btrim(display_name))) WHERE ((user_id IS NULL) AND (partner_id IS NULL));
+CREATE UNIQUE INDEX instructor_profiles_partner_uq ON public.instructor_profiles USING btree (partner_id) WHERE (partner_id IS NOT NULL);
+CREATE UNIQUE INDEX instructor_profiles_user_uq ON public.instructor_profiles USING btree (user_id) WHERE (user_id IS NOT NULL);
 CREATE INDEX idx_language_keys_category ON public.language_keys USING btree (category_id);
 CREATE INDEX idx_lecture_files_display_order ON public.lecture_files USING btree (display_order);
 CREATE INDEX idx_lecture_files_session_id ON public.lecture_files USING btree (session_id);
@@ -204,6 +221,7 @@ CREATE INDEX idx_session_presenters_partner_id ON public.session_presenters USIN
 CREATE INDEX idx_session_presenters_session_id ON public.session_presenters USING btree (session_id);
 CREATE INDEX idx_session_presenters_status ON public.session_presenters USING btree (status);
 CREATE INDEX idx_session_presenters_user_id ON public.session_presenters USING btree (user_id);
+CREATE INDEX session_presenters_instructor_profile_idx ON public.session_presenters USING btree (instructor_profile_id) WHERE (instructor_profile_id IS NOT NULL);
 CREATE INDEX idx_sessions_code ON public.sessions USING btree (code);
 CREATE INDEX idx_sessions_partner_id ON public.sessions USING btree (partner_id);
 CREATE INDEX idx_sessions_start_at ON public.sessions USING btree (start_at);
