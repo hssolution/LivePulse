@@ -141,6 +141,8 @@
   "auth.featureScreen": "Broadcast screen switching",
   "auth.featurePoll": "Surveys & polls",
   "auth.makeClassVivid": "Run your event-day screens in one place",
+  "auth.loginPanelLine1": "Q&A, polls, and run sheets for your live sessions,",
+  "auth.loginPanelLine2": "all in one console.",
   "auth.noAccount": "Don't have an account?",
   "auth.partnerTip": "💡 Partner Application Info",
   "auth.partnerTipDesc": "After signing up as a general member, you can apply to become a lecturer or agency partner in My Page.",

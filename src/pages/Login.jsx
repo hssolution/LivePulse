@@ -224,8 +224,8 @@ export default function Login() {
         <div className="relative">
           <blockquote className="text-white">
             <p className="text-xl md:text-2xl font-medium leading-relaxed mb-6">
-              "LivePulse 덕분에 청중과의 소통이 놀랍도록 쉬워졌습니다.<br/>
-              강연의 질이 완전히 달라졌어요."
+              {t('auth.loginPanelLine1')}<br/>
+              {t('auth.loginPanelLine2')}
             </p>
           </blockquote>
         </div>

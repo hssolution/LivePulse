@@ -141,6 +141,8 @@
   "auth.featureScreen": "송출 화면 전환",
   "auth.featurePoll": "설문·투표",
   "auth.makeClassVivid": "행사 당일, 화면 운영을 한 곳에서",
+  "auth.loginPanelLine1": "\"LivePulse 덕분에 청중과의 소통이 놀랍도록 쉬워졌습니다.",
+  "auth.loginPanelLine2": "강연의 질이 완전히 달라졌어요.\"",
   "auth.noAccount": "계정이 없으신가요?",
   "auth.partnerTip": "💡 파트너 신청 안내",
   "auth.partnerTipDesc": "일반 회원으로 가입 후, 마이페이지에서 강연가 또는 대행사 파트너로 신청할 수 있습니다.",
