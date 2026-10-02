@@ -342,6 +342,17 @@ create table public.session_assets (
   updated_at timestamp with time zone default now()
 );
 
+create table public.session_attendance (
+  id uuid default gen_random_uuid() not null,
+  session_id uuid not null,
+  attendee_key text not null,
+  name text not null,
+  affiliation text,
+  checked_in_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  certificate_issued_at timestamp with time zone
+);
+
 create table public.session_cues (
   id uuid default gen_random_uuid() not null,
   session_id uuid not null,
@@ -486,7 +497,17 @@ create table public.sessions (
   broadcast_changed_at timestamp with time zone,
   max_page integer default 1 not null,
   audience_settings jsonb default '{}'::jsonb not null,
-  survey_enabled boolean default true not null
+  survey_enabled boolean default true not null,
+  attendance_enabled boolean default false not null,
+  certificate_enabled boolean default false not null,
+  certificate_template text default 'classic'::text not null,
+  certificate_issuer text,
+  timer_duration_sec integer default 300 not null,
+  timer_remaining_sec integer default 300 not null,
+  timer_running boolean default false not null,
+  timer_ends_at timestamp with time zone,
+  timer_warn_sec integer default 60 not null,
+  timer_changed_at timestamp with time zone
 );
 
 create table public.translations (
@@ -720,13 +741,17 @@ comment on column public.session_templates.name is '템플릿명 (예: 학술 �
 comment on column public.session_templates.preview_image is '미리보기 이미지 URL';
 comment on column public.session_templates.screen_type is '화면 유형 - main: 메인화면, qna: 질문 송출, poll: 설문';
 comment on column public.session_templates.sort_order is '정렬 순서';
+comment on column public.sessions.attendance_enabled is '청중 화면에 출석 체크를 띄울지(기본 끔, 주최자가 켬) (028)';
 comment on column public.sessions.audience_settings is '청중 장면 동작 설정 JSONB (Q&A 노출 정책·스케줄표 on/off·열람 모드·ui_version 등)';
 comment on column public.sessions.broadcast_changed_at is '송출 상태 최종 변경 시각 - 지연 계측용';
-comment on column public.sessions.broadcast_mode is '현재 송출 모드 - idle: 대기, pdf: 강연자료, qna: 질문, survey: 설문, notice: 안내';
+comment on column public.sessions.broadcast_mode is '현재 송출 모드 - idle: 대기, pdf: 강연자료, qna: 질문, survey: 설문, notice: 안내, timer: 발표 타이머';
 comment on column public.sessions.broadcast_notice is 'notice 모드 송출 시 청중/송출 화면에 표시할 안내 문구';
 comment on column public.sessions.broadcast_pdf_id is '현재 송출 중인 강연자료(lecture_files) ID';
 comment on column public.sessions.broadcast_pdf_page is '현재 송출 중인 강연자료 페이지 번호';
 comment on column public.sessions.broadcast_settings is '송출 화면 설정 - width: 너비(0=자동), fontSize: 폰트크기, fontColor: 폰트색상, backgroundColor: 배경색상, borderColor: 테두리색상, innerBackgroundColor: 테두리안배경색상, textAlign: 정렬, verticalAlign: 세로정렬';
+comment on column public.sessions.certificate_enabled is '끝난 뒤 출석자에게 수료증을 줄지(기본 끔) (028)';
+comment on column public.sessions.certificate_issuer is '수료증 주최명(비면 주최 단체명) (028)';
+comment on column public.sessions.certificate_template is '수료증 템플릿 - classic: 기본, modern: 모던 (028)';
 comment on column public.sessions.code is '참여 코드 - 6자리 영숫자, 청중 입장 시 사용';
 comment on column public.sessions.contact_email is '대표 문의 이메일';
 comment on column public.sessions.contact_phone is '대표 문의 전화';
@@ -749,6 +774,12 @@ comment on column public.sessions.started_at is '실제 시작 일시';
 comment on column public.sessions.status is '상태 - draft: 초안, published: 공개, active: 진행중, ended: 종료, cancelled: 취소';
 comment on column public.sessions.survey_enabled is '세션이 끝나면 청중에게 만족도 설문을 띄울지(기본 켬, 주최자가 끔) (026)';
 comment on column public.sessions.template_id is '메인 화면 템플릿 ID';
+comment on column public.sessions.timer_changed_at is '타이머를 마지막으로 조작한 시각 (028)';
+comment on column public.sessions.timer_duration_sec is '발표 타이머 설정 시간(초) — 리셋하면 이 값으로 (028)';
+comment on column public.sessions.timer_ends_at is '도는 중일 때 0초가 되는 서버 시각 (028)';
+comment on column public.sessions.timer_remaining_sec is '멈춰 있을 때 남은 초(초과면 음수). 도는 중엔 timer_ends_at 이 정본 (028)';
+comment on column public.sessions.timer_running is '발표 타이머가 도는 중인지 (028)';
+comment on column public.sessions.timer_warn_sec is '남은 시간이 이 초 이하면 경고색 (028)';
 comment on column public.sessions.title is '세션명';
 comment on column public.sessions.venue_address is '상세 주소';
 comment on column public.sessions.venue_name is '장소명';
@@ -787,6 +818,7 @@ comment on table public.qna_categories is '질문 카테고리 - 청중 필터 +
 comment on table public.question_likes is '질문 좋아요 - 중복 방지를 위한 기록';
 comment on table public.questions is '질문 - 청중이 제출한 질문 관리';
 comment on table public.session_assets is '세션 에셋 - 세션별 이미지/텍스트 값';
+comment on table public.session_attendance is '세션 출석 — 이름(필수)·소속(선택)만. attendee_key 는 브라우저 출석 전용 난수의 md5 (028)';
 comment on table public.session_feedback is '세션 끝 만족도 응답(1~5점 + 한 줄). 이름·연락처·참가자 토큰 없음 — respondent_key 는 브라우저가 만든 설문 전용 난수의 md5(중복 응답 방지용) (026)';
 comment on table public.session_members is '세션 멤버 - 세션에 참여하는 사용자 역할 관리';
 comment on table public.session_partners is '세션 협업 파트너 - 세션에 초대된 대행업체/행사자 (1:1)';

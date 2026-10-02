@@ -31,6 +31,7 @@ alter table public.qna_categories enable row level security;
 alter table public.question_likes enable row level security;
 alter table public.questions enable row level security;
 alter table public.session_assets enable row level security;
+alter table public.session_attendance enable row level security;
 alter table public.session_cues enable row level security;
 alter table public.session_designs enable row level security;
 alter table public.session_feedback enable row level security;
@@ -478,6 +479,8 @@ create policy "Session owners can manage assets" on public.session_assets as PER
   WHERE (sessions.partner_id IN ( SELECT partners.id
            FROM partners
           WHERE (partners.profile_id = auth.uid()))))));
+create policy session_attendance_select_manager on public.session_attendance as PERMISSIVE for SELECT to authenticated
+  using (fn_can_manage_session(session_id));
 create policy "Session managers can manage cues" on public.session_cues as PERMISSIVE for ALL to authenticated
   using (((session_id IN ( SELECT s.id
    FROM (sessions s
@@ -756,6 +759,9 @@ revoke all on table public.session_assets from public, anon, authenticated, serv
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_assets to anon;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_assets to authenticated;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_assets to service_role;
+revoke all on table public.session_attendance from public, anon, authenticated, service_role;
+grant select on table public.session_attendance to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_attendance to service_role;
 revoke all on table public.session_cues from public, anon, authenticated, service_role;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_cues to anon;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.session_cues to authenticated;
@@ -860,8 +866,12 @@ grant execute on function public.decrement_participant_count(session_id uuid) to
 revoke all on function public.fn_can_manage_session(p_session_id uuid) from public, anon, authenticated, service_role;
 grant execute on function public.fn_can_manage_session(p_session_id uuid) to authenticated;
 grant execute on function public.fn_can_manage_session(p_session_id uuid) to service_role;
+revoke all on function public.fn_session_issuer_name(p_session_id uuid) from public, anon, authenticated, service_role;
+grant execute on function public.fn_session_issuer_name(p_session_id uuid) to service_role;
 revoke all on function public.fn_session_presenter_link_profile() from public, anon, authenticated, service_role;
 grant execute on function public.fn_session_presenter_link_profile() to service_role;
+revoke all on function public.fn_session_timer_json(v_s sessions) from public, anon, authenticated, service_role;
+grant execute on function public.fn_session_timer_json(v_s sessions) to service_role;
 revoke all on function public.generate_invite_token() from public, anon, authenticated, service_role;
 grant execute on function public.generate_invite_token() to anon;
 grant execute on function public.generate_invite_token() to authenticated;
@@ -1149,11 +1159,23 @@ grant execute on function public.sp_leave_session_auth_s(p_session_id uuid, p_us
 grant execute on function public.sp_leave_session_auth_s(p_session_id uuid, p_user_id uuid) to authenticated;
 grant execute on function public.sp_leave_session_auth_s(p_session_id uuid, p_user_id uuid) to public;
 grant execute on function public.sp_leave_session_auth_s(p_session_id uuid, p_user_id uuid) to service_role;
+revoke all on function public.sp_live_attendance_q(p_code text, p_key text) from public, anon, authenticated, service_role;
+grant execute on function public.sp_live_attendance_q(p_code text, p_key text) to anon;
+grant execute on function public.sp_live_attendance_q(p_code text, p_key text) to authenticated;
+grant execute on function public.sp_live_attendance_q(p_code text, p_key text) to service_role;
+revoke all on function public.sp_live_attendance_s(p_code text, p_key text, p_name text, p_affiliation text) from public, anon, authenticated, service_role;
+grant execute on function public.sp_live_attendance_s(p_code text, p_key text, p_name text, p_affiliation text) to anon;
+grant execute on function public.sp_live_attendance_s(p_code text, p_key text, p_name text, p_affiliation text) to authenticated;
+grant execute on function public.sp_live_attendance_s(p_code text, p_key text, p_name text, p_affiliation text) to service_role;
 revoke all on function public.sp_live_broadcast_q(p_code text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_live_broadcast_q(p_code text) to anon;
 grant execute on function public.sp_live_broadcast_q(p_code text) to authenticated;
 grant execute on function public.sp_live_broadcast_q(p_code text) to public;
 grant execute on function public.sp_live_broadcast_q(p_code text) to service_role;
+revoke all on function public.sp_live_certificate_s(p_code text, p_key text) from public, anon, authenticated, service_role;
+grant execute on function public.sp_live_certificate_s(p_code text, p_key text) to anon;
+grant execute on function public.sp_live_certificate_s(p_code text, p_key text) to authenticated;
+grant execute on function public.sp_live_certificate_s(p_code text, p_key text) to service_role;
 revoke all on function public.sp_live_design_q(p_code text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_live_design_q(p_code text) to anon;
 grant execute on function public.sp_live_design_q(p_code text) to authenticated;
@@ -1173,6 +1195,10 @@ grant execute on function public.sp_live_state_q(p_code text, p_cues_rev bigint)
 grant execute on function public.sp_live_state_q(p_code text, p_cues_rev bigint) to authenticated;
 grant execute on function public.sp_live_state_q(p_code text, p_cues_rev bigint) to public;
 grant execute on function public.sp_live_state_q(p_code text, p_cues_rev bigint) to service_role;
+revoke all on function public.sp_live_timer_q(p_code text) from public, anon, authenticated, service_role;
+grant execute on function public.sp_live_timer_q(p_code text) to anon;
+grant execute on function public.sp_live_timer_q(p_code text) to authenticated;
+grant execute on function public.sp_live_timer_q(p_code text) to service_role;
 revoke all on function public.sp_login_attempt_c(p_email text, p_ip_address text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_login_attempt_c(p_email text, p_ip_address text) to anon;
 grant execute on function public.sp_login_attempt_c(p_email text, p_ip_address text) to authenticated;
@@ -1196,6 +1222,9 @@ grant execute on function public.sp_login_failure_s(p_email text, p_ip_address t
 revoke all on function public.sp_partner_apply_s(p_partner_type text, p_representative_name text, p_company_name text, p_phone text, p_purpose text, p_business_number text, p_industry text, p_expected_scale text, p_client_type text, p_display_name text, p_specialty text, p_bio text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_partner_apply_s(p_partner_type text, p_representative_name text, p_company_name text, p_phone text, p_purpose text, p_business_number text, p_industry text, p_expected_scale text, p_client_type text, p_display_name text, p_specialty text, p_bio text) to authenticated;
 grant execute on function public.sp_partner_apply_s(p_partner_type text, p_representative_name text, p_company_name text, p_phone text, p_purpose text, p_business_number text, p_industry text, p_expected_scale text, p_client_type text, p_display_name text, p_specialty text, p_bio text) to service_role;
+revoke all on function public.sp_partner_attendance_q(p_session_id uuid) from public, anon, authenticated, service_role;
+grant execute on function public.sp_partner_attendance_q(p_session_id uuid) to authenticated;
+grant execute on function public.sp_partner_attendance_q(p_session_id uuid) to service_role;
 revoke all on function public.sp_partner_broadcast_mode_s(p_session_id uuid, p_mode text, p_pdf_id uuid) from public, anon, authenticated, service_role;
 grant execute on function public.sp_partner_broadcast_mode_s(p_session_id uuid, p_mode text, p_pdf_id uuid) to anon;
 grant execute on function public.sp_partner_broadcast_mode_s(p_session_id uuid, p_mode text, p_pdf_id uuid) to authenticated;
@@ -1391,6 +1420,9 @@ grant execute on function public.sp_partner_session_asset_s(p_action text, p_ses
 grant execute on function public.sp_partner_session_asset_s(p_action text, p_session_id uuid, p_field_key text, p_value text, p_url text) to authenticated;
 grant execute on function public.sp_partner_session_asset_s(p_action text, p_session_id uuid, p_field_key text, p_value text, p_url text) to public;
 grant execute on function public.sp_partner_session_asset_s(p_action text, p_session_id uuid, p_field_key text, p_value text, p_url text) to service_role;
+revoke all on function public.sp_partner_session_attendance_s(p_session_id uuid, p_attendance_enabled boolean, p_certificate_enabled boolean, p_certificate_template text, p_certificate_issuer text) from public, anon, authenticated, service_role;
+grant execute on function public.sp_partner_session_attendance_s(p_session_id uuid, p_attendance_enabled boolean, p_certificate_enabled boolean, p_certificate_template text, p_certificate_issuer text) to authenticated;
+grant execute on function public.sp_partner_session_attendance_s(p_session_id uuid, p_attendance_enabled boolean, p_certificate_enabled boolean, p_certificate_template text, p_certificate_issuer text) to service_role;
 revoke all on function public.sp_partner_session_basic_s(p_session_id uuid, p_title text, p_venue_name text, p_venue_address text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_contact_phone text, p_contact_email text, p_max_participants integer, p_description text, p_template_id uuid, p_qna_template_id uuid, p_poll_template_id uuid) from public, anon, authenticated, service_role;
 grant execute on function public.sp_partner_session_basic_s(p_session_id uuid, p_title text, p_venue_name text, p_venue_address text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_contact_phone text, p_contact_email text, p_max_participants integer, p_description text, p_template_id uuid, p_qna_template_id uuid, p_poll_template_id uuid) to anon;
 grant execute on function public.sp_partner_session_basic_s(p_session_id uuid, p_title text, p_venue_name text, p_venue_address text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_contact_phone text, p_contact_email text, p_max_participants integer, p_description text, p_template_id uuid, p_qna_template_id uuid, p_poll_template_id uuid) to authenticated;
@@ -1437,6 +1469,9 @@ grant execute on function public.sp_partner_team_q(p_partner_id uuid) to anon;
 grant execute on function public.sp_partner_team_q(p_partner_id uuid) to authenticated;
 grant execute on function public.sp_partner_team_q(p_partner_id uuid) to public;
 grant execute on function public.sp_partner_team_q(p_partner_id uuid) to service_role;
+revoke all on function public.sp_partner_timer_s(p_session_id uuid, p_action text, p_seconds integer) from public, anon, authenticated, service_role;
+grant execute on function public.sp_partner_timer_s(p_session_id uuid, p_action text, p_seconds integer) to authenticated;
+grant execute on function public.sp_partner_timer_s(p_session_id uuid, p_action text, p_seconds integer) to service_role;
 revoke all on function public.sp_pending_invites_c(p_email text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_pending_invites_c(p_email text) to anon;
 grant execute on function public.sp_pending_invites_c(p_email text) to authenticated;

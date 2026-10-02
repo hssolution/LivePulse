@@ -1,10 +1,10 @@
 # 운영 DB 스키마 덤프 (supabase/schema)
 
 운영 Supabase(프로젝트 `pfrdyviyzilhjarnmcec`)의 **스키마만**(행 데이터 없음) 카탈로그에서 뽑은 것이다.
-마이그레이션(`../migrations` 001~027)만으로는 운영 DB 를 다시 세울 수 없어서(운영에 직접 만든 함수·정책이 많음) 만들었다.
+마이그레이션(`../migrations` 001~028)만으로는 운영 DB 를 다시 세울 수 없어서(운영에 직접 만든 함수·정책이 많음) 만들었다.
 **이 폴더가 «지금 운영 DB 모양»의 정본**이다.
 
-- 덤프 날짜: **2026-10-02** (운영 Postgres 17.6) — 026·027(강사 프로필·만족도 설문) 적용 뒤 다시 덤프
+- 덤프 날짜: **2026-10-03** (운영 Postgres 17.6) — 028(출석·수료증·발표 타이머) 적용 뒤 다시 덤프
 - 대상: `public` 스키마(앱 스키마는 이것뿐) + 우리가 건 `auth` 트리거 + `storage` 버킷·`storage.objects` 정책 + realtime publication
 
 ## 적용 순서
@@ -28,15 +28,15 @@
 
 | 객체 | 운영 | 덤프 | 재현 DB |
 |---|---|---|---|
-| 테이블(public) | 39 | 39 | 39 |
-| 함수·프로시저(public, aggregate 제외) | 145 | 145 | 145 |
+| 테이블(public) | 40 | 40 | 40 |
+| 함수·프로시저(public, aggregate 제외) | 154 | 154 | 154 |
 | 트리거(public 테이블) | 32 | 32 | 32 |
 | 트리거(auth.users, 우리 함수) | 1 | 1 | 1 |
-| 정책(public) | 123 | 123 | 123 |
+| 정책(public) | 124 | 124 | 124 |
 | 정책(storage.objects) | 6 | 6 | 6 |
-| 인덱스(public) | 142 | 142 | 142 |
-| 제약(PK·UNIQUE·CHECK·FK) | 144 | 144 | 144 |
-| RLS 켜진 테이블 | 39 | 39 | 39 |
+| 인덱스(public) | 145 | 145 | 145 |
+| 제약(PK·UNIQUE·CHECK·FK) | 153 | 153 | 153 |
+| RLS 켜진 테이블 | 40 | 40 | 40 |
 | 시퀀스 / 뷰 / 사용자 타입 | 1 / 0 / 0 | 1 / 0 / 0 | 1 / 0 / 0 |
 | storage 버킷 | 2 | 2 | 2 |
 | realtime 테이블 | 4 | 4 | 4 |
@@ -44,7 +44,7 @@
 함수 정의 전체·정책 전체·인덱스 정의 전체의 md5 도 운영과 재현 DB 가 같다(`pg_get_functiondef` 이어붙인 값 등).
 (함수가 «약 104종»이라 알려져 있었으나 실제 운영은 139종 — 모두 확장 소유가 아닌 앱 함수다.)
 
-## 재현 시험 (2026-10-02)
+## 재현 시험 (2026-10-02, 2026-10-03 028 뒤 다시)
 
 로컬 Postgres 18 에 빈 DB 를 만들고 `_local_stub.sql`(롤 anon/authenticated/service_role/supabase_auth_admin, `auth.users`·`auth.uid()/role()/jwt()`,
 `storage.buckets/objects`, `supabase_realtime` publication, 기본 권한) → 00~07 을 `ON_ERROR_STOP=1` 로 적용: **오류 0건**.
@@ -59,7 +59,7 @@
 - 행 데이터·`auth.users` 계정은 없다. storage 버킷은 메타 행(이름·public·크기/MIME 제한)만 넣는다.
 - 확장 `pg_stat_statements`·`supabase_vault` 는 플랫폼 기본이라 만들지 않는다.
 
-## 마이그레이션 001~027 와의 관계
+## 마이그레이션 001~028 와의 관계
 
 `../migrations` 는 변경 이력이고 이 폴더는 «지금 모양»이다. 새 DB 를 세울 때는 **이 폴더만** 적용한다(마이그레이션과 같이 돌리지 않는다).
 이미 운영에 있는 DB 에는 새 마이그레이션만 올리면 된다. 운영 DB 를 바꾼 뒤에는 아래대로 다시 덤프해 이 폴더도 갱신한다.

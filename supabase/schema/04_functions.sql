@@ -301,6 +301,21 @@ AS $function$
   );
 $function$;
 
+CREATE OR REPLACE FUNCTION public.fn_session_issuer_name(p_session_id uuid)
+ RETURNS text
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT COALESCE(
+           NULLIF(btrim(s.certificate_issuer), ''),
+           (SELECT NULLIF(btrim(o.company_name), '') FROM public.partner_organizers o WHERE o.partner_id = s.partner_id LIMIT 1),
+           (SELECT NULLIF(btrim(a.company_name), '') FROM public.partner_agencies a WHERE a.partner_id = s.partner_id LIMIT 1),
+           (SELECT NULLIF(btrim(p.representative_name), '') FROM public.partners p WHERE p.id = s.partner_id),
+           'LivePulse')
+    FROM public.sessions s WHERE s.id = p_session_id;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.fn_session_presenter_link_profile()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -444,6 +459,22 @@ BEGIN
   NEW.instructor_profile_id := v_pid;
   RETURN NEW;
 END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.fn_session_timer_json(v_s sessions)
+ RETURNS json
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT json_build_object(
+    'duration_sec', v_s.timer_duration_sec,
+    'remaining_sec', v_s.timer_remaining_sec,
+    'running', v_s.timer_running,
+    'ends_at', v_s.timer_ends_at,
+    'warn_sec', v_s.timer_warn_sec,
+    'changed_at', v_s.timer_changed_at
+  );
 $function$;
 
 CREATE OR REPLACE FUNCTION public.generate_invite_token()
@@ -2402,6 +2433,86 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.sp_live_attendance_q(p_code text, p_key text)
+ RETURNS json
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_s public.sessions%ROWTYPE;
+  v_a public.session_attendance%ROWTYPE;
+BEGIN
+  SELECT * INTO v_s FROM public.sessions WHERE code = upper(btrim(p_code));
+  IF NOT FOUND OR v_s.status NOT IN ('published', 'active', 'ended') THEN
+    RETURN json_build_object('success', false, 'error', 'session_not_found');
+  END IF;
+  IF p_key IS NOT NULL AND char_length(p_key) BETWEEN 16 AND 100 THEN
+    SELECT * INTO v_a FROM public.session_attendance
+     WHERE session_id = v_s.id AND attendee_key = md5(p_key);
+  END IF;
+  RETURN json_build_object(
+    'success', true,
+    'status', v_s.status,
+    'attendance_enabled', v_s.attendance_enabled,
+    'certificate_enabled', v_s.certificate_enabled,
+    'checked_in', v_a.id IS NOT NULL,
+    'name', v_a.name,
+    'affiliation', v_a.affiliation,
+    'checked_in_at', v_a.checked_in_at
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sp_live_attendance_s(p_code text, p_key text, p_name text, p_affiliation text DEFAULT NULL::text)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_s    public.sessions%ROWTYPE;
+  v_name text := btrim(COALESCE(p_name, ''));
+  v_aff  text := NULLIF(btrim(COALESCE(p_affiliation, '')), '');
+  v_row  public.session_attendance%ROWTYPE;
+BEGIN
+  IF char_length(v_name) < 1 OR char_length(v_name) > 50 THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_name');
+  END IF;
+  IF v_aff IS NOT NULL AND char_length(v_aff) > 100 THEN
+    v_aff := left(v_aff, 100);
+  END IF;
+  IF p_key IS NULL OR char_length(p_key) < 16 OR char_length(p_key) > 100 THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_key');
+  END IF;
+
+  SELECT * INTO v_s FROM public.sessions WHERE code = upper(btrim(p_code));
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'session_not_found');
+  END IF;
+  IF NOT v_s.attendance_enabled THEN
+    RETURN json_build_object('success', false, 'error', 'attendance_disabled');
+  END IF;
+  IF v_s.status NOT IN ('published', 'active') THEN
+    RETURN json_build_object('success', false, 'error', 'session_not_open');
+  END IF;
+  -- 무한 행 생성 방지(정원과 무관한 넉넉한 상한)
+  IF NOT EXISTS (SELECT 1 FROM public.session_attendance WHERE session_id = v_s.id AND attendee_key = md5(p_key))
+     AND (SELECT count(*) FROM public.session_attendance WHERE session_id = v_s.id) >= GREATEST(v_s.max_participants * 2, 5000) THEN
+    RETURN json_build_object('success', false, 'error', 'attendance_full');
+  END IF;
+
+  INSERT INTO public.session_attendance (session_id, attendee_key, name, affiliation)
+  VALUES (v_s.id, md5(p_key), v_name, v_aff)
+  ON CONFLICT ON CONSTRAINT session_attendance_once
+  DO UPDATE SET name = EXCLUDED.name, affiliation = EXCLUDED.affiliation, updated_at = now()
+  RETURNING * INTO v_row;
+
+  RETURN json_build_object('success', true, 'name', v_row.name, 'affiliation', v_row.affiliation,
+                           'checked_in_at', v_row.checked_in_at);
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.sp_live_broadcast_q(p_code text)
  RETURNS json
  LANGUAGE plpgsql
@@ -2449,6 +2560,54 @@ BEGIN
     'question', v_question,
     'categories', v_categories,
     'active_poll_id', v_active_poll_id
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sp_live_certificate_s(p_code text, p_key text)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_s public.sessions%ROWTYPE;
+  v_a public.session_attendance%ROWTYPE;
+BEGIN
+  IF p_key IS NULL OR char_length(p_key) < 16 OR char_length(p_key) > 100 THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_key');
+  END IF;
+  SELECT * INTO v_s FROM public.sessions WHERE code = upper(btrim(p_code));
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'session_not_found');
+  END IF;
+  IF NOT v_s.certificate_enabled THEN
+    RETURN json_build_object('success', false, 'error', 'certificate_disabled');
+  END IF;
+  IF v_s.status <> 'ended' THEN
+    RETURN json_build_object('success', false, 'error', 'session_not_ended');
+  END IF;
+
+  UPDATE public.session_attendance
+     SET certificate_issued_at = COALESCE(certificate_issued_at, now())
+   WHERE session_id = v_s.id AND attendee_key = md5(p_key)
+  RETURNING * INTO v_a;
+  IF v_a.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'not_attended');
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'name', v_a.name,
+    'affiliation', v_a.affiliation,
+    'title', v_s.title,
+    'start_at', v_s.start_at,
+    'end_at', v_s.end_at,
+    'venue_name', v_s.venue_name,
+    'issuer', public.fn_session_issuer_name(v_s.id),
+    'template', v_s.certificate_template,
+    'certificate_no', 'LP-' || v_s.code || '-' || upper(substr(replace(v_a.id::text, '-', ''), 1, 6)),
+    'issued_at', v_a.certificate_issued_at
   );
 END;
 $function$;
@@ -2668,6 +2827,30 @@ BEGIN
     'cues_public', v_cues,
     'design_version', v_design_version,
     'participant_count', v_session.participant_count
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sp_live_timer_q(p_code text)
+ RETURNS json
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_s public.sessions%ROWTYPE;
+BEGIN
+  SELECT * INTO v_s FROM public.sessions WHERE code = upper(btrim(p_code));
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'session_not_found');
+  END IF;
+  RETURN json_build_object(
+    'success', true,
+    'session_id', v_s.id,
+    'title', v_s.title,
+    'broadcast_mode', v_s.broadcast_mode,
+    'timer', public.fn_session_timer_json(v_s),
+    'server_now', clock_timestamp()
   );
 END;
 $function$;
@@ -2933,6 +3116,48 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.sp_partner_attendance_q(p_session_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_s    public.sessions%ROWTYPE;
+  v_rows json;
+  v_cnt  integer;
+  v_iss  integer;
+BEGIN
+  IF NOT public.fn_can_manage_session(p_session_id) THEN
+    RETURN json_build_object('success', false, 'error', 'forbidden');
+  END IF;
+  SELECT * INTO v_s FROM public.sessions WHERE id = p_session_id;
+
+  SELECT COALESCE(json_agg(json_build_object(
+           'id', a.id, 'name', a.name, 'affiliation', a.affiliation,
+           'checked_in_at', a.checked_in_at, 'certificate_issued_at', a.certificate_issued_at
+         ) ORDER BY a.checked_in_at), '[]'::json),
+         count(*)::int,
+         count(a.certificate_issued_at)::int
+    INTO v_rows, v_cnt, v_iss
+    FROM public.session_attendance a
+   WHERE a.session_id = p_session_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'status', v_s.status,
+    'attendance_enabled', v_s.attendance_enabled,
+    'certificate_enabled', v_s.certificate_enabled,
+    'certificate_template', v_s.certificate_template,
+    'certificate_issuer', v_s.certificate_issuer,
+    'default_issuer', public.fn_session_issuer_name(p_session_id),
+    'count', v_cnt,
+    'issued_count', v_iss,
+    'rows', v_rows
+  );
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.sp_partner_broadcast_mode_s(p_session_id uuid, p_mode text, p_pdf_id uuid DEFAULT NULL::uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -2943,7 +3168,7 @@ BEGIN
   IF NOT public.sp_can_control_session(p_session_id) THEN
     RETURN json_build_object('success', false, 'error', 'forbidden');
   END IF;
-  IF p_mode NOT IN ('idle','pdf','qna','survey','notice') THEN
+  IF p_mode NOT IN ('idle','pdf','qna','survey','notice','timer') THEN
     RETURN json_build_object('success', false, 'error', 'invalid_mode');
   END IF;
 
@@ -4717,6 +4942,42 @@ EXCEPTION
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.sp_partner_session_attendance_s(p_session_id uuid, p_attendance_enabled boolean DEFAULT NULL::boolean, p_certificate_enabled boolean DEFAULT NULL::boolean, p_certificate_template text DEFAULT NULL::text, p_certificate_issuer text DEFAULT NULL::text)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_s public.sessions%ROWTYPE;
+BEGIN
+  IF NOT public.fn_can_manage_session(p_session_id) THEN
+    RETURN json_build_object('success', false, 'error', 'forbidden');
+  END IF;
+  IF p_certificate_template IS NOT NULL AND p_certificate_template NOT IN ('classic', 'modern') THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_template');
+  END IF;
+
+  UPDATE public.sessions SET
+    attendance_enabled   = COALESCE(p_attendance_enabled, attendance_enabled),
+    certificate_enabled  = COALESCE(p_certificate_enabled, certificate_enabled),
+    certificate_template = COALESCE(p_certificate_template, certificate_template),
+    certificate_issuer   = CASE WHEN p_certificate_issuer IS NULL THEN certificate_issuer
+                                ELSE NULLIF(left(btrim(p_certificate_issuer), 100), '') END
+  WHERE id = p_session_id
+  RETURNING * INTO v_s;
+
+  RETURN json_build_object(
+    'success', true,
+    'attendance_enabled', v_s.attendance_enabled,
+    'certificate_enabled', v_s.certificate_enabled,
+    'certificate_template', v_s.certificate_template,
+    'certificate_issuer', v_s.certificate_issuer,
+    'default_issuer', public.fn_session_issuer_name(p_session_id)
+  );
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.sp_partner_session_basic_s(p_session_id uuid, p_title text, p_venue_name text, p_venue_address text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_contact_phone text, p_contact_email text, p_max_participants integer, p_description text, p_template_id uuid, p_qna_template_id uuid, p_poll_template_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -5266,6 +5527,77 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.sp_partner_timer_s(p_session_id uuid, p_action text, p_seconds integer DEFAULT NULL::integer)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_s   public.sessions%ROWTYPE;
+  v_now timestamptz := clock_timestamp();
+  v_rem integer;
+BEGIN
+  IF NOT public.sp_can_control_session(p_session_id) THEN
+    RETURN json_build_object('success', false, 'error', 'forbidden');
+  END IF;
+  SELECT * INTO v_s FROM public.sessions WHERE id = p_session_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'session_not_found');
+  END IF;
+
+  -- 지금 남은 초(도는 중이면 종료 시각 기준, 올림)
+  v_rem := CASE WHEN v_s.timer_running AND v_s.timer_ends_at IS NOT NULL
+                THEN ceil(extract(epoch FROM (v_s.timer_ends_at - v_now)))::int
+                ELSE v_s.timer_remaining_sec END;
+  v_rem := GREATEST(-86400, LEAST(86400, v_rem));
+
+  IF p_action = 'start' THEN
+    IF NOT v_s.timer_running THEN
+      UPDATE public.sessions SET timer_running = true,
+             timer_ends_at = v_now + make_interval(secs => v_rem),
+             timer_remaining_sec = v_rem, timer_changed_at = v_now
+       WHERE id = p_session_id;
+    END IF;
+  ELSIF p_action = 'pause' THEN
+    UPDATE public.sessions SET timer_running = false, timer_ends_at = NULL,
+           timer_remaining_sec = v_rem, timer_changed_at = v_now
+     WHERE id = p_session_id;
+  ELSIF p_action = 'reset' THEN
+    UPDATE public.sessions SET timer_running = false, timer_ends_at = NULL,
+           timer_remaining_sec = timer_duration_sec, timer_changed_at = v_now
+     WHERE id = p_session_id;
+  ELSIF p_action = 'set' THEN
+    IF p_seconds IS NULL OR p_seconds < 0 OR p_seconds > 86400 THEN
+      RETURN json_build_object('success', false, 'error', 'invalid_seconds');
+    END IF;
+    UPDATE public.sessions SET timer_duration_sec = p_seconds, timer_remaining_sec = p_seconds,
+           timer_running = false, timer_ends_at = NULL, timer_changed_at = v_now
+     WHERE id = p_session_id;
+  ELSIF p_action = 'add' THEN
+    IF p_seconds IS NULL OR abs(p_seconds) > 86400 THEN
+      RETURN json_build_object('success', false, 'error', 'invalid_seconds');
+    END IF;
+    v_rem := GREATEST(-86400, LEAST(86400, v_rem + p_seconds));
+    UPDATE public.sessions SET timer_remaining_sec = v_rem,
+           timer_ends_at = CASE WHEN timer_running THEN v_now + make_interval(secs => v_rem) ELSE NULL END,
+           timer_changed_at = v_now
+     WHERE id = p_session_id;
+  ELSIF p_action = 'warn' THEN
+    IF p_seconds IS NULL OR p_seconds < 0 OR p_seconds > 3600 THEN
+      RETURN json_build_object('success', false, 'error', 'invalid_seconds');
+    END IF;
+    UPDATE public.sessions SET timer_warn_sec = p_seconds, timer_changed_at = v_now
+     WHERE id = p_session_id;
+  ELSE
+    RETURN json_build_object('success', false, 'error', 'invalid_action');
+  END IF;
+
+  SELECT * INTO v_s FROM public.sessions WHERE id = p_session_id;
+  RETURN json_build_object('success', true, 'timer', public.fn_session_timer_json(v_s), 'server_now', clock_timestamp());
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.sp_pending_invites_c(p_email text)
  RETURNS json
  LANGUAGE plpgsql
@@ -5792,14 +6124,19 @@ comment on function public.sp_join_session_anon_s(p_session_id uuid, p_name text
 comment on function public.sp_join_session_auth_s(p_session_id uuid, p_user_id uuid) is '로그인한 사용자 세션 참여';
 comment on function public.sp_join_session_q(p_code text, p_user_id uuid, p_is_preview boolean) is '세션 참여 페이지 초기 데이터 로드';
 comment on function public.sp_leave_session_auth_s(p_session_id uuid, p_user_id uuid) is '로그인한 사용자 세션 참여 취소';
+comment on function public.sp_live_attendance_q(p_code text, p_key text) is '청중 출석·수료증 상태 — 출석 켜짐 여부와 이 브라우저의 출석 기록 (028)';
+comment on function public.sp_live_attendance_s(p_code text, p_key text, p_name text, p_affiliation text) is '청중 출석 체크 — 출석 켜짐·게시/진행 중 세션만, 같은 브라우저는 한 행 (028)';
+comment on function public.sp_live_certificate_s(p_code text, p_key text) is '청중 수료증 데이터 — 끝난 세션·수료증 켜짐·출석자만, 첫 발급 시각 기록 (028)';
 comment on function public.sp_live_feedback_s(p_code text, p_key text, p_rating integer, p_comment text) is '청중 만족도 응답 저장 — 끝난 세션·설문 켜짐·브라우저당 1회 (026)';
 comment on function public.sp_live_qna_q(p_code text, p_token text, p_limit integer) is '청중 Q&A 목록 - 본인(pending 포함) 병합 + 좋아요 인라인 (PRD §6)';
 comment on function public.sp_live_state_q(p_code text, p_cues_rev bigint) is '청중 원-앱 단일 폴링 신호 (PRD §6) - 개인화 필드 금지(캐시 보존), cues_public은 rev 불일치 시에만';
+comment on function public.sp_live_timer_q(p_code text) is '발표 타이머 상태 + 서버 시각 (028)';
 comment on function public.sp_login_attempt_c(p_email text, p_ip_address text) is '로그인 시도 확인 - 잠금 상태, 시도 횟수 체크';
 comment on function public.sp_login_attempt_clear_s(p_email text, p_ip_address text) is '로그인 시도 초기화 - 로그인 성공 시 호출';
 comment on function public.sp_login_event_s(p_email text, p_event_type text, p_failure_reason text, p_ip_address text, p_user_agent text, p_device_info jsonb, p_session_id text) is '로그인 이벤트 로그 기록 - 성공/실패/로그아웃 등';
 comment on function public.sp_login_failure_s(p_email text, p_ip_address text) is '로그인 실패 기록 - 시도 횟수 증가, 잠금 처리';
 comment on function public.sp_partner_apply_s(p_partner_type text, p_representative_name text, p_company_name text, p_phone text, p_purpose text, p_business_number text, p_industry text, p_expected_scale text, p_client_type text, p_display_name text, p_specialty text, p_bio text) is '주최(파트너) 신청 — 본인 신청을 즉시 승인해 파트너로 만든다. 반려 이력이 있으면 심사 대기로 넣는다.';
+comment on function public.sp_partner_attendance_q(p_session_id uuid) is '주최 출석 명단·인원·수료증 발급 수·설정 (028)';
 comment on function public.sp_partner_collaboration_q(p_session_id uuid, p_partner_id uuid) is '세션 협업 정보 조회 - 세션 소유자, 초대된 파트너, 강사 목록, 팀원 목록';
 comment on function public.sp_partner_dashboard_q(p_user_id uuid) is '파트너 대시보드 데이터 조회 - 통계, 최근 세션, 일별 활동, 세션별 성과';
 comment on function public.sp_partner_faqs_q(p_category text) is '파트너용 FAQ 목록 조회 - 카테고리별 필터링 지원';
@@ -5820,6 +6157,7 @@ comment on function public.sp_partner_qna_q(p_session_id uuid) is '세션 Q&A �
 comment on function public.sp_partner_qna_s(p_question_id uuid, p_session_id uuid, p_content text, p_author_name text, p_is_anonymous boolean, p_status text) is 'Q&A 생성 또는 수정';
 comment on function public.sp_partner_qna_update_s(p_action text, p_question_id uuid, p_answer text, p_answered_by uuid, p_status text, p_is_pinned boolean, p_is_highlighted boolean, p_is_displayed boolean, p_presenter_id uuid) is 'Q&A 상태 및 속성 업데이트 - 승인, 거절, 답변, 고정, 강조, 표시';
 comment on function public.sp_partner_session_asset_s(p_action text, p_session_id uuid, p_field_key text, p_value text, p_url text) is '세션 자산 관리 - 이미지, URL 등 저장/삭제';
+comment on function public.sp_partner_session_attendance_s(p_session_id uuid, p_attendance_enabled boolean, p_certificate_enabled boolean, p_certificate_template text, p_certificate_issuer text) is '주최 출석·수료증 설정 (028)';
 comment on function public.sp_partner_session_basic_s(p_session_id uuid, p_title text, p_venue_name text, p_venue_address text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_contact_phone text, p_contact_email text, p_max_participants integer, p_description text, p_template_id uuid, p_qna_template_id uuid, p_poll_template_id uuid) is '세션 기본 정보 저장 - 생성 또는 수정';
 comment on function public.sp_partner_session_complete_q(p_session_id uuid) is '세션 상세 페이지 전체 데이터 조회 - 세션, 파트너, 템플릿, 템플릿 목록, 필드, 자산(배열), 통계, 협업자';
 comment on function public.sp_partner_session_create_q() is '세션 만들기 화면 데이터 — 선택할 수 있는 화면 템플릿 목록(main/qna/poll)';
@@ -5827,6 +6165,7 @@ comment on function public.sp_partner_session_detail_q(p_session_id uuid) is '�
 comment on function public.sp_partner_session_status_s(p_session_id uuid, p_status text) is '세션 상태 변경 - draft, published, active, paused, completed, cancelled';
 comment on function public.sp_partner_sessions_q(p_partner_id uuid, p_status text, p_search text) is '파트너 세션 목록 조회 - 필터링 및 검색 지원';
 comment on function public.sp_partner_team_q(p_partner_id uuid) is '파트너 팀원 목록 조회 - partner_members 테이블에서 팀원 정보를 가져옴';
+comment on function public.sp_partner_timer_s(p_session_id uuid, p_action text, p_seconds integer) is '발표 타이머 조작 — start/pause/reset/set/add/warn, 진행 권한자만 (028)';
 comment on function public.sp_pending_invites_c(p_email text) is '사용자의 대기 중인 파트너 초대 존재 여부 확인';
 comment on function public.sp_profile_q(p_user_id uuid) is '사용자 프로필 조회 - 표시 이름, 이메일, 역할, 상태 등';
 comment on function public.sp_profile_s(p_user_id uuid, p_display_name text) is '사용자 프로필 업데이트 - 표시 이름 변경';

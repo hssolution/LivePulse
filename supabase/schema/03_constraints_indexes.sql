@@ -59,6 +59,11 @@ alter table public.question_likes add constraint question_likes_question_id_user
 alter table public.questions add constraint questions_pkey PRIMARY KEY (id);
 alter table public.session_assets add constraint session_assets_pkey PRIMARY KEY (id);
 alter table public.session_assets add constraint session_assets_session_id_field_key_key UNIQUE (session_id, field_key);
+alter table public.session_attendance add constraint session_attendance_affiliation_check CHECK (((affiliation IS NULL) OR (char_length(affiliation) <= 100)));
+alter table public.session_attendance add constraint session_attendance_attendee_key_check CHECK ((char_length(attendee_key) = 32));
+alter table public.session_attendance add constraint session_attendance_name_check CHECK (((char_length(btrim(name)) >= 1) AND (char_length(btrim(name)) <= 50)));
+alter table public.session_attendance add constraint session_attendance_pkey PRIMARY KEY (id);
+alter table public.session_attendance add constraint session_attendance_once UNIQUE (session_id, attendee_key);
 alter table public.session_cues add constraint session_cues_cue_type_check CHECK ((cue_type = ANY (ARRAY['pdf'::text, 'survey'::text, 'qna'::text, 'notice'::text])));
 alter table public.session_cues add constraint session_cues_pkey PRIMARY KEY (id);
 alter table public.session_designs add constraint session_designs_pkey PRIMARY KEY (session_id);
@@ -76,6 +81,9 @@ alter table public.session_template_fields add constraint session_template_field
 alter table public.session_template_fields add constraint session_template_fields_template_id_field_key_key UNIQUE (template_id, field_key);
 alter table public.session_templates add constraint session_templates_pkey PRIMARY KEY (id);
 alter table public.session_templates add constraint session_templates_code_key UNIQUE (code);
+alter table public.sessions add constraint sessions_certificate_issuer_len CHECK (((certificate_issuer IS NULL) OR (char_length(certificate_issuer) <= 100)));
+alter table public.sessions add constraint sessions_certificate_template_check CHECK ((certificate_template = ANY (ARRAY['classic'::text, 'modern'::text])));
+alter table public.sessions add constraint sessions_timer_range CHECK ((((timer_duration_sec >= 0) AND (timer_duration_sec <= 86400)) AND ((timer_remaining_sec >= '-86400'::integer) AND (timer_remaining_sec <= 86400)) AND ((timer_warn_sec >= 0) AND (timer_warn_sec <= 3600))));
 alter table public.sessions add constraint sessions_pkey PRIMARY KEY (id);
 alter table public.sessions add constraint sessions_code_key UNIQUE (code);
 alter table public.translations add constraint translations_pkey PRIMARY KEY (id);
@@ -119,6 +127,7 @@ alter table public.questions add constraint questions_presenter_id_fkey FOREIGN 
 alter table public.questions add constraint questions_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
 alter table public.questions add constraint questions_template_id_fkey FOREIGN KEY (template_id) REFERENCES session_templates(id) ON DELETE SET NULL;
 alter table public.session_assets add constraint session_assets_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+alter table public.session_attendance add constraint session_attendance_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
 alter table public.session_cues add constraint session_cues_lecture_file_id_fkey FOREIGN KEY (lecture_file_id) REFERENCES lecture_files(id) ON DELETE SET NULL;
 alter table public.session_cues add constraint session_cues_poll_id_fkey FOREIGN KEY (poll_id) REFERENCES polls(id) ON DELETE SET NULL;
 alter table public.session_cues add constraint session_cues_presenter_id_fkey FOREIGN KEY (presenter_id) REFERENCES session_presenters(id) ON DELETE SET NULL;
@@ -210,6 +219,7 @@ CREATE INDEX idx_questions_participant_token ON public.questions USING btree (se
 CREATE INDEX idx_questions_presenter_id ON public.questions USING btree (presenter_id);
 CREATE INDEX idx_questions_session_id ON public.questions USING btree (session_id);
 CREATE INDEX idx_questions_status ON public.questions USING btree (status);
+CREATE INDEX session_attendance_session_idx ON public.session_attendance USING btree (session_id, checked_in_at);
 CREATE INDEX idx_session_cues_display_order ON public.session_cues USING btree (display_order);
 CREATE INDEX idx_session_cues_session_id ON public.session_cues USING btree (session_id);
 CREATE INDEX idx_session_members_session_id ON public.session_members USING btree (session_id);
