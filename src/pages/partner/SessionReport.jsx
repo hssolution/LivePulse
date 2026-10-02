@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { exportToExcel } from '@/utils/excel'
+import { FeedbackSummary } from '@/components/session/SessionFeedbackPanel'
 
 /**
  * 세션 리포트
@@ -303,6 +304,11 @@ export default function SessionReport() {
             sub={`비회원 ${participantCount - authedCount}명`}
           />
         </section>
+
+        {/* 만족도 설문 (026) */}
+        <div className="mb-6">
+          <FeedbackSummary sessionId={id} />
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 투표 결과 */}

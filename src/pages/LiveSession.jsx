@@ -25,6 +25,7 @@ import PdfPage from '@/components/PdfPage'
 import { useLiveState } from '@/hooks/useLiveState'
 import { getParticipantToken } from '@/lib/participant'
 import ScheduleList from '@/components/audience/ScheduleList'
+import SatisfactionSurvey from '@/components/session/SatisfactionSurvey'
 import SectionRenderer from '@/components/audience/SectionRenderer'
 import { sceneSettings, deriveTokens } from '@/components/audience/sections/registry'
 import SectionBand from '@/components/audience/SectionBand'
@@ -296,6 +297,10 @@ export default function LiveSession() {
         template={template}
         assets={assets}
         designTokens={design?.tokens}
+        surveySlot={
+          // 만족도 설문 기본 탑재(026) — 주최자가 끈 세션(survey_enabled=false)·미리보기에선 숨김
+          session.survey_enabled !== false && !isPreview ? <SatisfactionSurvey code={session.code} /> : null
+        }
         headerBand={
           endedHeader.length > 0 ? (
             <SectionBand sections={endedHeader} tokens={endedBandTokens} data={{ session }} className="!py-2" />
@@ -888,7 +893,7 @@ function InfoPanel({ session, presenters }) {
 /* ============================================================
  * 종료 (status='ended')
  * ============================================================ */
-export function EndedView({ session, navigate, template, assets, embedded = false, designTokens = null, headerBand = null, footerBand = null }) {
+export function EndedView({ session, navigate, template, assets, embedded = false, designTokens = null, headerBand = null, footerBand = null, surveySlot = null }) {
   // 테마 연속 (PRD §4) — 종료 화면까지 세션 브랜딩 유지.
   // 콘텐츠가 흰색 텍스트이므로 어두운 테마(배경 이미지·심포지엄·컨퍼런스)만
   // 테마 배경을 쓰고, 밝은 테마는 기존 인디고 그라데이션을 유지한다.
@@ -929,6 +934,7 @@ export function EndedView({ session, navigate, template, assets, embedded = fals
           <br />
           오늘 함께한 시간이 도움이 되었길 바랍니다
         </p>
+        {surveySlot && <div className="w-full mt-6">{surveySlot}</div>}
       </div>
 
       <div className="px-5 pb-8 max-w-sm w-full mx-auto">

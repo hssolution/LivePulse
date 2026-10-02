@@ -84,6 +84,7 @@ const PresenterQnA = lazy(() => import('./pages/PresenterQnA'))
 const BroadcastQnA = lazy(() => import('./pages/BroadcastQnA'))
 const SpeakerScreen = lazy(() => import('./pages/SpeakerScreen'))
 const TemplatePreviewPublic = lazy(() => import('./pages/TemplatePreviewPublic'))
+const InstructorProfile = lazy(() => import('./pages/InstructorProfile'))
 
 /**
  * Suspense Wrapper 컴포넌트
@@ -170,6 +171,14 @@ function AppContent() {
             <Route path="/lectures" element={<Navigate to="/" replace />} />
             <Route path="/instructors" element={<Navigate to="/" replace />} />
             <Route path="/agencies" element={<Navigate to="/" replace />} />
+            {/* 강사 공개 프로필 — 여러 행사에 걸친 누적 평점 (026) */}
+            <Route path="/instructor/:id" element={
+              <PublicThemeProvider>
+                <SuspenseWrapper>
+                  <InstructorProfile />
+                </SuspenseWrapper>
+              </PublicThemeProvider>
+            } />
             <Route path="/service/:slug" element={
               <PublicThemeProvider>
                 <SuspenseWrapper>

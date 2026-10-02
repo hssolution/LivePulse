@@ -58,6 +58,7 @@ import {
   ListChecks,
 } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { SurveyToggle } from '@/components/session/SessionFeedbackPanel'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import DesignSimulator from '@/components/session/DesignSimulator'
 import CollaborationPanel from '@/components/session/CollaborationPanel'
@@ -609,6 +610,7 @@ export default function SessionDetail() {
         <main className="flex-1 overflow-y-auto">
           {section === 'basic' && (
             <BasicSection
+              sessionId={id}
               formData={formData}
               setFormData={setFormData}
               onSave={handleSaveBasic}
@@ -866,7 +868,7 @@ function SectionHeader({ title, desc }) {
 /* ============================================================
  * Section 1: 기본 정보
  * ============================================================ */
-function BasicSection({ formData, setFormData, onSave, saving }) {
+function BasicSection({ sessionId, formData, setFormData, onSave, saving }) {
   const upd = (field, value) => setFormData((p) => ({ ...p, [field]: value }))
   return (
     <div className="p-8 max-w-3xl">
@@ -966,6 +968,8 @@ function BasicSection({ formData, setFormData, onSave, saving }) {
           저장
         </button>
       </div>
+      {/* 끝나면 만족도 설문 — 즉시 저장되는 스위치(026) */}
+      <SurveyToggle sessionId={sessionId} />
     </div>
   )
 }

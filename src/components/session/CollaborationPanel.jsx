@@ -75,7 +75,8 @@ import {
   Edit,
   ChevronUp,
   ChevronDown,
-  GripVertical
+  GripVertical,
+  Star
 } from 'lucide-react'
 import PartnerInfoDialog from '@/components/common/PartnerInfoDialog'
 
@@ -93,6 +94,7 @@ function SortablePresenterItem({
   onDelete,
   onClickPartner,
   onClickMember,
+  profileId,
   t 
 }) {
   const {
@@ -192,6 +194,17 @@ function SortablePresenterItem({
         {presenter.presenter_type !== 'manual' && presenter.display_title && (
           <p className="text-sm text-muted-foreground">{presenter.display_title}</p>
         )}
+        {/* 강사 독립 프로필(026) — 여러 세션 누적 평점 */}
+        {profileId && (
+          <a
+            href={`/instructor/${profileId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline mt-0.5"
+          >
+            <Star className="h-3 w-3" /> {t('instructor.viewProfile', '강사 프로필')}
+          </a>
+        )}
       </div>
       
       {/* 액션 */}
@@ -235,6 +248,28 @@ export default function CollaborationPanel({ sessionId, partnerId, partnerType, 
   const [invitedPartner, setInvitedPartner] = useState(null)
   const [presenters, setPresenters] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
+  // 발표자 id → 강사 프로필 id (026). 협업 조회 함수는 그대로 두고 새 컬럼만 따로 읽는다
+  const [profileLinks, setProfileLinks] = useState({})
+  const presenterIdsKey = presenters.map((p) => p.id).join(',')
+  useEffect(() => {
+    if (!sessionId || !presenterIdsKey) return
+    let cancelled = false
+    supabase
+      .from('session_presenters')
+      .select('id, instructor_profile_id')
+      .eq('session_id', sessionId)
+      .then(({ data, error }) => {
+        if (cancelled || error) return
+        const map = {}
+        ;(data || []).forEach((r) => {
+          if (r.instructor_profile_id) map[r.id] = r.instructor_profile_id
+        })
+        setProfileLinks(map)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId, presenterIdsKey])
   
   // 파트너 초대 다이얼로그
   const [showPartnerDialog, setShowPartnerDialog] = useState(false)
@@ -987,6 +1022,7 @@ export default function CollaborationPanel({ sessionId, partnerId, partnerType, 
                     <SortablePresenterItem
                       key={presenter.id}
                       presenter={presenter}
+                      profileId={profileLinks[presenter.id]}
                       index={index}
                       totalCount={presenters.length}
                       getStatusBadge={getStatusBadge}

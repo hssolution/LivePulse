@@ -57,6 +57,46 @@ export function hasJoined(code) {
 }
 
 /**
+ * 만족도 설문 전용 키 (026) — 참가자 토큰과 일부러 분리한다.
+ * 참가자 토큰은 입장 정보(이름·연락처) 행 id 일 수 있어, 설문 응답과 이어지면 익명성이 깨진다.
+ * 서버는 이 값의 md5만 저장하고(중복 응답 방지), 브라우저당 1회만 의미가 있다.
+ */
+const surveyKeyFor = (code) => `lp_survey_key:${code}`
+const surveyDoneFor = (code) => `lp_survey_done:${code}`
+
+export function getSurveyKey(code) {
+  if (!code) return null
+  try {
+    let key = localStorage.getItem(surveyKeyFor(code))
+    if (!key) {
+      key = crypto.randomUUID()
+      localStorage.setItem(surveyKeyFor(code), key)
+    }
+    return key
+  } catch {
+    if (!window.__lpSurveyFallback) window.__lpSurveyFallback = {}
+    if (!window.__lpSurveyFallback[code]) window.__lpSurveyFallback[code] = crypto.randomUUID()
+    return window.__lpSurveyFallback[code]
+  }
+}
+
+export function hasSubmittedSurvey(code) {
+  if (!code) return false
+  try {
+    return localStorage.getItem(surveyDoneFor(code)) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markSurveySubmitted(code) {
+  if (!code) return
+  try {
+    localStorage.setItem(surveyDoneFor(code), '1')
+  } catch { /* storage 불가 환경 무시 */ }
+}
+
+/**
  * join RPC가 참가자 id를 반환하면 토큰으로 저장.
  * 이미 발급된 토큰이 있으면 유지 — 좋아요·투표 기록의 연속성이
  * 서버 id 정합성보다 우선한다 (리뷰 S2: 키 교체로 인한 기록 단절 방지).
