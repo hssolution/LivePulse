@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,7 @@ import {
 import { toast } from 'sonner'
 import { LanguageSelector } from '@/components/ui/language-selector'
 import { useLanguage } from '@/context/LanguageContext'
+import { SESSION_CREATE_PATH, clearPostAuthRedirect } from '@/lib/postAuthRedirect'
 import { 
   User, 
   Mail, 
@@ -46,7 +47,9 @@ import {
 /**
  * 마이페이지 (일반 회원용)
  * - 내 정보 확인
- * - 파트너 신청 (팝업)
+ * - 파트너(주최) 신청 (팝업) — 신청하면 바로 승인되고 세션 만들기로 이어진다 (TSK-1294)
+ *   · DB 에 sp_partner_apply_s 가 아직 없으면 예전처럼 신청 행만 넣고 관리자 승인을 기다린다
+ * - ?start=session 으로 들어오면: 파트너는 세션 만들기로, 아니면 신청 팝업을 바로 연다
  * - 신청 상태 확인
  * - 언어팩 적용됨
  */
@@ -54,6 +57,10 @@ export default function MyPage() {
   const { user, profile, loading: authLoading, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const { t } = useLanguage()
+  const [searchParams] = useSearchParams()
+  // 랜딩의 «세션 만들기»에서 온 사람 — 신청을 마치면 세션 만들기로 보낸다
+  const startSession = searchParams.get('start') === 'session'
+  const [startHandled, setStartHandled] = useState(false)
   
   const [partnerRequest, setPartnerRequest] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -145,22 +152,17 @@ export default function MyPage() {
       errors.representativeName = t('mypage.nameRequired')
     }
     
-    if (!formData.phone.trim()) {
-      errors.phone = t('mypage.phoneRequired')
-    } else if (!validatePhone(formData.phone)) {
-      errors.phone = t('mypage.phoneInvalid')
-    } else {
-      // 전화번호 중복 체크
-      const isDuplicate = await checkPhoneDuplicate(formData.phone)
-      if (isDuplicate) {
-        errors.phone = t('mypage.phoneDuplicate')
+    // 연락처·사용 목적은 선택 — 첫 세션에 꼭 필요한 것(이름·단체명)만 받는다. 적었다면 형식만 본다.
+    if (formData.phone.trim()) {
+      if (!validatePhone(formData.phone)) {
+        errors.phone = t('mypage.phoneInvalid')
+      } else {
+        // 전화번호 중복 체크
+        const isDuplicate = await checkPhoneDuplicate(formData.phone)
+        if (isDuplicate) {
+          errors.phone = t('mypage.phoneDuplicate')
+        }
       }
-    }
-    
-    if (!formData.purpose.trim()) {
-      errors.purpose = t('mypage.purposeRequired')
-    } else if (formData.purpose.trim().length < 10) {
-      errors.purpose = t('mypage.purposeMinLength')
     }
     
     // 타입별 필수값
@@ -171,9 +173,6 @@ export default function MyPage() {
     } else if (formData.partnerType === 'agency') {
       if (!formData.companyName.trim()) {
         errors.companyName = t('mypage.companyRequired')
-      }
-      if (!formData.businessNumber.trim()) {
-        errors.businessNumber = t('mypage.businessNumberRequired')
       }
     } else if (formData.partnerType === 'instructor') {
       // 강사는 활동명 필수
@@ -347,6 +346,51 @@ export default function MyPage() {
     }
   }
 
+  const resetForm = () => {
+    setFormData({
+      partnerType: 'organizer',
+      representativeName: '',
+      phone: '',
+      purpose: '',
+      companyName: '',
+      businessNumber: '',
+      industry: '',
+      expectedScale: '',
+      clientType: '',
+      displayName: '',
+      specialty: '',
+      bio: ''
+    })
+    setFormErrors({})
+  }
+
+  /**
+   * RPC 가 DB 에 없어서 난 오류인지 (PostgREST: PGRST202 / 404)
+   */
+  const isMissingFunction = (error) =>
+    error?.code === 'PGRST202' ||
+    error?.code === '42883' ||
+    /could not find the function/i.test(error?.message || '')
+
+  /**
+   * «세션 만들기»에서 온 사람: 이미 파트너면 만들기 화면으로, 신청할 수 있으면 팝업을 바로 연다
+   */
+  useEffect(() => {
+    if (!startSession || startHandled || authLoading || loading || !user) return
+    if (profile?.role === 'admin') return
+    if (profile?.userType === 'partner') {
+      setStartHandled(true)
+      clearPostAuthRedirect()
+      navigate(SESSION_CREATE_PATH, { replace: true })
+      return
+    }
+    // 승인됐지만 JWT 가 아직 안 바뀐 경우는 fetchPartnerRequest 의 세션 갱신을 기다린다
+    if (partnerRequest?.status === 'approved' && isPartnerInDB) return
+    setStartHandled(true)
+    clearPostAuthRedirect()
+    if (!partnerRequest || partnerRequest.status === 'rejected') setRequestDialogOpen(true)
+  }, [startSession, startHandled, authLoading, loading, user, profile, partnerRequest, isPartnerInDB, navigate])
+
   /**
    * 파트너 신청 제출
    */
@@ -362,12 +406,55 @@ export default function MyPage() {
     }
 
     try {
-      // 타입별 데이터 구성
+      // 1) 즉시 승인 프로시저 — 신청과 동시에 파트너가 된다
+      const isOrg = formData.partnerType === 'organizer' || formData.partnerType === 'agency'
+      const { data: applied, error: applyError } = await supabase.rpc('sp_partner_apply_s', {
+        p_partner_type: formData.partnerType,
+        p_representative_name: formData.representativeName.trim(),
+        p_company_name: isOrg ? formData.companyName.trim() : null,
+        p_phone: formData.phone.trim(),
+        p_purpose: formData.purpose.trim(),
+        p_business_number: isOrg ? formData.businessNumber.trim() : null,
+        p_industry: isOrg ? formData.industry.trim() : null,
+        p_expected_scale: isOrg ? formData.expectedScale.trim() : null,
+        p_client_type: formData.partnerType === 'agency' ? formData.clientType.trim() : null,
+        p_display_name: formData.partnerType === 'instructor' ? formData.displayName.trim() : null,
+        p_specialty: formData.partnerType === 'instructor' ? formData.specialty.trim() : null,
+        p_bio: formData.partnerType === 'instructor' ? formData.bio.trim() : null,
+      })
+
+      if (!applyError) {
+        if (!applied?.success) throw new Error(applied?.error || 'apply_failed')
+
+        setRequestDialogOpen(false)
+        resetForm()
+
+        if (applied.status === 'approved') {
+          toast.success(t('mypage.approvedNow'))
+          // JWT 에 파트너 유형이 실려야 파트너 화면에 들어갈 수 있다
+          const refreshed = await refreshProfile()
+          if (refreshed?.userType === 'partner') {
+            clearPostAuthRedirect()
+            navigate(SESSION_CREATE_PATH)
+            return
+          }
+        } else {
+          toast.success(t('mypage.applySuccess'))
+        }
+        fetchPartnerRequest()
+        return
+      }
+
+      // 프로시저가 아직 없는 DB(마이그레이션 024 적용 전)만 예전 방식으로 넘어간다. 그 밖의 오류는 그대로 실패.
+      if (!isMissingFunction(applyError)) throw applyError
+
+      // 2) 예전 방식 — 신청 행만 넣고 관리자 승인을 기다린다
+      // 타입별 데이터 구성 (phone·purpose 는 NOT NULL 이라 비어 있으면 빈 문자열)
       const requestData = {
         user_id: user.id,
         partner_type: formData.partnerType,
         representative_name: formData.representativeName.trim(),
-        phone: formData.phone,
+        phone: formData.phone.trim(),
         purpose: formData.purpose.trim(),
       }
 
@@ -379,9 +466,10 @@ export default function MyPage() {
         requestData.expected_scale = formData.expectedScale.trim() || null
       }
 
-      // 대행업체 전용
+      // 대행업체 전용 (승인 때 partner_agencies.business_number 가 NOT NULL 이라 빈 문자열로 둔다)
       if (formData.partnerType === 'agency') {
         requestData.client_type = formData.clientType.trim() || null
+        requestData.business_number = formData.businessNumber.trim()
       }
 
       // 강사 전용
@@ -400,21 +488,7 @@ export default function MyPage() {
       toast.success(t('mypage.applySuccess'))
       setRequestDialogOpen(false)
       fetchPartnerRequest()
-      setFormData({
-        partnerType: 'organizer',
-        representativeName: '',
-        phone: '',
-        purpose: '',
-        companyName: '',
-        businessNumber: '',
-        industry: '',
-        expectedScale: '',
-        clientType: '',
-        displayName: '',
-        specialty: '',
-        bio: ''
-      })
-      setFormErrors({})
+      resetForm()
     } catch (error) {
       console.error('Error submitting partner request:', error)
       toast.error(t('mypage.applyError'))
@@ -775,7 +849,7 @@ export default function MyPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="phone">
-                  {t('partner.phone')} <span className="text-red-500">*</span>
+                  {t('partner.phone')} <span className="text-muted-foreground text-xs">({t('common.optional')})</span>
                 </Label>
                 <Input
                   id="phone"
@@ -798,7 +872,7 @@ export default function MyPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="purpose">
-                  {t('partner.purpose')} <span className="text-red-500">*</span>
+                  {t('partner.purpose')} <span className="text-muted-foreground text-xs">({t('common.optional')})</span>
                 </Label>
                 <Textarea
                   id="purpose"
@@ -844,8 +918,7 @@ export default function MyPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="businessNumber">
-                      {t('partner.businessNumber')} {formData.partnerType === 'agency' && <span className="text-red-500">*</span>}
-                      {formData.partnerType === 'organizer' && <span className="text-muted-foreground text-xs">({t('common.optional')})</span>}
+                      {t('partner.businessNumber')} <span className="text-muted-foreground text-xs">({t('common.optional')})</span>
                     </Label>
                     <Input
                       id="businessNumber"

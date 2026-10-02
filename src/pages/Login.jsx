@@ -15,6 +15,7 @@ import {
   logLoginEvent,
   getFailureReason
 } from '@/lib/loginService'
+import { consumePostAuthRedirect, clearPostAuthRedirect, safeInternalPath } from '@/lib/postAuthRedirect'
 
 /**
  * 로그인 페이지
@@ -26,6 +27,10 @@ import {
 export default function Login() {
   const [searchParams] = useSearchParams()
   const redirectUrl = searchParams.get('redirect') || ''
+  // 가입 화면으로 넘어가도 가려던 곳을 잃지 않게 한다
+  const signupPath = safeInternalPath(redirectUrl)
+    ? `/signup?redirect=${encodeURIComponent(redirectUrl)}`
+    : '/signup'
   const prefillEmail = searchParams.get('email') || ''
   
   const [email, setEmail] = useState(prefillEmail)
@@ -167,8 +172,11 @@ export default function Login() {
       document.body.classList.add('preload')
 
       // 2. redirect URL이 있으면 해당 페이지로 최우선 이동
-      if (redirectUrl) {
-        navigate(redirectUrl)
+      //    (없으면 가입 때 적어 둔 «가려던 곳» — 예: 세션 만들기)
+      const target = redirectUrl || consumePostAuthRedirect()
+      if (target) {
+        clearPostAuthRedirect()
+        navigate(target)
         return
       }
 
@@ -313,7 +321,7 @@ export default function Login() {
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {t('auth.noAccount')}{' '}
-            <Link to="/signup" className="text-primary hover:underline font-medium" tabIndex={5}>
+            <Link to={signupPath} className="text-primary hover:underline font-medium" tabIndex={5}>
               {t('auth.signup')}
             </Link>
           </div>

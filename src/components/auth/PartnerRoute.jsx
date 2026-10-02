@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import InitialLoading from '@/components/ui/InitialLoading'
 
@@ -9,6 +9,7 @@ import InitialLoading from '@/components/ui/InitialLoading'
  */
 export function PartnerRoute({ children }) {
   const { user, profile, loading } = useAuth()
+  const location = useLocation()
 
   // 로딩 중일 때는 로딩 화면 표시
   if (loading || (user && !profile)) {
@@ -27,7 +28,9 @@ export function PartnerRoute({ children }) {
 
   // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
   if (!user) {
-    return <Navigate to="/login" replace />
+    // 로그인 뒤 보던 화면으로 돌아오게 한다
+    const back = `${location.pathname}${location.search}`
+    return <Navigate to={`/login?redirect=${encodeURIComponent(back)}`} replace />
   }
 
   // 파트너 권한 체크 (관리자는 프리패스)

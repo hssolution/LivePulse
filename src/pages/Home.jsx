@@ -30,6 +30,7 @@ import {
   Tv,
   Zap,
 } from 'lucide-react'
+import { START_SESSION_PATH, SESSION_CREATE_PATH, consumePostAuthRedirect } from '@/lib/postAuthRedirect'
 
 /** 참여 코드: 영문 대문자·숫자 6자리 (sessions.code, generate_session_code) */
 const JOIN_CODE_LENGTH = 6
@@ -363,13 +364,21 @@ export default function Home() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [location.key, location.hash])
 
-  // 세션 만들기: 파트너(관리자 포함) → 만들기 화면, 일반 회원 → 파트너 신청(마이페이지), 비로그인 → 가입
+  // 세션 만들기: 파트너(관리자 포함) → 만들기 화면, 일반 회원 → 주최 신청(바로 승인) 뒤 만들기 화면,
+  // 비로그인 → 가입 뒤 같은 길로 돌아온다
   const canRunSessions = profile?.userType === 'partner' || profile?.role === 'admin'
   const createSessionTo = !user
-    ? `/signup?redirect=${encodeURIComponent('/mypage')}`
+    ? `/signup?redirect=${encodeURIComponent(START_SESSION_PATH)}`
     : canRunSessions
-      ? '/partner/sessions/new'
-      : '/mypage'
+      ? SESSION_CREATE_PATH
+      : START_SESSION_PATH
+
+  // 이메일 인증 링크로 돌아온 사람: 가입 때 가려던 곳(세션 만들기)이 적혀 있으면 그리로 보낸다
+  useEffect(() => {
+    if (!user || !profile) return
+    const pending = consumePostAuthRedirect()
+    if (pending) navigate(pending, { replace: true })
+  }, [user, profile, navigate])
 
   const joinReady = joinCode.length === JOIN_CODE_LENGTH
   const handleJoin = (e) => {

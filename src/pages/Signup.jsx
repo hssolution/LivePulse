@@ -8,6 +8,7 @@ import { Zap, ArrowLeft, CheckCircle, Mail, AlertCircle, RefreshCw } from 'lucid
 import { useLanguage } from '@/context/LanguageContext'
 import { OpenFreeNotice } from '@/components/common/OpenFreeNotice'
 import SEO from '@/components/common/SEO'
+import { safeInternalPath, savePostAuthRedirect } from '@/lib/postAuthRedirect'
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,11 @@ export default function Signup() {
   
   const navigate = useNavigate()
   const { t, currentLanguage } = useLanguage()
+
+  // 가입 뒤 돌아갈 곳 — 사이트 안쪽 경로만 인증 링크·로그인 화면으로 넘긴다
+  const safeRedirect = safeInternalPath(redirectUrl)
+  const emailRedirectTo = safeRedirect ? `${window.location.origin}${safeRedirect}` : ''
+  const loginPath = safeRedirect ? `/login?redirect=${encodeURIComponent(safeRedirect)}` : '/login'
 
   useEffect(() => {
     checkSystemStatus()
@@ -102,7 +108,9 @@ export default function Signup() {
         options: {
           data: {
             preferred_language: currentLanguage
-          }
+          },
+          // 인증 링크를 누르면 원래 가려던 곳(예: 세션 만들기)으로 돌아오게 한다
+          ...(emailRedirectTo ? { emailRedirectTo } : {})
         }
       })
 
@@ -124,7 +132,8 @@ export default function Signup() {
               navigate('/')
             }
           } else {
-            // 이메일 인증 필요
+            // 이메일 인증 필요 — 인증 뒤 돌아갈 곳을 적어 둔다(같은 브라우저에서 이어질 때 쓴다)
+            if (safeRedirect && !isFirstUser) savePostAuthRedirect(safeRedirect)
             setDialogType('emailSent')
           }
         } else {
@@ -159,7 +168,9 @@ export default function Signup() {
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: email,
+        ...(emailRedirectTo ? { options: { emailRedirectTo } } : {})
       })
+      if (!error && safeRedirect) savePostAuthRedirect(safeRedirect)
       
       if (error) throw error
       
@@ -181,7 +192,7 @@ export default function Signup() {
   }
 
   const handleGoToLogin = () => {
-    navigate('/login')
+    navigate(loginPath)
   }
 
   const handleGoToHome = () => {
@@ -434,7 +445,7 @@ export default function Signup() {
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {t('auth.alreadyHaveAccount')}{' '}
-            <Link to="/login" className="text-primary hover:underline font-medium">
+            <Link to={loginPath} className="text-primary hover:underline font-medium">
               {t('auth.login')}
             </Link>
           </div>
