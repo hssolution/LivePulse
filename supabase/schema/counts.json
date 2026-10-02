@@ -3,13 +3,13 @@
   "ref": "pfrdyviyzilhjarnmcec",
   "prod": {
     "tables": 40,
-    "functions": 154,
-    "triggers_public": 32,
+    "functions": 159,
+    "triggers_public": 33,
     "triggers_other_schema": 1,
-    "policies_public": 124,
+    "policies_public": 125,
     "policies_storage": 6,
-    "indexes": 145,
-    "constraints": 153,
+    "indexes": 146,
+    "constraints": 155,
     "sequences": 1,
     "views": 0,
     "types": 0,
@@ -18,5 +18,5 @@
     "realtime_tables": 4,
     "event_triggers_public_fn": 0
   },
-  "dumpedFunctions": 154
+  "dumpedFunctions": 159
 }

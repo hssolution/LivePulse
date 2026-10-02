@@ -70,9 +70,11 @@ create table public.instructor_profiles (
   bio text,
   image_url text,
   created_by uuid,
-  is_public boolean default true not null,
+  is_public boolean default false not null,
   created_at timestamp with time zone default now() not null,
-  updated_at timestamp with time zone default now() not null
+  updated_at timestamp with time zone default now() not null,
+  slug text,
+  public_consent_at timestamp with time zone
 );
 
 create table public.language_categories (
@@ -558,7 +560,10 @@ comment on column public.inquiry_replies.inquiry_id is '문의 ID';
 comment on column public.inquiry_replies.is_admin is '관리자 답변 여부';
 comment on column public.inquiry_replies.user_id is '작성자 ID';
 comment on column public.instructor_profiles.created_by is '만든 사람 — 계정 없는 강사(수기 등록)는 그 주최자 계정이 관리';
+comment on column public.instructor_profiles.is_public is '본인이 공개를 켰는지(기본 끔). 켜기는 본인만, 끄기는 본인·관리 주최자·관리자 (029)';
 comment on column public.instructor_profiles.partner_id is '강사 파트너(있으면)';
+comment on column public.instructor_profiles.public_consent_at is '본인이 공개에 동의(켜기)한 시각. 끄면 지운다 (029)';
+comment on column public.instructor_profiles.slug is '공개 주소 /instructors/<slug>. 소문자·숫자·하이픈 3~40자, 비우면 id 로 연다 (029)';
 comment on column public.instructor_profiles.user_id is '강사 본인 계정(있으면). 본인만 수정';
 comment on column public.language_categories.description is '카테고리 설명';
 comment on column public.language_categories.name is '카테고리명 (예: common, auth, admin, partner)';

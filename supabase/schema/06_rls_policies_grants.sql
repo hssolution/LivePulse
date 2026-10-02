@@ -121,7 +121,9 @@ create policy instructor_profiles_insert on public.instructor_profiles as PERMIS
   with check ((((user_id = auth.uid()) OR ((user_id IS NULL) AND (created_by = auth.uid()))) AND ((partner_id IS NULL) OR (partner_id IN ( SELECT partners.id
    FROM partners
   WHERE (partners.profile_id = auth.uid()))))));
-create policy instructor_profiles_select on public.instructor_profiles as PERMISSIVE for SELECT to anon, authenticated
+create policy instructor_profiles_select_anon on public.instructor_profiles as PERMISSIVE for SELECT to anon
+  using (is_public);
+create policy instructor_profiles_select_auth on public.instructor_profiles as PERMISSIVE for SELECT to authenticated
   using ((is_public OR (user_id = auth.uid()) OR (created_by = auth.uid()) OR (EXISTS ( SELECT 1
    FROM profiles
   WHERE ((profiles.id = auth.uid()) AND (profiles.user_role = 'admin'::text))))));
@@ -666,7 +668,6 @@ grant delete, insert, maintain, references, select, trigger, truncate, update on
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.inquiry_replies to authenticated;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.inquiry_replies to service_role;
 revoke all on table public.instructor_profiles from public, anon, authenticated, service_role;
-grant select on table public.instructor_profiles to anon;
 grant insert, select, update on table public.instructor_profiles to authenticated;
 grant delete, insert, maintain, references, select, trigger, truncate, update on table public.instructor_profiles to service_role;
 revoke all on table public.language_categories from public, anon, authenticated, service_role;
@@ -866,6 +867,11 @@ grant execute on function public.decrement_participant_count(session_id uuid) to
 revoke all on function public.fn_can_manage_session(p_session_id uuid) from public, anon, authenticated, service_role;
 grant execute on function public.fn_can_manage_session(p_session_id uuid) to authenticated;
 grant execute on function public.fn_can_manage_session(p_session_id uuid) to service_role;
+revoke all on function public.fn_instructor_profile_public_guard() from public, anon, authenticated, service_role;
+grant execute on function public.fn_instructor_profile_public_guard() to service_role;
+revoke all on function public.fn_mask_contact(p_text text) from public, anon, authenticated, service_role;
+grant execute on function public.fn_mask_contact(p_text text) to authenticated;
+grant execute on function public.fn_mask_contact(p_text text) to service_role;
 revoke all on function public.fn_session_issuer_name(p_session_id uuid) from public, anon, authenticated, service_role;
 grant execute on function public.fn_session_issuer_name(p_session_id uuid) to service_role;
 revoke all on function public.fn_session_presenter_link_profile() from public, anon, authenticated, service_role;
@@ -1139,6 +1145,10 @@ revoke all on function public.sp_instructor_profile_q(p_profile_id uuid) from pu
 grant execute on function public.sp_instructor_profile_q(p_profile_id uuid) to anon;
 grant execute on function public.sp_instructor_profile_q(p_profile_id uuid) to authenticated;
 grant execute on function public.sp_instructor_profile_q(p_profile_id uuid) to service_role;
+revoke all on function public.sp_instructor_public_q(p_key text) from public, anon, authenticated, service_role;
+grant execute on function public.sp_instructor_public_q(p_key text) to anon;
+grant execute on function public.sp_instructor_public_q(p_key text) to authenticated;
+grant execute on function public.sp_instructor_public_q(p_key text) to service_role;
 revoke all on function public.sp_join_session_anon_s(p_session_id uuid, p_name text, p_email text, p_phone text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_join_session_anon_s(p_session_id uuid, p_name text, p_email text, p_phone text) to anon;
 grant execute on function public.sp_join_session_anon_s(p_session_id uuid, p_name text, p_email text, p_phone text) to authenticated;
@@ -1219,6 +1229,12 @@ grant execute on function public.sp_login_failure_s(p_email text, p_ip_address t
 grant execute on function public.sp_login_failure_s(p_email text, p_ip_address text) to authenticated;
 grant execute on function public.sp_login_failure_s(p_email text, p_ip_address text) to public;
 grant execute on function public.sp_login_failure_s(p_email text, p_ip_address text) to service_role;
+revoke all on function public.sp_my_instructor_profile_q() from public, anon, authenticated, service_role;
+grant execute on function public.sp_my_instructor_profile_q() to authenticated;
+grant execute on function public.sp_my_instructor_profile_q() to service_role;
+revoke all on function public.sp_my_instructor_public_s(p_is_public boolean, p_slug text, p_display_name text, p_title text, p_bio text) from public, anon, authenticated, service_role;
+grant execute on function public.sp_my_instructor_public_s(p_is_public boolean, p_slug text, p_display_name text, p_title text, p_bio text) to authenticated;
+grant execute on function public.sp_my_instructor_public_s(p_is_public boolean, p_slug text, p_display_name text, p_title text, p_bio text) to service_role;
 revoke all on function public.sp_partner_apply_s(p_partner_type text, p_representative_name text, p_company_name text, p_phone text, p_purpose text, p_business_number text, p_industry text, p_expected_scale text, p_client_type text, p_display_name text, p_specialty text, p_bio text) from public, anon, authenticated, service_role;
 grant execute on function public.sp_partner_apply_s(p_partner_type text, p_representative_name text, p_company_name text, p_phone text, p_purpose text, p_business_number text, p_industry text, p_expected_scale text, p_client_type text, p_display_name text, p_specialty text, p_bio text) to authenticated;
 grant execute on function public.sp_partner_apply_s(p_partner_type text, p_representative_name text, p_company_name text, p_phone text, p_purpose text, p_business_number text, p_industry text, p_expected_scale text, p_client_type text, p_display_name text, p_specialty text, p_bio text) to service_role;
@@ -1552,6 +1568,9 @@ grant execute on function public.update_user_language(lang_code text) to anon;
 grant execute on function public.update_user_language(lang_code text) to authenticated;
 grant execute on function public.update_user_language(lang_code text) to public;
 grant execute on function public.update_user_language(lang_code text) to service_role;
+
+-- 컬럼 단위 GRANT(운영 그대로 — 위 테이블 revoke 뒤에 준다)
+grant select (id, display_name, title, image_url, is_public, created_at, slug) on table public.instructor_profiles to anon;
 
 -- 기본 권한(운영 pg_default_acl, 참고용 — Supabase 가 프로젝트 생성 때 기본으로 걸어 주므로 적용하지 않음)
 --   role=postgres schema=public type=S acl={postgres=rwU/postgres,anon=rwU/postgres,authenticated=rwU/postgres,service_role=rwU/postgres}

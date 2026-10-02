@@ -7,6 +7,7 @@
 -- 앱 테이블 트리거
 CREATE TRIGGER handle_faqs_updated_at BEFORE UPDATE ON faqs FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
 CREATE TRIGGER handle_inquiries_updated_at BEFORE UPDATE ON inquiries FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
+CREATE TRIGGER instructor_profiles_public_guard BEFORE INSERT OR UPDATE OF is_public, user_id ON instructor_profiles FOR EACH ROW EXECUTE FUNCTION fn_instructor_profile_public_guard();
 CREATE TRIGGER set_instructor_profiles_updated_at BEFORE UPDATE ON instructor_profiles FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
 CREATE TRIGGER on_language_categories_updated BEFORE UPDATE ON language_categories FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER on_language_keys_updated BEFORE UPDATE ON language_keys FOR EACH ROW EXECUTE FUNCTION set_updated_at();

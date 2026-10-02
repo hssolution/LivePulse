@@ -301,6 +301,47 @@ AS $function$
   );
 $function$;
 
+CREATE OR REPLACE FUNCTION public.fn_instructor_profile_public_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_was boolean := CASE WHEN TG_OP = 'UPDATE' THEN OLD.is_public ELSE false END;
+BEGIN
+  IF NEW.is_public AND NOT v_was THEN
+    -- 서비스 롤·마이그레이션(v_uid 없음)이 아니면 본인만 켤 수 있다
+    IF v_uid IS NOT NULL AND (NEW.user_id IS NULL OR NEW.user_id <> v_uid) THEN
+      RAISE EXCEPTION 'instructor_public_owner_only' USING ERRCODE = '42501';
+    END IF;
+    NEW.public_consent_at := now();
+  ELSIF NOT NEW.is_public THEN
+    NEW.public_consent_at := NULL;
+  ELSIF TG_OP = 'UPDATE' AND NEW.user_id IS DISTINCT FROM OLD.user_id THEN
+    -- 공개 중에 계정이 바뀌면 동의가 이어지지 않는다
+    NEW.is_public := false;
+    NEW.public_consent_at := NULL;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.fn_mask_contact(p_text text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT CASE WHEN p_text IS NULL THEN NULL ELSE
+    regexp_replace(
+      regexp_replace(p_text,
+        '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '[비공개]', 'g'),
+      '(\+?82[[:space:].-]?|0)[0-9]{1,2}[[:space:].)-]{0,2}[0-9]{3,4}[[:space:].-]?[0-9]{4}', '[비공개]', 'g')
+  END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.fn_session_issuer_name(p_session_id uuid)
  RETURNS text
  LANGUAGE sql
@@ -2218,23 +2259,46 @@ $function$;
 
 CREATE OR REPLACE FUNCTION public.sp_instructor_profile_q(p_profile_id uuid)
  RETURNS json
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT public.sp_instructor_public_q(p_profile_id::text);
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sp_instructor_public_q(p_key text)
+ RETURNS json
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
-  v_uid uuid := auth.uid();
-  v_p   public.instructor_profiles%ROWTYPE;
+  v_uid  uuid := auth.uid();
+  v_key  text := lower(btrim(COALESCE(p_key, '')));
+  v_p    public.instructor_profiles%ROWTYPE;
   v_sessions json;
-  v_avg numeric;
-  v_cnt integer;
   v_scnt integer;
+  v_avg  numeric;
+  v_cnt  integer;
 BEGIN
-  SELECT * INTO v_p FROM public.instructor_profiles WHERE id = p_profile_id;
-  IF NOT FOUND OR NOT (v_p.is_public OR v_p.user_id = v_uid OR v_p.created_by = v_uid) THEN
+  IF v_key = '' OR char_length(v_key) > 64 THEN
     RETURN json_build_object('success', false, 'error', 'not_found');
   END IF;
 
+  IF v_key ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    SELECT * INTO v_p FROM public.instructor_profiles WHERE id = v_key::uuid;
+  ELSE
+    SELECT * INTO v_p FROM public.instructor_profiles WHERE slug = v_key;
+  END IF;
+
+  IF NOT FOUND OR NOT (
+       v_p.is_public
+       OR (v_uid IS NOT NULL AND (v_p.user_id = v_uid OR (v_p.user_id IS NULL AND v_p.created_by = v_uid)))
+     ) THEN
+    RETURN json_build_object('success', false, 'error', 'not_found');
+  END IF;
+
+  -- 진행한 공개 행사: 공개(published) 이후 상태만. 장소·연락처·코드는 주지 않는다
   WITH ss AS (
     SELECT DISTINCT s.id, s.title, s.start_at, s.status
       FROM public.session_presenters sp
@@ -2250,7 +2314,7 @@ BEGIN
       ) f ON true
   )
   SELECT COALESCE(json_agg(json_build_object(
-           'title', title, 'start_at', start_at, 'status', status,
+           'title', public.fn_mask_contact(title), 'start_at', start_at, 'status', status,
            'avg_rating', avg_rating, 'response_count', cnt
          ) ORDER BY start_at DESC), '[]'::json),
          count(*)::int
@@ -2267,8 +2331,14 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'profile', json_build_object(
-      'id', v_p.id, 'display_name', v_p.display_name, 'title', v_p.title,
-      'bio', v_p.bio, 'image_url', v_p.image_url, 'created_at', v_p.created_at,
+      'id', v_p.id,
+      'slug', v_p.slug,
+      'display_name', v_p.display_name,
+      'title', public.fn_mask_contact(v_p.title),
+      'bio', public.fn_mask_contact(v_p.bio),
+      'image_url', v_p.image_url,
+      'created_at', v_p.created_at,
+      'is_public', v_p.is_public,
       'is_mine', (v_uid IS NOT NULL AND (v_p.user_id = v_uid OR (v_p.user_id IS NULL AND v_p.created_by = v_uid)))
     ),
     'rating', json_build_object('avg', v_avg, 'count', COALESCE(v_cnt, 0)),
@@ -2972,6 +3042,89 @@ BEGIN
     v_attempt.attempt_count >= v_max_attempts,
     v_attempt.locked_until,
     v_attempt.attempt_count;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sp_my_instructor_profile_q()
+ RETURNS json
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_p   public.instructor_profiles%ROWTYPE;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'unauthorized');
+  END IF;
+  SELECT * INTO v_p FROM public.instructor_profiles WHERE user_id = v_uid;
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', true, 'profile', NULL);
+  END IF;
+  RETURN json_build_object('success', true, 'profile', json_build_object(
+    'id', v_p.id, 'slug', v_p.slug, 'display_name', v_p.display_name, 'title', v_p.title,
+    'bio', v_p.bio, 'image_url', v_p.image_url, 'is_public', v_p.is_public,
+    'public_consent_at', v_p.public_consent_at
+  ));
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sp_my_instructor_public_s(p_is_public boolean, p_slug text DEFAULT NULL::text, p_display_name text DEFAULT NULL::text, p_title text DEFAULT NULL::text, p_bio text DEFAULT NULL::text)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_uid   uuid := auth.uid();
+  v_slug  text := NULLIF(lower(btrim(COALESCE(p_slug, ''))), '');
+  v_name  text := NULLIF(btrim(COALESCE(p_display_name, '')), '');
+  v_title text := NULLIF(btrim(COALESCE(p_title, '')), '');
+  v_bio   text := NULLIF(btrim(COALESCE(p_bio, '')), '');
+  v_id    uuid;
+  v_pname text;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'unauthorized');
+  END IF;
+  IF v_slug IS NOT NULL AND NOT (
+       v_slug ~ '^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$' AND v_slug !~ '--'
+       AND v_slug !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_slug');
+  END IF;
+  IF v_slug IS NOT NULL AND EXISTS (
+       SELECT 1 FROM public.instructor_profiles WHERE slug = v_slug AND (user_id IS DISTINCT FROM v_uid)) THEN
+    RETURN json_build_object('success', false, 'error', 'slug_taken');
+  END IF;
+  IF v_name IS NOT NULL AND char_length(v_name) > 100 THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_name');
+  END IF;
+  IF v_title IS NOT NULL AND char_length(v_title) > 200 THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_title');
+  END IF;
+  IF v_bio IS NOT NULL AND char_length(v_bio) > 5000 THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_bio');
+  END IF;
+
+  SELECT id INTO v_id FROM public.instructor_profiles WHERE user_id = v_uid;
+  IF v_id IS NULL THEN
+    SELECT display_name INTO v_pname FROM public.profiles WHERE id = v_uid;
+    INSERT INTO public.instructor_profiles (user_id, display_name, title, bio, slug, created_by, is_public)
+    VALUES (v_uid, left(COALESCE(v_name, NULLIF(btrim(v_pname), ''), '강사'), 100),
+            v_title, v_bio, v_slug, v_uid, COALESCE(p_is_public, false))
+    RETURNING id INTO v_id;
+  ELSE
+    UPDATE public.instructor_profiles
+       SET is_public    = COALESCE(p_is_public, is_public),
+           slug         = v_slug,
+           display_name = COALESCE(v_name, display_name),
+           title        = v_title,
+           bio          = v_bio
+     WHERE id = v_id;
+  END IF;
+
+  RETURN public.sp_my_instructor_profile_q();
 END;
 $function$;
 
@@ -6085,6 +6238,8 @@ comment on function public.check_question_liked(p_question_id uuid, p_device_id 
 comment on function public.cleanup_old_sessions() is '오래된 세션 및 로그인 시도 기록 정리';
 comment on function public.custom_access_token_hook(event jsonb) is 'JWT 토큰에 사용자 프로필 정보(user_role, user_type, status 등)를 추가하는 Auth Hook';
 comment on function public.decrement_participant_count(session_id uuid) is '세션 참여자 수 감소 (최소값 0)';
+comment on function public.fn_instructor_profile_public_guard() is '강사 프로필 공개 켜기는 본인만, 동의 시각 기록 (029)';
+comment on function public.fn_mask_contact(p_text text) is '공개 글의 이메일·전화번호를 [비공개]로 바꾼다 (029)';
 comment on function public.fn_session_presenter_link_profile() is '발표자 행 → 강사 프로필 자동 연결·직접 지정 권한 확인 (026)';
 comment on function public.generate_invite_token() is '32자리 랜덤 초대 토큰 생성';
 comment on function public.generate_session_code() is '6자리 고유 참여 코드 생성 (혼동 문자 제외)';
@@ -6119,7 +6274,8 @@ comment on function public.sp_admin_template_toggle_s(p_id uuid) is '템플릿 �
 comment on function public.sp_admin_templates_q(p_screen_type text) is '관리자용 템플릿 목록 조회';
 comment on function public.sp_admin_users_q() is '관리자용 회원 목록 조회 - 프로필, 마지막 로그인, 파트너 정보 포함';
 comment on function public.sp_can_control_session(p_session_id uuid) is '세션 송출 제어 권한 확인 (좌장/강연자/협업/팀/관리자)';
-comment on function public.sp_instructor_profile_q(p_profile_id uuid) is '강사 프로필 공개 조회 — 누적 평균·응답 수·세션별 평점(의견 본문은 주지 않음) (026)';
+comment on function public.sp_instructor_profile_q(p_profile_id uuid) is '강사 프로필 조회(id) — 029 부터 sp_instructor_public_q 로 넘김';
+comment on function public.sp_instructor_public_q(p_key text) is '강사 공개 프로필(slug 또는 id) — 공개 동의한 프로필만, 연락처 가림, 진행한 공개 행사·누적 평점 (029)';
 comment on function public.sp_join_session_anon_s(p_session_id uuid, p_name text, p_email text, p_phone text) is '비로그인 사용자 세션 참여';
 comment on function public.sp_join_session_auth_s(p_session_id uuid, p_user_id uuid) is '로그인한 사용자 세션 참여';
 comment on function public.sp_join_session_q(p_code text, p_user_id uuid, p_is_preview boolean) is '세션 참여 페이지 초기 데이터 로드';
@@ -6135,6 +6291,8 @@ comment on function public.sp_login_attempt_c(p_email text, p_ip_address text) i
 comment on function public.sp_login_attempt_clear_s(p_email text, p_ip_address text) is '로그인 시도 초기화 - 로그인 성공 시 호출';
 comment on function public.sp_login_event_s(p_email text, p_event_type text, p_failure_reason text, p_ip_address text, p_user_agent text, p_device_info jsonb, p_session_id text) is '로그인 이벤트 로그 기록 - 성공/실패/로그아웃 등';
 comment on function public.sp_login_failure_s(p_email text, p_ip_address text) is '로그인 실패 기록 - 시도 횟수 증가, 잠금 처리';
+comment on function public.sp_my_instructor_profile_q() is '내 강사 프로필(본인 계정) (029)';
+comment on function public.sp_my_instructor_public_s(p_is_public boolean, p_slug text, p_display_name text, p_title text, p_bio text) is '내 강사 프로필 공개 여부·주소·이름·직함·소개 저장, 없으면 만든다 (029)';
 comment on function public.sp_partner_apply_s(p_partner_type text, p_representative_name text, p_company_name text, p_phone text, p_purpose text, p_business_number text, p_industry text, p_expected_scale text, p_client_type text, p_display_name text, p_specialty text, p_bio text) is '주최(파트너) 신청 — 본인 신청을 즉시 승인해 파트너로 만든다. 반려 이력이 있으면 심사 대기로 넣는다.';
 comment on function public.sp_partner_attendance_q(p_session_id uuid) is '주최 출석 명단·인원·수료증 발급 수·설정 (028)';
 comment on function public.sp_partner_collaboration_q(p_session_id uuid, p_partner_id uuid) is '세션 협업 정보 조회 - 세션 소유자, 초대된 파트너, 강사 목록, 팀원 목록';

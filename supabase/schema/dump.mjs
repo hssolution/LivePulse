@@ -95,6 +95,13 @@ const Q = {
       from o, lateral aclexplode(o.acl) x where o.acl is not null and x.grantee <> (select oid from pg_roles where rolname='postgres') group by 1,2,3,4
     )
     select kind, name, ord, grantee, privs from g order by kind, ord, name, grantee`,
+  // 컬럼 단위 GRANT(예: 029 anon 의 instructor_profiles 일부 컬럼 SELECT) — 테이블 ACL 과 따로 있다
+  colacl: `select format('%I.%I', n.nspname, c.relname) tbl, case when x.grantee=0 then 'public' else x.grantee::regrole::text end grantee,
+      lower(x.privilege_type) priv, string_agg(quote_ident(a.attname), ', ' order by a.attnum) cols
+    from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace, lateral aclexplode(a.attacl) x
+    where ${APP} and c.relkind in ('r','p','v','m') and a.attnum > 0 and not a.attisdropped and a.attacl is not null
+      and x.grantee <> (select oid from pg_roles where rolname='postgres')
+    group by 1,2,3 order by 1,2,3`,
   noacl: `select kind, name from (
       select 'table' kind, format('%I.%I', n.nspname, c.relname) name from pg_class c join pg_namespace n on n.oid=c.relnamespace where ${APP} and c.relkind in ('r','p','v','m') and c.relacl is null
       union all select 'function', format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where ${APP} and p.prokind in ('f','p') and p.proacl is null) z order by 1,2`,
@@ -189,6 +196,10 @@ out['03_constraints_indexes.sql'] = head('03 제약(PK·UNIQUE·CHECK 먼저, FK
     if (!hasAcl) continue; // acl null = 기본 권한 그대로(재현 시에도 기본)
     s += `revoke all on ${o.kind} ${o.name} from public, anon, authenticated, service_role;\n`;
     for (const g of o.g) s += `grant ${g.privs} on ${o.kind} ${o.name} to ${g.grantee};\n`;
+  }
+  if (res.colacl.length) {
+    s += '\n-- 컬럼 단위 GRANT(운영 그대로 — 위 테이블 revoke 뒤에 준다)\n';
+    for (const c of res.colacl) s += `grant ${c.priv} (${c.cols}) on table ${c.tbl} to ${c.grantee};\n`;
   }
   s += '\n-- 기본 권한(운영 pg_default_acl, 참고용 — Supabase 가 프로젝트 생성 때 기본으로 걸어 주므로 적용하지 않음)\n';
   for (const d of res.defacl) s += `--   role=${d.role} schema=${d.sch || '(전체)'} type=${d.typ} acl=${d.acl}\n`;
