@@ -8,6 +8,7 @@ import { Zap, ArrowLeft, CheckCircle, Mail, AlertCircle, RefreshCw } from 'lucid
 import { useLanguage } from '@/context/LanguageContext'
 import { OpenFreeNotice } from '@/components/common/OpenFreeNotice'
 import SEO from '@/components/common/SEO'
+import { trackMetaEvent } from '@/lib/metaPixel'
 import { safeInternalPath, savePostAuthRedirect } from '@/lib/postAuthRedirect'
 import {
   Dialog,
@@ -121,7 +122,8 @@ export default function Signup() {
         const isEmailConfirmed = authData.user.email_confirmed_at
         
         if (hasIdentities) {
-          // 새 사용자 가입 성공
+          // 새 사용자 가입 성공 — 메타 전환(개인정보 없이 이벤트 이름만)
+          trackMetaEvent('CompleteRegistration')
           if (authData.session) {
             // 이메일 인증이 필요 없는 환경 (로컬 등)
             if (isFirstUser) {

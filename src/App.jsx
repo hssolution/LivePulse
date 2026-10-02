@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+import { trackMetaPageView, isMetaPublicPath } from './lib/metaPixel'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { PublicThemeProvider } from './context/PublicThemeContext'
@@ -135,6 +137,15 @@ function PartnerSuspenseWrapper({ children }) {
   )
 }
 
+/** 공개 화면에서만 메타 픽셀 PageView 를 보낸다(ID 가 없으면 아무 일도 안 함) */
+function MetaPixelTracker() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    if (isMetaPublicPath(pathname)) trackMetaPageView()
+  }, [pathname])
+  return null
+}
+
 function AppContent() {
   const initData = useAppInit()
 
@@ -145,6 +156,7 @@ function AppContent() {
           <Toaster position="top-right" richColors closeButton />
           <Router>
           <ViewAsBanner />
+          <MetaPixelTracker />
           <Routes>
             {/* Public Routes (Accessible by everyone) - with PublicThemeProvider */}
             <Route path="/" element={

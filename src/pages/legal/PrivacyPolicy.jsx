@@ -5,8 +5,9 @@ import { PAGE_META } from '@/config/seo'
 
 export default function PrivacyPolicy() {
   return (
-    <LegalLayout title="개인정보처리방침" lastUpdated="2026-05-12">
+    <LegalLayout title="개인정보처리방침" lastUpdated="2026-10-09">
       <SEO title={PAGE_META.legalPrivacy.title} description={PAGE_META.legalPrivacy.description} url={PAGE_META.legalPrivacy.path} />
+      <p><strong>2026-10-09 시행 개정 예정</strong> — 제9조(쿠키의 운영)를 신설했습니다.</p>
       <p>
         <strong>{COMPANY.name}</strong>(이하 "회사")은 정보주체의 자유와 권리 보호를 위해 「개인정보 보호법」 및 관계 법령이 정한 바를 준수하여,
         적법하게 개인정보를 처리하고 안전하게 관리하고 있습니다. 회사는 「개인정보 보호법」 제30조에 따라 정보주체에게
@@ -124,18 +125,27 @@ export default function PrivacyPolicy() {
         <li>물리적 조치: 전산실, 자료보관실 등의 접근통제</li>
       </ul>
 
-      <h2>제9조 (개인정보 보호책임자)</h2>
+      <h2>제9조 (쿠키의 운영)</h2>
+      <p>회사는 로그인 상태 유지 및 사용자 환경 설정을 위하여 쿠키를 사용할 수 있습니다. 정보주체는 웹브라우저 설정을 통해 쿠키 저장을 거부할 수 있으나, 이 경우 로그인 유지 등 일부 서비스 이용에 제한이 있을 수 있습니다.</p>
+      <p>소개·가입·문의 등 공개 화면에서는 방문 분석과 광고 성과 측정을 위해 Meta Platforms, Inc. 의 픽셀(쿠키)을 사용할 수 있습니다.</p>
+      <ul>
+        <li><strong>전달 항목:</strong> 방문 화면, 가입·문의 제출 여부, 브라우저·기기 정보, 쿠키 식별자</li>
+        <li><strong>사용 범위:</strong> 로그인 뒤 서비스 화면(강연 진행·관리자·청중 참여 화면 등)에서는 사용하지 않습니다</li>
+        <li><strong>거부 방법:</strong> 브라우저의 쿠키 차단 설정, 또는 Meta 광고 설정에서 맞춤 광고를 끌 수 있습니다</li>
+      </ul>
+
+      <h2>제10조 (개인정보 보호책임자)</h2>
       <p>회사는 개인정보 처리에 관한 업무를 총괄해서 책임지고, 개인정보 처리와 관련한 정보주체의 불만처리 및 피해구제 등을 위하여 아래와 같이 개인정보 보호책임자를 지정하고 있습니다.</p>
       <ul>
         <li><strong>개인정보 보호책임자:</strong> {COMPANY.representative}</li>
         <li><strong>이메일:</strong> {COMPANY.email}</li>
       </ul>
 
-      <h2>제10조 (개인정보 처리방침의 변경)</h2>
+      <h2>제11조 (개인정보 처리방침의 변경)</h2>
       <p>본 개인정보 처리방침은 시행일로부터 적용되며, 법령 및 방침에 따른 변경내용의 추가, 삭제 및 정정이 있는 경우에는 변경사항의 시행 7일 전부터 공지사항을 통하여 고지할 것입니다.</p>
 
       <h2>부칙</h2>
-      <p>본 방침은 2026년 5월 12일부터 시행됩니다.</p>
+      <p>본 방침은 2026년 10월 9일부터 시행됩니다. (직전 방침: 2026년 5월 12일 시행)</p>
     </LegalLayout>
   )
 }
