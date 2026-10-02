@@ -172,7 +172,14 @@ function AppContent() {
             <Route path="/lectures" element={<Navigate to="/" replace />} />
             <Route path="/instructors" element={<Navigate to="/" replace />} />
             <Route path="/agencies" element={<Navigate to="/" replace />} />
-            {/* 강사 공개 프로필 — 여러 행사에 걸친 누적 평점 (026) */}
+            {/* 강사 공개 프로필 — 본인이 공개에 동의한 강사만 (029). 예전 주소 /instructor/:id 도 같은 화면 */}
+            <Route path="/instructors/:key" element={
+              <PublicThemeProvider>
+                <SuspenseWrapper>
+                  <InstructorProfile />
+                </SuspenseWrapper>
+              </PublicThemeProvider>
+            } />
             <Route path="/instructor/:id" element={
               <PublicThemeProvider>
                 <SuspenseWrapper>

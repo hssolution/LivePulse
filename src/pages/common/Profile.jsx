@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from 'sonner'
 import { User, Mail, Shield, Calendar, Building2, Loader2, Save, UserCircle } from "lucide-react"
+import InstructorPublicSettings from '@/components/instructor/InstructorPublicSettings'
 
 /**
  * 내 정보 페이지 (공통)
@@ -152,6 +153,9 @@ export default function Profile() {
             </div>
           </CardContent>
         </Card>
+
+        {/* 강사 공개 프로필 (029) — 강사 프로필이 있거나 파트너면 */}
+        <InstructorPublicSettings allowCreate={profile?.userType === 'partner'} />
 
         {/* 기본 정보 */}
         <Card>

@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { LanguageSelector } from '@/components/ui/language-selector'
 import { useLanguage } from '@/context/LanguageContext'
 import { SESSION_CREATE_PATH, clearPostAuthRedirect } from '@/lib/postAuthRedirect'
+import InstructorPublicSettings from '@/components/instructor/InstructorPublicSettings'
 import { 
   User, 
   Mail, 
@@ -702,6 +703,9 @@ export default function MyPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* 강사 공개 프로필 (029) — 발표자로 연결된 강사 프로필이 있을 때만 */}
+          <InstructorPublicSettings />
 
           {/* 팀원 초대 내역 */}
           {pendingInvites.length > 0 && (

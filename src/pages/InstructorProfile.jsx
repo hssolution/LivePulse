@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { Star, Loader2, CalendarDays, MessageSquareQuote, UserRound } from 'lucide-react'
+import { Star, Loader2, CalendarDays, MessageSquareQuote, UserRound, EyeOff } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useLanguage } from '@/context/LanguageContext'
 import { PublicHeader } from '@/components/layout/PublicHeader'
 import { PublicFooter } from '@/components/layout/PublicFooter'
 import SEO from '@/components/common/SEO'
+import { SITE_URL } from '@/config/seo'
 
 /**
- * 강사 공개 프로필 (026) — /instructor/:id
- * 행사에 묶이지 않는 한 사람의 프로필 + 여러 세션에 걸친 누적 평점(평균·응답 수).
- * 데이터는 sp_instructor_profile_q 하나로 받는다(의견 본문·응답자 정보는 주지 않음).
+ * 강사 공개 프로필 (026 → 029) — /instructors/:key (slug 또는 id), 예전 주소 /instructor/:id
+ * 본인이 공개에 동의한 프로필만 열린다. 비공개면 본인·관리 주최자만 미리보기, 그 밖엔 «찾을 수 없음».
+ * 데이터는 sp_instructor_public_q 하나로 받는다(연락처는 서버가 가림, 의견 본문·응답자 정보 없음).
  */
+const PERSON_DESC_MAX = 155
+
 export default function InstructorProfile() {
-  const { id } = useParams()
+  const { key, id: legacyId } = useParams()
+  const id = key || legacyId
   const { t, language } = useLanguage()
   const [state, setState] = useState({ loading: true, data: null })
 
@@ -21,7 +25,7 @@ export default function InstructorProfile() {
     let cancelled = false
     setState({ loading: true, data: null })
     supabase
-      .rpc('sp_instructor_profile_q', { p_profile_id: id })
+      .rpc('sp_instructor_public_q', { p_key: id })
       .then(({ data, error }) => {
         if (cancelled) return
         setState({ loading: false, data: !error && data?.success ? data : null })
@@ -46,12 +50,30 @@ export default function InstructorProfile() {
   const profile = data?.profile
   const rating = data?.rating
   const avg = rating?.avg != null ? Number(rating.avg) : null
+  const description = (() => {
+    if (!profile) return t('instructor.profileDesc', '여러 행사에 걸쳐 쌓인 강사 평점')
+    const parts = [profile.title, profile.bio?.replace(/\s+/g, ' ')].filter(Boolean)
+    const ratingText = avg != null ? `★ ${avg.toFixed(2)} / 5 (${rating?.count ?? 0})` : ''
+    const text = [profile.display_name, ...parts, ratingText].filter(Boolean).join(' · ')
+    return text.length > PERSON_DESC_MAX ? `${text.slice(0, PERSON_DESC_MAX - 1)}…` : text
+  })()
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
       <SEO
         title={profile ? `${profile.display_name} — ${t('instructor.profile', '강사 프로필')}` : t('instructor.profile', '강사 프로필')}
-        description={profile?.title || t('instructor.profileDesc', '여러 행사에 걸쳐 쌓인 강사 평점')}
+        description={description}
+        url={profile ? `/instructors/${profile.slug || profile.id}` : undefined}
+        image={profile?.image_url || undefined}
+        noindex={!profile || !profile.is_public}
+        jsonLd={profile?.is_public ? {
+          '@context': 'https://schema.org',
+          '@type': 'Person',
+          name: profile.display_name,
+          ...(profile.title ? { jobTitle: profile.title } : {}),
+          ...(profile.image_url ? { image: profile.image_url } : {}),
+          url: `${SITE_URL}/instructors/${profile.slug || profile.id}`,
+        } : undefined}
       />
       <PublicHeader />
 
@@ -71,6 +93,12 @@ export default function InstructorProfile() {
             </div>
           ) : (
             <>
+              {!profile.is_public && (
+                <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200" data-testid="instructor-private-preview">
+                  <EyeOff className="w-4 h-4 shrink-0" />
+                  {t('instructor.public.previewNotice', '비공개 프로필입니다. 나에게만 보이는 미리보기입니다')}
+                </div>
+              )}
               {/* 프로필 머리 */}
               <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
                 <div className="flex flex-col sm:flex-row gap-6 sm:items-center">

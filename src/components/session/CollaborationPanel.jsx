@@ -197,7 +197,7 @@ function SortablePresenterItem({
         {/* 강사 독립 프로필(026) — 여러 세션 누적 평점 */}
         {profileId && (
           <a
-            href={`/instructor/${profileId}`}
+            href={`/instructors/${profileId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline mt-0.5"
